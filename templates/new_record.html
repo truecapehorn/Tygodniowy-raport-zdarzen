@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% block title %}Nowy rekord – Tygodniowy raport napraw GORT{% endblock %}
+{% block content %}
+
+<div class="page-title">Nowy rekord <small>Dodaj zdarzenie utrzymania ruchu</small></div>
+
+<div class="card">
+    <form method="post">
+        <div class="card-title">Zdarzenie i czas</div>
+        <div class="form-grid">
+            <div class="field">
+                <label>Data wystąpienia *</label>
+                <input type="datetime-local" name="occurrence_at" required>
+            </div>
+            <div class="field">
+                <label>Data naprawienia / interwencji</label>
+                <input type="datetime-local" name="repaired_at">
+            </div>
+            <div class="field">
+                <label>Rodzaj zdarzenia</label>
+                <select name="event_type">
+                    {% for et in event_types %}
+                    <option value="{{ et }}">{{ et }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="field">
+                <label>MTG maszyny</label>
+                <input type="text" name="machine_mtg" placeholder="np. 12 500">
+            </div>
+        </div>
+
+        <div class="card-title mt-section">Maszyna</div>
+        <div class="form-grid">
+            <div class="field">
+                <label>Maszyna *</label>
+                <input list="machine-list" id="machine_name" name="machine_name" required autocomplete="off" placeholder="Nazwa maszyny">
+                <datalist id="machine-list">
+                    {% for mn in machine_names %}<option value="{{ mn }}">{% endfor %}
+                </datalist>
+            </div>
+            <div class="field">
+                <label>Typ *</label>
+                <input list="type-list" id="machine_type" name="machine_type" required autocomplete="off" placeholder="Typ maszyny">
+                <datalist id="type-list"></datalist>
+            </div>
+            <div class="field">
+                <label>Numer *</label>
+                <input list="serial-list" id="serial_number" name="serial_number" required autocomplete="off" placeholder="Nr seryjny / fabryczny">
+                <datalist id="serial-list"></datalist>
+            </div>
+        </div>
+
+        <div class="card-title mt-section">Opis zdarzenia</div>
+        <div class="form-grid3">
+            <div class="field">
+                <label>Opis *</label>
+                <textarea name="description" required placeholder="Opis usterki lub zdarzenia"></textarea>
+            </div>
+            <div class="field">
+                <label>Przyczyna</label>
+                <textarea name="cause" placeholder="Przyczyna awarii / zdarzenia"></textarea>
+            </div>
+            <div class="field">
+                <label>Sposób naprawy</label>
+                <textarea name="repair_method" placeholder="Zastosowany sposób naprawy"></textarea>
+            </div>
+            <div class="field">
+                <label>Wymienione części</label>
+                <textarea name="replaced_parts" placeholder="Lista wymienionych części"></textarea>
+            </div>
+        </div>
+
+        <div class="card-title mt-section">Koszty</div>
+        <div class="form-grid">
+            <div class="field">
+                <label>Pracochłonność [h, 80 PLN/h]</label>
+                <input type="number" step="0.01" min="0" name="labor_cost" placeholder="0.00">
+            </div>
+            <div class="field">
+                <label>Materiał własny PLN</label>
+                <input type="number" step="0.01" min="0" name="material_cost" placeholder="0.00">
+            </div>
+            <div class="field">
+                <label>Części zamienne PLN</label>
+                <input type="number" step="0.01" min="0" name="spare_parts_cost" placeholder="0.00">
+            </div>
+            <div class="field">
+                <label>Serwis PLN</label>
+                <input type="number" step="0.01" min="0" name="service_cost" placeholder="0.00">
+            </div>
+        </div>
+
+        <div class="actions">
+            <button type="submit" class="btn btn-primary">Zapisz rekord</button>
+            <a href="{{ url_for('index') }}" class="btn btn-outline">Anuluj</a>
+        </div>
+    </form>
+</div>
+
+<div class="card" id="history-panel" style="display:none;">
+    <div class="card-title">Historia maszyny</div>
+    <ul class="history-list" id="history-list" style="list-style:none;"></ul>
+</div>
+
+<script>
+    const machineInput = document.getElementById("machine_name");
+    const typeInput    = document.getElementById("machine_type");
+    const serialInput  = document.getElementById("serial_number");
+    const typeList     = document.getElementById("type-list");
+    const serialList   = document.getElementById("serial-list");
+    const historyList  = document.getElementById("history-list");
+    const historyPanel = document.getElementById("history-panel");
+
+    function fillDatalist(target, values) {
+        target.innerHTML = "";
+        values.forEach(v => {
+            const o = document.createElement("option");
+            o.value = v;
+            target.appendChild(o);
+        });
+    }
+
+    function badgeClass(et) {
+        const e = (et || "").toLowerCase();
+        if (e === "awaria")       return "badge-awaria";
+        if (e === "przegląd")     return "badge-przeglad";
+        if (e === "modernizacja") return "badge-modernizacja";
+        if (e === "interwencja")  return "badge-interwencja";
+        return "badge-inne";
+    }
+
+    async function refreshMachineData() {
+        const params = new URLSearchParams({ machine: machineInput.value, machine_type: typeInput.value });
+        const resp = await fetch(`/api/machines?${params}`);
+        const data = await resp.json();
+        fillDatalist(typeList,   data.types           || []);
+        fillDatalist(serialList, data.serial_numbers  || []);
+        historyList.innerHTML = "";
+        const entries = data.previous_entries || [];
+        historyPanel.style.display = entries.length ? "" : "none";
+        entries.forEach(e => {
+            const li = document.createElement("li");
+            li.style.cssText = "padding:.35rem .5rem;display:flex;gap:.5rem;align-items:baseline;font-size:.78rem;color:var(--muted);";
+            li.innerHTML = `<span style="color:var(--accent);white-space:nowrap;font-size:.72rem;">${e.occurrence_at}</span>`
+                         + `<span class="badge ${badgeClass(e.event_type)}">${e.event_type}</span>`
+                         + `<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;">${e.description}</span>`;
+            historyList.appendChild(li);
+        });
+    }
+
+    machineInput.addEventListener("change", refreshMachineData);
+    typeInput.addEventListener("change",    refreshMachineData);
+    serialInput.addEventListener("focus",   refreshMachineData);
+</script>
+{% endblock %}

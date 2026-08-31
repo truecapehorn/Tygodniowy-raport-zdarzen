@@ -1,8 +1,10 @@
+
+
 from __future__ import annotations
 
 import io
 import sqlite3
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -246,25 +248,55 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             "occurrence_to": request.args.get("occurrence_to", "").strip(),
             "description_terms": request.args.get("description_terms", "").strip(),
         }
+        filter_active = any(filters.values())
         return render_template(
             "index.html",
-            records=query_records(filters),
+            latest_records=query_records_latest(20),
+            filtered_records=query_records(filters) if filter_active else [],
+            filter_active=filter_active,
             machine_names=list_machine_names(),
             event_types=EVENT_TYPES,
             filters=filters,
         )
 
+    @app.route("/new", methods=["GET", "POST"])
+    def new_record():
+        if request.method == "POST":
+            try:
+                save_record(request.form)
+                flash("Rekord został zapisany.", "success")
+                return redirect(url_for("index"))
+            except ValueError as exc:
+                flash(str(exc), "error")
+        return render_template(
+            "new_record.html",
+            machine_names=list_machine_names(),
+            event_types=EVENT_TYPES,
+        )
+
     @app.route("/import", methods=["GET", "POST"])
     def import_data():
+        if request.method == "GET":
+            return redirect(url_for("data_page"), code=301)
+        upload = request.files.get("file")
+        if not upload or not upload.filename:
+            flash("Wybierz plik Excel do importu.", "error")
+            return redirect(url_for("data_page"))
+        imported = import_workbook(upload.read(), upload.filename or "")
+        flash(f"Zaimportowano {imported} rekordów.", "success")
+        return redirect(url_for("index"))
+
+    @app.route("/data", methods=["GET", "POST"])
+    def data_page():
         if request.method == "POST":
             upload = request.files.get("file")
             if not upload or not upload.filename:
                 flash("Wybierz plik Excel do importu.", "error")
-                return redirect(url_for("import_data"))
-            imported = import_workbook(upload.read())
+                return redirect(url_for("data_page"))
+            imported = import_workbook(upload.read(), upload.filename or "")
             flash(f"Zaimportowano {imported} rekordów.", "success")
             return redirect(url_for("index"))
-        return render_template("import.html")
+        return render_template("import_export.html")
 
     @app.route("/export")
     def export_data():
@@ -277,7 +309,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         }
         workbook = Workbook()
         sheet = workbook.active
-        sheet.title = "Raport"
+        sheet.title = "ZBIORCZE"
         sheet.append(EXPORT_COLUMNS)
         for record in query_records(filters):
             sheet.append(
@@ -429,11 +461,27 @@ def save_record(form: dict[str, Any]) -> int:
             spare_parts_cost,
             service_cost,
             total_cost,
-            datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            datetime.now(UTC).isoformat(timespec="seconds"),
         ),
     )
     db.commit()
     return int(cursor.lastrowid)
+
+
+def query_records_latest(limit: int = 20) -> list[sqlite3.Row]:
+    db = get_db()
+    return list(
+        db.execute(
+            """
+            SELECT r.*, m.name, m.machine_type, m.serial_number
+            FROM repair_records r
+            JOIN machines m ON m.id = r.machine_id
+            ORDER BY r.occurrence_at DESC, r.id DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+    )
 
 
 def query_records(filters: dict[str, str]) -> list[sqlite3.Row]:
@@ -541,21 +589,91 @@ def list_previous_entries(machine_name: str) -> list[dict[str, Any]]:
     ]
 
 
-def import_workbook(binary_content: bytes) -> int:
+def import_workbook(binary_content: bytes, filename: str = "") -> int:
+    """Detect format (XLS vs XLSX) and dispatch to the appropriate importer."""
+    if binary_content[:2] == b"PK":
+        return _import_xlsx_bytes(binary_content)
+    if binary_content[:4] == b"\xd0\xcf\x11\xe0":
+        return _import_xls_bytes(binary_content)
+    # Fall back to file extension when magic bytes are ambiguous
+    if filename.lower().endswith(".xls"):
+        return _import_xls_bytes(binary_content)
+    return _import_xlsx_bytes(binary_content)
+
+
+def _import_xlsx_bytes(binary_content: bytes) -> int:
     workbook = load_workbook(io.BytesIO(binary_content), data_only=True)
-    sheet = workbook.active
-    rows = list(sheet.iter_rows(values_only=True))
+    sheet = workbook["ZBIORCZE"] if "ZBIORCZE" in workbook.sheetnames else workbook.active
+    return _process_import_rows(list(sheet.iter_rows(values_only=True)))
+
+
+def _import_xls_bytes(binary_content: bytes) -> int:
+    try:
+        import xlrd
+    except ImportError as exc:
+        raise ValueError(
+            "Biblioteka xlrd jest wymagana do importu plików .xls. "
+            "Zainstaluj ją: pip install xlrd"
+        ) from exc
+
+    wb = xlrd.open_workbook(file_contents=binary_content)
+    sheet_names = wb.sheet_names()
+    sheet = wb.sheet_by_name("ZBIORCZE") if "ZBIORCZE" in sheet_names else wb.sheet_by_index(0)
+
+    rows: list[tuple[Any, ...]] = []
+    for row_idx in range(sheet.nrows):
+        row_data: list[Any] = []
+        for col_idx in range(sheet.ncols):
+            cell = sheet.cell(row_idx, col_idx)
+            if cell.ctype == xlrd.XL_CELL_DATE:
+                try:
+                    dt_tuple = xlrd.xldate_as_tuple(cell.value, wb.datemode)
+                    row_data.append(
+                        datetime(int(dt_tuple[0]), int(dt_tuple[1]), int(dt_tuple[2]),
+                                 int(dt_tuple[3]), int(dt_tuple[4]), int(dt_tuple[5]))
+                        if dt_tuple[0] else None
+                    )
+                except Exception:
+                    row_data.append(cell.value)
+            elif cell.ctype == xlrd.XL_CELL_EMPTY:
+                row_data.append(None)
+            elif cell.ctype == xlrd.XL_CELL_NUMBER:
+                v = cell.value
+                try:
+                    iv = int(v)
+                    row_data.append(iv if iv == v else v)
+                except (ValueError, OverflowError):
+                    row_data.append(v)
+            else:
+                row_data.append(cell.value)
+        rows.append(tuple(row_data))
+    return _process_import_rows(rows)
+
+
+def _process_import_rows(rows: list[tuple[Any, ...]]) -> int:
     if not rows:
         return 0
+    # Find first row that contains at least 3 recognised column headers
+    header_row_index = 0
+    for i, row in enumerate(rows[:10]):
+        matches = sum(
+            1 for h in row
+            if h is not None and HEADER_ALIASES.get(normalize_header(h))
+        )
+        if matches >= 3:
+            header_row_index = i
+            break
+
     header_map: dict[str, int] = {}
-    for index, header in enumerate(rows[0]):
+    for index, header in enumerate(rows[header_row_index]):
         if header is None:
             continue
         canonical_name = HEADER_ALIASES.get(normalize_header(header))
         if canonical_name:
             header_map[canonical_name] = index
+
     imported = 0
-    for values in rows[1:]:
+    for values in rows[header_row_index + 1:]:
         if not any(value not in (None, "") for value in values):
             continue
         occurrence_at = parse_datetime(row_value(values, header_map, "Data wystąpienia", None))
@@ -632,7 +750,7 @@ def save_imported_record(record: dict[str, Any]) -> int:
             spare_parts_cost,
             service_cost,
             total_cost,
-            datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            datetime.now(UTC).isoformat(timespec="seconds"),
         ),
     )
     db.commit()
@@ -642,8 +760,4 @@ def save_imported_record(record: dict[str, Any]) -> int:
 if __name__ == "__main__":
     import os
 
-    create_app().run(
-        host="0.0.0.0",
-        port=5001,
-        debug=os.environ.get("FLASK_DEBUG", "0") == "1",
-    )
+    create_app().run(debug=os.environ.get("FLASK_DEBUG", "0") == "1")

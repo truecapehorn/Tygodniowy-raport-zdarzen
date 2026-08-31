@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Import / Export – Tygodniowy raport napraw GORT{% endblock %}
+{% block content %}
+
+<div class="page-title">Import / Export <small>Zarządzanie danymi bazy</small></div>
+
+<div class="card">
+    <div class="card-title">Import z pliku Excel</div>
+    <p class="text-muted" style="font-size:.875rem;margin-bottom:1rem;line-height:1.6;">
+        Załaduj plik <strong>.xls</strong> lub <strong>.xlsx</strong>.
+        Aplikacja automatycznie znajdzie zakładkę <strong>ZBIORCZE</strong> (lub użyje pierwszej zakładki).
+        Kolumny są dopasowywane automatycznie. Istniejące rekordy nie są usuwane.
+    </p>
+    <form method="post" enctype="multipart/form-data">
+        <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;">
+            <input type="file" name="file" accept=".xls,.xlsx" required>
+            <button type="submit" class="btn btn-primary">Importuj dane</button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <div class="card-title">Eksport całej bazy danych</div>
+    <p class="text-muted" style="font-size:.875rem;margin-bottom:1rem;line-height:1.6;">
+        Eksport wszystkich rekordów do pliku <strong>.xlsx</strong> z zakładką <strong>ZBIORCZE</strong>,
+        w układzie kolumn zgodnym z raportem tygodniowym.
+    </p>
+    <div class="actions" style="margin-top:0;">
+        <a href="{{ url_for('export_data') }}" class="btn btn-success">Eksportuj całą bazę (.xlsx)</a>
+    </div>
+</div>
+
+{% endblock %}
