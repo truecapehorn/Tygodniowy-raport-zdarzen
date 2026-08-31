@@ -284,10 +284,10 @@ function buildEditForm(r) {
     <div>
         <div class="card-title" style="margin-bottom:.5rem;">Za&#322;&#261;czniki &#8212; dodaj nowe pliki</div>
         ${existingAttach}
-        <div id="ef-attach-zone" style="border:2px dashed var(--border);border-radius:6px;padding:1rem;text-align:center;color:var(--muted);font-size:.82rem;cursor:pointer;transition:border-color .15s;">
+        <label id="ef-attach-zone" for="ef-attach-input" style="border:2px dashed var(--border);border-radius:6px;padding:1rem;text-align:center;color:var(--muted);font-size:.82rem;cursor:pointer;transition:border-color .15s;display:block;">
             Przeci&#261;gnij pliki, kliknij lub wklej ze schowka (Ctrl+V)
             <input type="file" id="ef-attach-input" multiple accept="image/*,.pdf,.doc,.docx,.txt,.xls,.xlsx,.csv,.zip,.rar" style="display:none;">
-        </div>
+        </label>
         <div id="ef-attach-preview" style="display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.4rem;"></div>
     </div>`;
 }
@@ -315,7 +315,7 @@ function initEditAttachments() {
     const zone  = document.getElementById('ef-attach-zone');
     const input = document.getElementById('ef-attach-input');
     if (!zone || !input) return;
-    zone.addEventListener('click',     () => input.click());
+    // click handled natively by <label for="ef-attach-input">
     zone.addEventListener('dragover',  e => { e.preventDefault(); zone.style.borderColor = 'var(--accent)'; });
     zone.addEventListener('dragleave', () => { zone.style.borderColor = ''; });
     zone.addEventListener('drop',      e => { e.preventDefault(); zone.style.borderColor = ''; addEditFiles(e.dataTransfer.files); });

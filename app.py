@@ -432,15 +432,6 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         db.commit()
         return jsonify({"ok": True})
 
-    @app.route("/api/record/<int:record_id>/attachments", methods=["POST"])
-    def add_record_attachments_api(record_id: int):
-        if not get_db().execute("SELECT id FROM repair_records WHERE id = ?", (record_id,)).fetchone():
-            return jsonify({"error": "Rekord nie istnieje."}), 404
-        for f in request.files.getlist("attachments"):
-            if f and f.filename:
-                save_attachment(record_id, f)
-        return jsonify({"ok": True})
-
     @app.route("/attachments/<int:record_id>/<path:filename>")
     def serve_attachment(record_id: int, filename: str):
         row = get_db().execute(
