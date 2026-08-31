@@ -181,24 +181,25 @@
     serialInput.addEventListener("focus",   refreshMachineData);
 
     // ── Attachment handling ────────────────────────────────────────
-    const dt         = new DataTransfer();
-    const attachZone  = document.getElementById('attach-zone');
-    const attachInput = document.getElementById('attach-input');
+    let uploadFiles = [];
+    const attachZone    = document.getElementById('attach-zone');
+    const attachInput   = document.getElementById('attach-input');
     const attachPreview = document.getElementById('attach-preview');
 
     function renderPreview() {
         attachPreview.innerHTML = '';
-        for (let i = 0; i < dt.files.length; i++) {
-            const f = dt.files[i];
+        uploadFiles.forEach((f, i) => {
             const el = document.createElement('div');
             el.style.cssText = 'padding:.2rem .55rem;background:var(--bg-card-alt,#162032);border:1px solid var(--border);border-radius:4px;font-size:.75rem;display:flex;align-items:center;gap:.35rem;';
-            el.innerHTML = `<span>${f.name}</span><span style="color:var(--muted);">${(f.size/1024).toFixed(0)} KB</span>`;
+            el.innerHTML = `<span>${f.name}</span><span style="color:var(--muted);">${(f.size/1024).toFixed(0)} KB</span><button type="button" onclick="removeUploadFile(${i})" style="background:none;border:none;color:var(--muted);cursor:pointer;padding:0 .15rem;line-height:1;font-size:.95rem;" title="Usu\u0144">\u00d7</button>`;
             attachPreview.appendChild(el);
-        }
+        });
     }
 
+    function removeUploadFile(i) { uploadFiles.splice(i, 1); renderPreview(); }
+
     function addFiles(files) {
-        for (const f of files) dt.items.add(f);
+        for (const f of files) uploadFiles.push(f);
         renderPreview();
     }
 
@@ -209,7 +210,7 @@
         e.preventDefault(); attachZone.style.borderColor='';
         addFiles(e.dataTransfer.files);
     });
-    attachInput.addEventListener('change', () => addFiles(attachInput.files));
+    attachInput.addEventListener('change', () => { addFiles(attachInput.files); attachInput.value = ''; });
     document.addEventListener('paste', e => {
         if (e.clipboardData && e.clipboardData.files.length) addFiles(e.clipboardData.files);
     });
@@ -220,7 +221,7 @@
         e.preventDefault();
         const fd = new FormData(mainForm);
         fd.delete('attachments');
-        for (let i = 0; i < dt.files.length; i++) fd.append('attachments', dt.files[i]);
+        uploadFiles.forEach(f => fd.append('attachments', f));
         const resp = await fetch('', { method: 'POST', body: fd });
         window.location.href = resp.url;
     });

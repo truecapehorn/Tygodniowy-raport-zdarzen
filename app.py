@@ -406,6 +406,41 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         record["attachments"] = [dict(a) for a in attachments]
         return jsonify(record)
 
+    @app.route("/api/record/<int:record_id>", methods=["PATCH"])
+    def update_record_api(record_id: int):
+        data = request.get_json(force=True)
+        if not data:
+            return jsonify({"error": "Brak danych."}), 400
+        try:
+            update_record(record_id, data)
+            return jsonify({"ok": True})
+        except ValueError as exc:
+            return jsonify({"error": str(exc)}), 400
+
+    @app.route("/api/record/<int:record_id>", methods=["DELETE"])
+    def delete_record_api(record_id: int):
+        import shutil
+
+        db = get_db()
+        if not db.execute("SELECT id FROM repair_records WHERE id = ?", (record_id,)).fetchone():
+            return jsonify({"error": "Rekord nie istnieje."}), 404
+        upload_dir = Path(current_app_uploads()) / str(record_id)
+        if upload_dir.exists():
+            shutil.rmtree(str(upload_dir))
+        db.execute("DELETE FROM attachments WHERE record_id = ?", (record_id,))
+        db.execute("DELETE FROM repair_records WHERE id = ?", (record_id,))
+        db.commit()
+        return jsonify({"ok": True})
+
+    @app.route("/api/record/<int:record_id>/attachments", methods=["POST"])
+    def add_record_attachments_api(record_id: int):
+        if not get_db().execute("SELECT id FROM repair_records WHERE id = ?", (record_id,)).fetchone():
+            return jsonify({"error": "Rekord nie istnieje."}), 404
+        for f in request.files.getlist("attachments"):
+            if f and f.filename:
+                save_attachment(record_id, f)
+        return jsonify({"ok": True})
+
     @app.route("/attachments/<int:record_id>/<path:filename>")
     def serve_attachment(record_id: int, filename: str):
         row = get_db().execute(
@@ -706,6 +741,59 @@ def list_previous_entries(machine_name: str) -> list[dict[str, Any]]:
         }
         for row in rows
     ]
+
+
+def update_record(record_id: int, data: dict[str, Any]) -> None:
+    db = get_db()
+    if not db.execute("SELECT id FROM repair_records WHERE id = ?", (record_id,)).fetchone():
+        raise ValueError(f"Rekord #{record_id} nie istnieje.")
+    occurrence_at = parse_datetime(data.get("occurrence_at"))
+    if not occurrence_at:
+        raise ValueError("Data wystąpienia jest wymagana.")
+    repaired_at = parse_datetime(data.get("repaired_at"))
+    machine_id = get_or_create_machine(
+        str(data.get("machine_name", "")).strip(),
+        str(data.get("machine_type", "")).strip(),
+        str(data.get("serial_number", "")).strip(),
+    )
+    downtime_hours = calculate_downtime_hours(occurrence_at, repaired_at)
+    labor_cost = as_float(data.get("labor_cost"))
+    material_cost = as_float(data.get("material_cost"))
+    spare_parts_cost = as_float(data.get("spare_parts_cost"))
+    service_cost = as_float(data.get("service_cost"))
+    total_cost = round(
+        (labor_cost * LABOR_RATE_PLN_PER_HOUR) + material_cost + spare_parts_cost + service_cost, 2
+    )
+    db.execute(
+        """
+        UPDATE repair_records SET
+            machine_id = ?, event_type = ?, description = ?, cause = ?,
+            repair_method = ?, replaced_parts = ?, occurrence_at = ?,
+            repaired_at = ?, machine_mtg = ?, downtime_hours = ?,
+            labor_cost = ?, material_cost = ?, spare_parts_cost = ?,
+            service_cost = ?, total_cost = ?
+        WHERE id = ?
+        """,
+        (
+            machine_id,
+            str(data.get("event_type", "")).strip() or "Inne",
+            str(data.get("description", "")).strip(),
+            str(data.get("cause", "")).strip(),
+            str(data.get("repair_method", "")).strip(),
+            str(data.get("replaced_parts", "")).strip(),
+            occurrence_at.isoformat(sep=" ", timespec="minutes"),
+            repaired_at.isoformat(sep=" ", timespec="minutes") if repaired_at else None,
+            str(data.get("machine_mtg", "")).strip(),
+            downtime_hours,
+            labor_cost,
+            material_cost,
+            spare_parts_cost,
+            service_cost,
+            total_cost,
+            record_id,
+        ),
+    )
+    db.commit()
 
 
 def import_workbook(binary_content: bytes, filename: str = "") -> int:
