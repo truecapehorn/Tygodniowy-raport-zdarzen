@@ -600,7 +600,8 @@ def query_records_latest(limit: int = 20) -> list[sqlite3.Row]:
     return list(
         db.execute(
             """
-            SELECT r.*, m.name, m.machine_type, m.serial_number
+            SELECT r.*, m.name, m.machine_type, m.serial_number,
+                (SELECT COUNT(*) FROM attachments a WHERE a.record_id = r.id) AS attachment_count
             FROM repair_records r
             JOIN machines m ON m.id = r.machine_id
             ORDER BY r.occurrence_at DESC, r.id DESC
@@ -618,7 +619,8 @@ def query_records(filters: dict[str, str]) -> list[sqlite3.Row]:
             r.*,
             m.name,
             m.machine_type,
-            m.serial_number
+            m.serial_number,
+            (SELECT COUNT(*) FROM attachments a WHERE a.record_id = r.id) AS attachment_count
         FROM repair_records r
         JOIN machines m ON m.id = r.machine_id
         WHERE 1 = 1

@@ -41,6 +41,7 @@
                     <th>Przyczyna</th>
                     <th>Sposób naprawy</th>
                     <th>Wymienione części</th>
+                    <th title="Załączniki">&#128206;</th>
                 </tr>
             </thead>
             <tbody>
@@ -55,9 +56,12 @@
                     <td class="text-muted">{{ r.cause or '' }}</td>
                     <td class="text-muted">{{ r.repair_method or '' }}</td>
                     <td class="text-muted">{{ r.replaced_parts or '' }}</td>
+                    <td style="white-space:nowrap;text-align:center;">
+                        {% if r.attachment_count > 0 %}<span style="color:var(--accent);font-size:.8rem;" title="{{ r.attachment_count }} plik(ów)">&#128206; {{ r.attachment_count }}</span>{% endif %}
+                    </td>
                 </tr>
                 {% else %}
-                <tr class="empty-row"><td colspan="9">Brak rekordów. <a href="{{ url_for('new_record') }}">Dodaj pierwszy rekord →</a></td></tr>
+                <tr class="empty-row"><td colspan="10">Brak rekordów. <a href="{{ url_for('new_record') }}">Dodaj pierwszy rekord →</a></td></tr>
                 {% endfor %}
             </tbody>
         </table>
@@ -139,6 +143,7 @@
                     <th>Przyczyna</th>
                     <th>Sposób naprawy</th>
                     <th>Wymienione części</th>
+                    <th title="Załączniki">&#128206;</th>
                 </tr>
             </thead>
             <tbody>
@@ -153,9 +158,12 @@
                     <td class="text-muted">{{ r.cause or '' }}</td>
                     <td class="text-muted">{{ r.repair_method or '' }}</td>
                     <td class="text-muted">{{ r.replaced_parts or '' }}</td>
+                    <td style="white-space:nowrap;text-align:center;">
+                        {% if r.attachment_count > 0 %}<span style="color:var(--accent);font-size:.8rem;" title="{{ r.attachment_count }} plik(ów)">&#128206; {{ r.attachment_count }}</span>{% endif %}
+                    </td>
                 </tr>
                 {% else %}
-                <tr class="empty-row"><td colspan="9">Brak wyników dla wybranych filtrów.</td></tr>
+                <tr class="empty-row"><td colspan="10">Brak wyników dla wybranych filtrów.</td></tr>
                 {% endfor %}
             </tbody>
         </table>
@@ -284,10 +292,11 @@ function buildEditForm(r) {
     <div>
         <div class="card-title" style="margin-bottom:.5rem;">Za&#322;&#261;czniki &#8212; dodaj nowe pliki</div>
         ${existingAttach}
-        <label id="ef-attach-zone" for="ef-attach-input" style="border:2px dashed var(--border);border-radius:6px;padding:1rem;text-align:center;color:var(--muted);font-size:.82rem;cursor:pointer;transition:border-color .15s;display:block;">
+        <div id="ef-attach-zone" style="border:2px dashed var(--border);border-radius:6px;padding:1rem;text-align:center;color:var(--muted);font-size:.82rem;cursor:pointer;transition:border-color .15s;position:relative;user-select:none;">
             Przeci&#261;gnij pliki, kliknij lub wklej ze schowka (Ctrl+V)
-            <input type="file" id="ef-attach-input" multiple accept="image/*,.pdf,.doc,.docx,.txt,.xls,.xlsx,.csv,.zip,.rar" style="display:none;">
-        </label>
+            <input type="file" id="ef-attach-input" multiple accept="image/*,.pdf,.doc,.docx,.txt,.xls,.xlsx,.csv,.zip,.rar"
+                   style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;">
+        </div>
         <div id="ef-attach-preview" style="display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.4rem;"></div>
     </div>`;
 }
@@ -315,10 +324,10 @@ function initEditAttachments() {
     const zone  = document.getElementById('ef-attach-zone');
     const input = document.getElementById('ef-attach-input');
     if (!zone || !input) return;
-    // click handled natively by <label for="ef-attach-input">
+    // transparent overlay handles click natively — no JS click handler needed
     zone.addEventListener('dragover',  e => { e.preventDefault(); zone.style.borderColor = 'var(--accent)'; });
     zone.addEventListener('dragleave', () => { zone.style.borderColor = ''; });
-    zone.addEventListener('drop',      e => { e.preventDefault(); zone.style.borderColor = ''; addEditFiles(e.dataTransfer.files); });
+    zone.addEventListener('drop',      e => { e.preventDefault(); e.stopPropagation(); zone.style.borderColor = ''; addEditFiles(e.dataTransfer.files); });
     input.addEventListener('change',   () => { addEditFiles(input.files); input.value = ''; });
 }
 // Paste into edit modal only when edit panel is visible
