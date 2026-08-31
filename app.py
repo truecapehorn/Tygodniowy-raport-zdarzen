@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import io
 import sqlite3
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -429,7 +429,7 @@ def save_record(form: dict[str, Any]) -> int:
             spare_parts_cost,
             service_cost,
             total_cost,
-            datetime.now(UTC).isoformat(timespec="seconds"),
+            datetime.now(timezone.utc).isoformat(timespec="seconds"),
         ),
     )
     db.commit()
@@ -632,7 +632,7 @@ def save_imported_record(record: dict[str, Any]) -> int:
             spare_parts_cost,
             service_cost,
             total_cost,
-            datetime.now(UTC).isoformat(timespec="seconds"),
+            datetime.now(timezone.utc).isoformat(timespec="seconds"),
         ),
     )
     db.commit()
