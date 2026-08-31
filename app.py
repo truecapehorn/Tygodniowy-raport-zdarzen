@@ -28,6 +28,8 @@ EVENT_TYPES = [
     "Inne",
 ]
 
+LABOR_RATE_PLN_PER_HOUR = 80
+
 EXPORT_COLUMNS = [
     "Nr",
     "ROK",
@@ -74,6 +76,8 @@ HEADER_ALIASES = {
     "wykluczenie z produkcji robgodzina": "Wykluczenie z produkcji [rob.godzina]",
     "pracochlonnosc 80plnh": "Praco chłonność [80PLN/h]",
     "pracochlonnosc": "Praco chłonność [80PLN/h]",
+    "praco chlonnosc 80plnh": "Praco chłonność [80PLN/h]",
+    "praco chlonnosc": "Praco chłonność [80PLN/h]",
     "material wlasny pln": "Materiał własny PLN",
     "czesci zamienne pln": "Części zamienne PLN",
     "serwis pln": "Serwis PLN",
@@ -394,7 +398,7 @@ def save_record(form: dict[str, Any]) -> int:
     material_cost = as_float(form.get("material_cost"))
     spare_parts_cost = as_float(form.get("spare_parts_cost"))
     service_cost = as_float(form.get("service_cost"))
-    total_cost = round(labor_cost + material_cost + spare_parts_cost + service_cost, 2)
+    total_cost = round((labor_cost * LABOR_RATE_PLN_PER_HOUR) + material_cost + spare_parts_cost + service_cost, 2)
     db = get_db()
     cursor = db.execute(
         """
@@ -543,11 +547,13 @@ def import_workbook(binary_content: bytes) -> int:
     rows = list(sheet.iter_rows(values_only=True))
     if not rows:
         return 0
-    header_map = {
-        HEADER_ALIASES.get(normalize_header(header), str(header).strip()): index
-        for index, header in enumerate(rows[0])
-        if header is not None
-    }
+    header_map: dict[str, int] = {}
+    for index, header in enumerate(rows[0]):
+        if header is None:
+            continue
+        canonical_name = HEADER_ALIASES.get(normalize_header(header))
+        if canonical_name:
+            header_map[canonical_name] = index
     imported = 0
     for values in rows[1:]:
         if not any(value not in (None, "") for value in values):
@@ -572,8 +578,11 @@ def import_workbook(binary_content: bytes) -> int:
             "spare_parts_cost": row_value(values, header_map, "Części zamienne PLN", 0) or 0,
             "service_cost": row_value(values, header_map, "Serwis PLN", 0) or 0,
         }
-        save_imported_record(record)
-        imported += 1
+        try:
+            save_imported_record(record)
+            imported += 1
+        except ValueError:
+            continue
     return imported
 
 
@@ -592,7 +601,7 @@ def save_imported_record(record: dict[str, Any]) -> int:
     material_cost = as_float(record.get("material_cost"))
     spare_parts_cost = as_float(record.get("spare_parts_cost"))
     service_cost = as_float(record.get("service_cost"))
-    total_cost = round(labor_cost + material_cost + spare_parts_cost + service_cost, 2)
+    total_cost = round((labor_cost * LABOR_RATE_PLN_PER_HOUR) + material_cost + spare_parts_cost + service_cost, 2)
     db = get_db()
     cursor = db.execute(
         """
@@ -630,8 +639,7 @@ def save_imported_record(record: dict[str, Any]) -> int:
     return int(cursor.lastrowid)
 
 
-app = create_app()
-
-
 if __name__ == "__main__":
-    app.run(debug=True)
+    import os
+
+    create_app().run(debug=os.environ.get("FLASK_DEBUG", "0") == "1")

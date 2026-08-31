@@ -38,7 +38,7 @@ class RepairReportAppTests(unittest.TestCase):
                 "cause": "Zużycie",
                 "repair_method": "Wymiana",
                 "replaced_parts": "Czujnik",
-                "labor_cost": "80",
+                "labor_cost": "1",
                 "material_cost": "20",
                 "spare_parts_cost": "100",
                 "service_cost": "0",
@@ -114,6 +114,17 @@ class RepairReportAppTests(unittest.TestCase):
                 "Wymiana noża",
                 "2026-08-20 07:00",
                 "2026-08-20 08:30",
+            ]
+        )
+        sheet.append(
+            [
+                "",
+                "",
+                "",
+                "Awaria",
+                "Niekompletny wiersz",
+                "2026-08-21 07:00",
+                "2026-08-21 08:00",
             ]
         )
         buffer = io.BytesIO()

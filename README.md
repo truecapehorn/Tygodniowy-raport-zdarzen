@@ -8,7 +8,7 @@ Przeglądarkowa aplikacja Flask do prowadzenia tygodniowego raportu napraw dla d
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-flask --app app run
+flask --app app:create_app run
 ```
 
 Aplikacja używa bazy SQLite tworzonej automatycznie w katalogu `instance/`.
