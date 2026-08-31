@@ -17,6 +17,7 @@ from flask import (
     render_template,
     request,
     send_file,
+    send_from_directory,
     url_for,
 )
 from openpyxl import Workbook, load_workbook
@@ -118,6 +119,16 @@ CREATE TABLE IF NOT EXISTS repair_records (
     created_at TEXT NOT NULL,
     FOREIGN KEY(machine_id) REFERENCES machines(id)
 );
+
+CREATE TABLE IF NOT EXISTS attachments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    record_id INTEGER NOT NULL,
+    filename TEXT NOT NULL,
+    original_name TEXT NOT NULL,
+    content_type TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY(record_id) REFERENCES repair_records(id)
+);
 """
 
 
@@ -212,11 +223,13 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
     app.config.from_mapping(
         SECRET_KEY="dev",
         DATABASE=str(default_db),
+        UPLOAD_DIR=str(Path(app.instance_path) / "uploads"),
     )
     if test_config:
         app.config.update(test_config)
 
     Path(app.config["DATABASE"]).parent.mkdir(parents=True, exist_ok=True)
+    Path(app.config["UPLOAD_DIR"]).mkdir(parents=True, exist_ok=True)
 
     @app.before_request
     def before_request() -> None:
@@ -241,8 +254,14 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             except ValueError as exc:
                 flash(str(exc), "error")
 
+        try:
+            limit = max(1, min(int(request.args.get("limit", 20) or 20), 500))
+        except (ValueError, TypeError):
+            limit = 20
         filters = {
             "machine": request.args.get("machine", "").strip(),
+            "machine_type": request.args.get("machine_type", "").strip(),
+            "serial_number": request.args.get("serial_number", "").strip(),
             "event_type": request.args.get("event_type", "").strip(),
             "occurrence_from": request.args.get("occurrence_from", "").strip(),
             "occurrence_to": request.args.get("occurrence_to", "").strip(),
@@ -251,19 +270,23 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         filter_active = any(filters.values())
         return render_template(
             "index.html",
-            latest_records=query_records_latest(20),
+            latest_records=query_records_latest(limit),
             filtered_records=query_records(filters) if filter_active else [],
             filter_active=filter_active,
             machine_names=list_machine_names(),
             event_types=EVENT_TYPES,
             filters=filters,
+            limit=limit,
         )
 
     @app.route("/new", methods=["GET", "POST"])
     def new_record():
         if request.method == "POST":
             try:
-                save_record(request.form)
+                record_id = save_record(request.form)
+                for f in request.files.getlist("attachments"):
+                    if f and f.filename:
+                        save_attachment(record_id, f)
                 flash("Rekord został zapisany.", "success")
                 return redirect(url_for("index"))
             except ValueError as exc:
@@ -302,6 +325,8 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
     def export_data():
         filters = {
             "machine": request.args.get("machine", "").strip(),
+            "machine_type": request.args.get("machine_type", "").strip(),
+            "serial_number": request.args.get("serial_number", "").strip(),
             "event_type": request.args.get("event_type", "").strip(),
             "occurrence_from": request.args.get("occurrence_from", "").strip(),
             "occurrence_to": request.args.get("occurrence_to", "").strip(),
@@ -359,6 +384,39 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             }
         )
 
+    @app.route("/api/record/<int:record_id>")
+    def record_details_api(record_id: int):
+        db = get_db()
+        row = db.execute(
+            """
+            SELECT r.*, m.name, m.machine_type, m.serial_number
+            FROM repair_records r
+            JOIN machines m ON m.id = r.machine_id
+            WHERE r.id = ?
+            """,
+            (record_id,),
+        ).fetchone()
+        if not row:
+            return jsonify({"error": "Rekord nie istnieje."}), 404
+        record = dict(row)
+        attachments = db.execute(
+            "SELECT id, filename, original_name, content_type FROM attachments WHERE record_id = ? ORDER BY created_at",
+            (record_id,),
+        ).fetchall()
+        record["attachments"] = [dict(a) for a in attachments]
+        return jsonify(record)
+
+    @app.route("/attachments/<int:record_id>/<path:filename>")
+    def serve_attachment(record_id: int, filename: str):
+        row = get_db().execute(
+            "SELECT filename FROM attachments WHERE record_id = ? AND filename = ?",
+            (record_id, filename),
+        ).fetchone()
+        if not row:
+            return "Not found", 404
+        upload_dir = Path(current_app_uploads()) / str(record_id)
+        return send_from_directory(str(upload_dir), filename)
+
     return app
 
 
@@ -373,6 +431,49 @@ def current_app_database() -> str:
     from flask import current_app
 
     return current_app.config["DATABASE"]
+
+
+def current_app_uploads() -> str:
+    from flask import current_app
+
+    return current_app.config["UPLOAD_DIR"]
+
+
+def save_attachment(record_id: int, file_storage: Any) -> None:
+    from werkzeug.utils import secure_filename
+    import mimetypes
+
+    original_name = file_storage.filename or "file"
+    safe_name = secure_filename(original_name)
+    if not safe_name:
+        return
+
+    upload_dir = Path(current_app_uploads()) / str(record_id)
+    upload_dir.mkdir(parents=True, exist_ok=True)
+
+    dest = upload_dir / safe_name
+    counter = 1
+    while dest.exists():
+        stem, suffix = Path(safe_name).stem, Path(safe_name).suffix
+        dest = upload_dir / f"{stem}_{counter}{suffix}"
+        counter += 1
+
+    file_storage.save(str(dest))
+
+    content_type = (
+        file_storage.content_type
+        or mimetypes.guess_type(safe_name)[0]
+        or "application/octet-stream"
+    )
+    db = get_db()
+    db.execute(
+        """
+        INSERT INTO attachments(record_id, filename, original_name, content_type, created_at)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (record_id, dest.name, original_name, content_type, datetime.now(UTC).isoformat(timespec="seconds")),
+    )
+    db.commit()
 
 
 def init_db() -> None:
@@ -500,6 +601,12 @@ def query_records(filters: dict[str, str]) -> list[sqlite3.Row]:
     if filters.get("machine"):
         query += " AND m.name = ?"
         params.append(filters["machine"])
+    if filters.get("machine_type"):
+        query += " AND m.machine_type = ?"
+        params.append(filters["machine_type"])
+    if filters.get("serial_number"):
+        query += " AND m.serial_number = ?"
+        params.append(filters["serial_number"])
     if filters.get("event_type"):
         query += " AND r.event_type = ?"
         params.append(filters["event_type"])
@@ -511,8 +618,15 @@ def query_records(filters: dict[str, str]) -> list[sqlite3.Row]:
         params.append(filters["occurrence_to"])
     description_terms = [term.strip() for term in filters.get("description_terms", "").split(";") if term.strip()]
     if description_terms:
-        query += " AND (" + " OR ".join(["LOWER(r.description) LIKE ?"] * len(description_terms)) + ")"
-        params.extend([f"%{term.lower()}%" for term in description_terms])
+        text_fields = ["r.description", "r.cause", "r.repair_method", "r.replaced_parts"]
+        term_clauses = []
+        for term in description_terms:
+            field_conditions = " OR ".join(
+                f"LOWER(COALESCE({f}, '')) LIKE ?" for f in text_fields
+            )
+            term_clauses.append(f"({field_conditions})")
+            params.extend([f"%{term.lower()}%"] * len(text_fields))
+        query += " AND (" + " OR ".join(term_clauses) + ")"
     query += " ORDER BY r.occurrence_at DESC, r.id DESC"
     return list(db.execute(query, params).fetchall())
 
@@ -566,13 +680,15 @@ def list_previous_entries(machine_name: str) -> list[dict[str, Any]]:
             r.occurrence_at,
             r.event_type,
             r.description,
+            r.cause,
+            r.repair_method,
+            r.replaced_parts,
             m.machine_type,
             m.serial_number
         FROM repair_records r
         JOIN machines m ON m.id = r.machine_id
         WHERE m.name = ?
         ORDER BY r.occurrence_at DESC, r.id DESC
-        LIMIT 10
         """,
         (machine_name,),
     ).fetchall()
@@ -582,6 +698,9 @@ def list_previous_entries(machine_name: str) -> list[dict[str, Any]]:
             "occurrence_at": format_datetime(row["occurrence_at"]),
             "event_type": row["event_type"],
             "description": row["description"],
+            "cause": row["cause"] or "",
+            "repair_method": row["repair_method"] or "",
+            "replaced_parts": row["replaced_parts"] or "",
             "machine_type": row["machine_type"],
             "serial_number": row["serial_number"],
         }

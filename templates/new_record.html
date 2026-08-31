@@ -5,7 +5,7 @@
 <div class="page-title">Nowy rekord <small>Dodaj zdarzenie utrzymania ruchu</small></div>
 
 <div class="card">
-    <form method="post">
+    <form method="post" enctype="multipart/form-data">
         <div class="card-title">Zdarzenie i czas</div>
         <div class="form-grid">
             <div class="field">
@@ -98,9 +98,34 @@
     </form>
 </div>
 
+<div class="card">
+    <div class="card-title">Załączniki</div>
+    <p class="text-muted" style="font-size:.8rem;margin-bottom:.75rem;">Przeciągnij pliki, kliknij obszar lub wklej ze schowka (Ctrl+V). Obsługiwane: obrazy, PDF, Word, Excel, TXT i inne.</p>
+    <div id="attach-zone" style="border:2px dashed var(--border);border-radius:8px;padding:1.5rem;text-align:center;color:var(--muted);font-size:.85rem;cursor:pointer;transition:border-color .15s;">
+        Przeciągnij tu pliki lub kliknij aby wybrać
+        <input type="file" id="attach-input" name="attachments" multiple
+               accept="image/*,.pdf,.doc,.docx,.txt,.xls,.xlsx,.csv,.zip,.rar"
+               style="display:none;">
+    </div>
+    <div id="attach-preview" style="display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.5rem;"></div>
+</div>
+
 <div class="card" id="history-panel" style="display:none;">
-    <div class="card-title">Historia maszyny</div>
-    <ul class="history-list" id="history-list" style="list-style:none;"></ul>
+    <div class="card-title">Historia maszyny <span id="history-count" class="count-badge" style="display:none;"></span></div>
+    <div style="max-height:400px;overflow-y:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:.78rem;">
+            <thead style="position:sticky;top:0;background:var(--bg-th);">
+                <tr>
+                    <th style="padding:.4rem .6rem;text-align:left;font-size:.68rem;color:var(--muted);border-bottom:1px solid var(--border);white-space:nowrap;">Data</th>
+                    <th style="padding:.4rem .6rem;text-align:left;font-size:.68rem;color:var(--muted);border-bottom:1px solid var(--border);">Zdarzenie</th>
+                    <th style="padding:.4rem .6rem;text-align:left;font-size:.68rem;color:var(--muted);border-bottom:1px solid var(--border);">Opis</th>
+                    <th style="padding:.4rem .6rem;text-align:left;font-size:.68rem;color:var(--muted);border-bottom:1px solid var(--border);">Przyczyna</th>
+                    <th style="padding:.4rem .6rem;text-align:left;font-size:.68rem;color:var(--muted);border-bottom:1px solid var(--border);">Sposób naprawy</th>
+                </tr>
+            </thead>
+            <tbody id="history-body"></tbody>
+        </table>
+    </div>
 </div>
 
 <script>
@@ -109,22 +134,20 @@
     const serialInput  = document.getElementById("serial_number");
     const typeList     = document.getElementById("type-list");
     const serialList   = document.getElementById("serial-list");
-    const historyList  = document.getElementById("history-list");
     const historyPanel = document.getElementById("history-panel");
+    const historyBody  = document.getElementById("history-body");
+    const historyCount = document.getElementById("history-count");
 
     function fillDatalist(target, values) {
-        target.innerHTML = "";
-        values.forEach(v => {
-            const o = document.createElement("option");
-            o.value = v;
-            target.appendChild(o);
-        });
+        target.innerHTML = values.map(v => `<option value="${v}">`).join('');
     }
+
+    function esc(s) { return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
     function badgeClass(et) {
         const e = (et || "").toLowerCase();
         if (e === "awaria")       return "badge-awaria";
-        if (e === "przegląd")     return "badge-przeglad";
+        if (e.includes("przegl")) return "badge-przeglad";
         if (e === "modernizacja") return "badge-modernizacja";
         if (e === "interwencja")  return "badge-interwencja";
         return "badge-inne";
@@ -136,21 +159,70 @@
         const data = await resp.json();
         fillDatalist(typeList,   data.types           || []);
         fillDatalist(serialList, data.serial_numbers  || []);
-        historyList.innerHTML = "";
         const entries = data.previous_entries || [];
-        historyPanel.style.display = entries.length ? "" : "none";
-        entries.forEach(e => {
-            const li = document.createElement("li");
-            li.style.cssText = "padding:.35rem .5rem;display:flex;gap:.5rem;align-items:baseline;font-size:.78rem;color:var(--muted);";
-            li.innerHTML = `<span style="color:var(--accent);white-space:nowrap;font-size:.72rem;">${e.occurrence_at}</span>`
-                         + `<span class="badge ${badgeClass(e.event_type)}">${e.event_type}</span>`
-                         + `<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;">${e.description}</span>`;
-            historyList.appendChild(li);
-        });
+        historyPanel.style.display = entries.length ? '' : 'none';
+        if (entries.length) {
+            historyCount.textContent = entries.length;
+            historyCount.style.display = '';
+            historyBody.innerHTML = entries.map(e =>
+                `<tr style="border-bottom:1px solid rgba(51,65,85,.4);">
+                    <td style="padding:.35rem .6rem;white-space:nowrap;color:var(--accent);font-size:.72rem;">${esc(e.occurrence_at)}</td>
+                    <td style="padding:.35rem .6rem;"><span class="badge ${badgeClass(e.event_type)}">${esc(e.event_type)}</span></td>
+                    <td style="padding:.35rem .6rem;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(e.description)}</td>
+                    <td style="padding:.35rem .6rem;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);">${esc(e.cause)}</td>
+                    <td style="padding:.35rem .6rem;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);">${esc(e.repair_method)}</td>
+                </tr>`
+            ).join('');
+        }
     }
 
     machineInput.addEventListener("change", refreshMachineData);
     typeInput.addEventListener("change",    refreshMachineData);
     serialInput.addEventListener("focus",   refreshMachineData);
+
+    // ── Attachment handling ────────────────────────────────────────
+    const dt         = new DataTransfer();
+    const attachZone  = document.getElementById('attach-zone');
+    const attachInput = document.getElementById('attach-input');
+    const attachPreview = document.getElementById('attach-preview');
+
+    function renderPreview() {
+        attachPreview.innerHTML = '';
+        for (let i = 0; i < dt.files.length; i++) {
+            const f = dt.files[i];
+            const el = document.createElement('div');
+            el.style.cssText = 'padding:.2rem .55rem;background:var(--bg-card-alt,#162032);border:1px solid var(--border);border-radius:4px;font-size:.75rem;display:flex;align-items:center;gap:.35rem;';
+            el.innerHTML = `<span>${f.name}</span><span style="color:var(--muted);">${(f.size/1024).toFixed(0)} KB</span>`;
+            attachPreview.appendChild(el);
+        }
+    }
+
+    function addFiles(files) {
+        for (const f of files) dt.items.add(f);
+        renderPreview();
+    }
+
+    attachZone.addEventListener('click', () => attachInput.click());
+    attachZone.addEventListener('dragover',  e => { e.preventDefault(); attachZone.style.borderColor='var(--accent)'; });
+    attachZone.addEventListener('dragleave', () => { attachZone.style.borderColor=''; });
+    attachZone.addEventListener('drop', e => {
+        e.preventDefault(); attachZone.style.borderColor='';
+        addFiles(e.dataTransfer.files);
+    });
+    attachInput.addEventListener('change', () => addFiles(attachInput.files));
+    document.addEventListener('paste', e => {
+        if (e.clipboardData && e.clipboardData.files.length) addFiles(e.clipboardData.files);
+    });
+
+    // Submit via fetch so pasted/dropped files are included
+    const mainForm = document.querySelector('form');
+    mainForm.addEventListener('submit', async e => {
+        e.preventDefault();
+        const fd = new FormData(mainForm);
+        fd.delete('attachments');
+        for (let i = 0; i < dt.files.length; i++) fd.append('attachments', dt.files[i]);
+        const resp = await fetch('', { method: 'POST', body: fd });
+        window.location.href = resp.url;
+    });
 </script>
 {% endblock %}

@@ -286,6 +286,49 @@
             .navbar-brand span.subtitle { display: none; }
             .container { padding: 1rem; }
         }
+
+        /* ─── Record detail modal ─── */
+        .modal-backdrop {
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,.7);
+            z-index: 200;
+            display: flex; align-items: center; justify-content: center;
+            opacity: 0; pointer-events: none;
+            transition: opacity .2s;
+        }
+        .modal-backdrop.open { opacity: 1; pointer-events: auto; }
+        .modal-box {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            width: min(92vw, 860px);
+            max-height: 88vh;
+            overflow-y: auto;
+            padding: 1.5rem;
+        }
+        .modal-header {
+            display: flex; justify-content: space-between; align-items: flex-start;
+            margin-bottom: 1rem;
+        }
+        .modal-close {
+            background: none; border: none; color: var(--muted);
+            cursor: pointer; font-size: 1.25rem; padding: .2rem .4rem;
+            border-radius: 4px; line-height: 1; flex-shrink: 0;
+        }
+        .modal-close:hover { color: var(--text); background: rgba(255,255,255,.07); }
+        .detail-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: .65rem;
+        }
+        .detail-item .dl { font-size: .7rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin-bottom: .15rem; }
+        .detail-item .dv { font-size: .85rem; color: var(--text); white-space: pre-wrap; word-break: break-word; }
+        .detail-item .dv:empty::before { content: '—'; color: var(--muted); }
+        .detail-item.full { grid-column: 1 / -1; }
+        .attach-list { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: .5rem; }
+        .attach-list a { color: var(--accent); font-size: .8rem; }
+        .attach-list img { max-height: 90px; border-radius: 4px; border: 1px solid var(--border); cursor: zoom-in; }
+        .record-row { cursor: pointer; }
     </style>
 </head>
 <body>

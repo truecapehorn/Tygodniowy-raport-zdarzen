@@ -5,7 +5,6 @@
 {% macro event_badge(et) %}
   {%- set e = et | lower -%}
   {%- if   e == 'awaria'       -%}<span class="badge badge-awaria">{{ et }}</span>
-  {%- elif e == 'przeglad'     -%}<span class="badge badge-przeglad">{{ et }}</span>
   {%- elif 'przegl' in e       -%}<span class="badge badge-przeglad">{{ et }}</span>
   {%- elif e == 'modernizacja' -%}<span class="badge badge-modernizacja">{{ et }}</span>
   {%- elif e == 'interwencja'  -%}<span class="badge badge-interwencja">{{ et }}</span>
@@ -15,49 +14,80 @@
 
 <div class="page-title">Strona główna <small>Rejestr działań utrzymania ruchu</small></div>
 
+<!-- ── Ostatnie N rekordów ─────────────────────────────────────── -->
 <div class="card">
-    <div class="card-title">
-        Ostatnie 20 rekordów
+    <div class="card-title" style="justify-content:flex-start;gap:.6rem;">
+        Ostatnie {{ limit }} rekordów
         {% if latest_records %}<span class="count-badge">{{ latest_records | length }}</span>{% endif %}
+        <span style="margin-left:auto;display:flex;align-items:center;gap:.4rem;font-size:.78rem;color:var(--muted);text-transform:none;letter-spacing:0;">
+            Pokaż:
+            <select id="limit-select" style="background:var(--bg-input);border:1px solid var(--border);border-radius:4px;color:var(--text);font:inherit;padding:.2rem .4rem;font-size:.78rem;">
+                {% for n in [10, 20, 50, 100] %}
+                <option value="{{ n }}" {% if limit == n %}selected{% endif %}>{{ n }}</option>
+                {% endfor %}
+            </select>
+        </span>
     </div>
     <div class="table-wrap">
         <table>
             <thead>
                 <tr>
-                    <th>Nr</th><th>Data wystąpienia</th><th>Maszyna</th><th>Typ / Numer</th>
-                    <th>Zdarzenie</th><th>Opis</th><th>Wyklucz. [h]</th><th>Koszt brutto PLN</th>
+                    <th>Nr</th>
+                    <th>Data wystąpienia</th>
+                    <th>Maszyna</th>
+                    <th>Typ / Numer</th>
+                    <th>Zdarzenie</th>
+                    <th>Opis</th>
+                    <th>Przyczyna</th>
+                    <th>Sposób naprawy</th>
+                    <th>Wymienione części</th>
                 </tr>
             </thead>
             <tbody>
                 {% for r in latest_records %}
-                <tr>
+                <tr class="record-row" data-id="{{ r.id }}" data-downtime="{{ r.downtime_hours }}" data-cost="{{ r.total_cost }}">
                     <td class="td-id">{{ r.id }}<br><span class="td-week">{{ r.record_year }}/W{{ r.record_week }}/{{ r.week_sequence }}</span></td>
-                    <td>{{ r.occurrence_at }}</td>
+                    <td style="white-space:nowrap;">{{ r.occurrence_at }}</td>
                     <td>{{ r.name }}</td>
                     <td class="text-muted">{{ r.machine_type }}<br>{{ r.serial_number }}</td>
                     <td>{{ event_badge(r.event_type) }}</td>
                     <td>{{ r.description }}</td>
-                    <td class="td-hrs">{{ r.downtime_hours }}</td>
-                    <td class="td-cost">{{ r.total_cost }}</td>
+                    <td class="text-muted">{{ r.cause or '' }}</td>
+                    <td class="text-muted">{{ r.repair_method or '' }}</td>
+                    <td class="text-muted">{{ r.replaced_parts or '' }}</td>
                 </tr>
                 {% else %}
-                <tr class="empty-row"><td colspan="8">Brak rekordów. <a href="{{ url_for('new_record') }}">Dodaj pierwszy rekord →</a></td></tr>
+                <tr class="empty-row"><td colspan="9">Brak rekordów. <a href="{{ url_for('new_record') }}">Dodaj pierwszy rekord →</a></td></tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
 </div>
 
+<!-- ── Filtrowanie i eksport ────────────────────────────────────── -->
 <div class="card">
     <div class="card-title">Filtrowanie i eksport</div>
-    <form method="get">
+    <form method="get" id="filter-form">
         <div class="form-grid">
             <div class="field">
                 <label>Maszyna</label>
-                <input list="machine-filter-list" name="machine" value="{{ filters.machine }}" placeholder="Wszystkie maszyny" autocomplete="off">
+                <input list="machine-filter-list" id="filter-machine" name="machine"
+                       value="{{ filters.machine }}" placeholder="Wszystkie" autocomplete="off">
                 <datalist id="machine-filter-list">
                     {% for mn in machine_names %}<option value="{{ mn }}">{% endfor %}
                 </datalist>
+            </div>
+            <div class="field">
+                <label>Typ</label>
+                <input list="filter-type-list" id="filter-type" name="machine_type"
+                       value="{{ filters.machine_type }}" placeholder="Wszystkie typy" autocomplete="off">
+                <datalist id="filter-type-list"></datalist>
+            </div>
+            <div class="field">
+                <label>Numer</label>
+                <input list="filter-serial-list" id="filter-serial" name="serial_number"
+                       value="{{ filters.serial_number }}" placeholder="Wszystkie numery" autocomplete="off">
+                <datalist id="filter-serial-list"></datalist>
             </div>
             <div class="field">
                 <label>Rodzaj zdarzenia</label>
@@ -69,16 +99,17 @@
                 </select>
             </div>
             <div class="field">
-                <label>Data wystąpienia od</label>
+                <label>Data od</label>
                 <input type="date" name="occurrence_from" value="{{ filters.occurrence_from }}">
             </div>
             <div class="field">
-                <label>Data wystąpienia do</label>
+                <label>Data do</label>
                 <input type="date" name="occurrence_to" value="{{ filters.occurrence_to }}">
             </div>
-            <div class="field">
-                <label>Opis (słowa, średnik)</label>
-                <input type="text" name="description_terms" value="{{ filters.description_terms }}" placeholder="np. silnik;czujnik">
+            <div class="field" style="grid-column:span 2;">
+                <label>Szukaj w opisie, przyczynie, naprawie, częściach (słowa rozdzielone ; )</label>
+                <input type="text" name="description_terms" value="{{ filters.description_terms }}"
+                       placeholder="np. silnik;czujnik">
             </div>
         </div>
         <div class="actions">
@@ -99,24 +130,32 @@
         <table>
             <thead>
                 <tr>
-                    <th>Nr</th><th>Data wystąpienia</th><th>Maszyna</th><th>Typ / Numer</th>
-                    <th>Zdarzenie</th><th>Opis</th><th>Wyklucz. [h]</th><th>Koszt brutto PLN</th>
+                    <th>Nr</th>
+                    <th>Data wystąpienia</th>
+                    <th>Maszyna</th>
+                    <th>Typ / Numer</th>
+                    <th>Zdarzenie</th>
+                    <th>Opis</th>
+                    <th>Przyczyna</th>
+                    <th>Sposób naprawy</th>
+                    <th>Wymienione części</th>
                 </tr>
             </thead>
             <tbody>
                 {% for r in filtered_records %}
-                <tr>
+                <tr class="record-row" data-id="{{ r.id }}" data-downtime="{{ r.downtime_hours }}" data-cost="{{ r.total_cost }}">
                     <td class="td-id">{{ r.id }}<br><span class="td-week">{{ r.record_year }}/W{{ r.record_week }}/{{ r.week_sequence }}</span></td>
-                    <td>{{ r.occurrence_at }}</td>
+                    <td style="white-space:nowrap;">{{ r.occurrence_at }}</td>
                     <td>{{ r.name }}</td>
                     <td class="text-muted">{{ r.machine_type }}<br>{{ r.serial_number }}</td>
                     <td>{{ event_badge(r.event_type) }}</td>
                     <td>{{ r.description }}</td>
-                    <td class="td-hrs">{{ r.downtime_hours }}</td>
-                    <td class="td-cost">{{ r.total_cost }}</td>
+                    <td class="text-muted">{{ r.cause or '' }}</td>
+                    <td class="text-muted">{{ r.repair_method or '' }}</td>
+                    <td class="text-muted">{{ r.replaced_parts or '' }}</td>
                 </tr>
                 {% else %}
-                <tr class="empty-row"><td colspan="8">Brak wyników dla wybranych filtrów.</td></tr>
+                <tr class="empty-row"><td colspan="9">Brak wyników dla wybranych filtrów.</td></tr>
                 {% endfor %}
             </tbody>
         </table>
@@ -129,4 +168,121 @@
     {% endif %}
 </div>
 
+<!-- ── Record detail popup ─────────────────────────────────────── -->
+<div class="modal-backdrop" id="record-modal">
+    <div class="modal-box">
+        <div class="modal-header">
+            <strong id="modal-title" style="font-size:1rem;"></strong>
+            <button class="modal-close" onclick="closeModal()" title="Zamknij">✕</button>
+        </div>
+        <div id="modal-body"></div>
+    </div>
+</div>
+
+<script>
+// ── Limit selector ─────────────────────────────────────────────────
+document.getElementById('limit-select').addEventListener('change', function() {
+    const url = new URL(window.location);
+    url.searchParams.set('limit', this.value);
+    window.location.href = url.toString();
+});
+
+// ── Filter form: dynamic Typ / Numer datalists ─────────────────────
+const filterMachine = document.getElementById('filter-machine');
+const filterType    = document.getElementById('filter-type');
+const filterSerial  = document.getElementById('filter-serial');
+const filterTypeList   = document.getElementById('filter-type-list');
+const filterSerialList = document.getElementById('filter-serial-list');
+
+function fillDatalist(dl, values) {
+    dl.innerHTML = values.map(v => `<option value="${v}">`).join('');
+}
+
+async function updateFilterLists() {
+    if (!filterMachine.value) return;
+    const p = new URLSearchParams({ machine: filterMachine.value, machine_type: filterType.value });
+    const data = await fetch(`/api/machines?${p}`).then(r => r.json());
+    fillDatalist(filterTypeList,   data.types           || []);
+    fillDatalist(filterSerialList, data.serial_numbers  || []);
+}
+
+filterMachine.addEventListener('change', updateFilterLists);
+filterType.addEventListener('change', updateFilterLists);
+
+// Pre-populate if machine already selected (page reload with filter active)
+if (filterMachine.value) updateFilterLists();
+
+// ── Record detail modal ────────────────────────────────────────────
+function esc(s) { return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+async function openRecord(id) {
+    document.getElementById('modal-title').textContent = 'Ładowanie…';
+    document.getElementById('modal-body').innerHTML = '';
+    document.getElementById('record-modal').classList.add('open');
+
+    const r = await fetch(`/api/record/${id}`).then(res => res.json());
+
+    document.getElementById('modal-title').innerHTML =
+        `Rekord <span style="color:var(--accent)">#${r.id}</span> — ${esc(r.name)}`;
+
+    const fields = [
+        ['Maszyna',               r.name,           false],
+        ['Typ',                   r.machine_type,   false],
+        ['Numer',                 r.serial_number,  false],
+        ['Rok / Tydzień / Lp.',   `${r.record_year} / W${r.record_week} / ${r.week_sequence}`, false],
+        ['Rodzaj zdarzenia',      r.event_type,     false],
+        ['MTG maszyny',           r.machine_mtg,    false],
+        ['Data wystąpienia',      r.occurrence_at,  false],
+        ['Data naprawienia',      r.repaired_at,    false],
+        ['Opis',                  r.description,    true],
+        ['Przyczyna',             r.cause,          true],
+        ['Sposób naprawy',        r.repair_method,  true],
+        ['Wymienione części',     r.replaced_parts, true],
+        ['Pracochłonność [h]',    r.labor_cost,     false],
+        ['Materiał PLN',          r.material_cost,  false],
+        ['Części zamienne PLN',   r.spare_parts_cost,false],
+        ['Serwis PLN',            r.service_cost,   false],
+        ['Koszt brutto PLN',      r.total_cost,     false],
+        ['Wykluczenie z prod.[h]',r.downtime_hours, false],
+    ];
+
+    let html = '<div class="detail-grid">';
+    fields.forEach(([label, val, full]) => {
+        html += `<div class="detail-item${full?' full':''}">
+            <div class="dl">${esc(label)}</div>
+            <div class="dv">${esc(val)}</div>
+        </div>`;
+    });
+    html += '</div>';
+
+    if (r.attachments && r.attachments.length) {
+        html += `<div style="margin-top:1rem;">
+            <div class="card-title" style="margin-bottom:.5rem;">Załączniki</div>
+            <div class="attach-list">`;
+        r.attachments.forEach(a => {
+            const url = `/attachments/${r.id}/${encodeURIComponent(a.filename)}`;
+            if (a.content_type.startsWith('image/')) {
+                html += `<a href="${url}" target="_blank"><img src="${url}" alt="${esc(a.original_name)}" title="${esc(a.original_name)}"></a>`;
+            } else {
+                html += `<a href="${url}" target="_blank" class="btn btn-outline btn-sm">📎 ${esc(a.original_name)}</a>`;
+            }
+        });
+        html += '</div></div>';
+    }
+
+    document.getElementById('modal-body').innerHTML = html;
+}
+
+function closeModal() {
+    document.getElementById('record-modal').classList.remove('open');
+}
+document.getElementById('record-modal').addEventListener('click', function(e) {
+    if (e.target === this) closeModal();
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+document.querySelectorAll('.record-row').forEach(row => {
+    row.addEventListener('click', () => openRecord(row.dataset.id));
+});
+</script>
 {% endblock %}
