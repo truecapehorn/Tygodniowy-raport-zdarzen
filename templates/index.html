@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="pl">
+<head>
+    <meta charset="utf-8">
+    <title>Tygodniowy raport napraw</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 2rem; background: #f7f7f7; color: #222; }
+        h1, h2 { margin-bottom: 0.5rem; }
+        .layout { display: grid; gap: 1.5rem; }
+        .card { background: #fff; padding: 1rem; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+        form { display: grid; gap: 0.75rem; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.75rem; }
+        label { display: grid; gap: 0.35rem; font-weight: 600; }
+        input, select, textarea, button { font: inherit; padding: 0.55rem; }
+        textarea { min-height: 90px; resize: vertical; }
+        table { width: 100%; border-collapse: collapse; margin-top: 1rem; background: #fff; }
+        th, td { padding: 0.6rem; border: 1px solid #ddd; vertical-align: top; }
+        th { background: #efefef; }
+        .actions { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+        .flash-success { color: #116329; }
+        .flash-error { color: #9f1d1d; }
+        .muted { color: #666; font-size: 0.95rem; }
+        ul { margin: 0.5rem 0 0; padding-left: 1.2rem; }
+    </style>
+</head>
+<body>
+    <h1>Tygodniowy raport napraw</h1>
+    <p class="muted">Rejestr działań utrzymania ruchu, filtrowanie wpisów oraz import i eksport danych Excel.</p>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div class="card">
+                {% for category, message in messages %}
+                    <div class="flash-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% endwith %}
+
+    <div class="layout">
+        <section class="card">
+            <h2>Nowy rekord</h2>
+            <form method="post">
+                <div class="grid">
+                    <label>Data wystąpienia
+                        <input type="datetime-local" name="occurrence_at" required>
+                    </label>
+                    <label>Data naprawienia / interwencji
+                        <input type="datetime-local" name="repaired_at">
+                    </label>
+                    <label>Rodzaj zdarzenia
+                        <select name="event_type">
+                            {% for event_type in event_types %}
+                                <option value="{{ event_type }}">{{ event_type }}</option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                    <label>MTG maszyny
+                        <input type="text" name="machine_mtg">
+                    </label>
+                </div>
+                <div class="grid">
+                    <label>Maszyna
+                        <input list="machine-list" id="machine_name" name="machine_name" required>
+                        <datalist id="machine-list">
+                            {% for machine_name in machine_names %}
+                                <option value="{{ machine_name }}"></option>
+                            {% endfor %}
+                        </datalist>
+                    </label>
+                    <label>Typ
+                        <input list="type-list" id="machine_type" name="machine_type" required>
+                        <datalist id="type-list"></datalist>
+                    </label>
+                    <label>Numer
+                        <input list="serial-list" id="serial_number" name="serial_number" required>
+                        <datalist id="serial-list"></datalist>
+                    </label>
+                </div>
+                <div class="grid">
+                    <label>Opis
+                        <textarea name="description" required></textarea>
+                    </label>
+                    <label>Przyczyna
+                        <textarea name="cause"></textarea>
+                    </label>
+                    <label>Sposób naprawy
+                        <textarea name="repair_method"></textarea>
+                    </label>
+                    <label>Wymienione części
+                        <textarea name="replaced_parts"></textarea>
+                    </label>
+                </div>
+                <div class="grid">
+                    <label>Praco chłonność [80PLN/h]
+                        <input type="number" step="0.01" min="0" name="labor_cost">
+                    </label>
+                    <label>Materiał własny PLN
+                        <input type="number" step="0.01" min="0" name="material_cost">
+                    </label>
+                    <label>Części zamienne PLN
+                        <input type="number" step="0.01" min="0" name="spare_parts_cost">
+                    </label>
+                    <label>Serwis PLN
+                        <input type="number" step="0.01" min="0" name="service_cost">
+                    </label>
+                </div>
+                <div class="actions">
+                    <button type="submit">Zapisz rekord</button>
+                    <a href="{{ url_for('import_data') }}">Import Excel</a>
+                </div>
+            </form>
+
+            <div id="history" class="card" style="margin-top: 1rem;">
+                <strong>Poprzednie wpisy dla maszyny</strong>
+                <p class="muted">Wybierz maszynę, aby zobaczyć ostatnie wpisy poniżej formularza.</p>
+                <ul id="history-list"></ul>
+            </div>
+        </section>
+
+        <section class="card">
+            <h2>Filtrowanie i eksport</h2>
+            <form method="get">
+                <div class="grid">
+                    <label>Maszyna
+                        <input list="machine-list" name="machine" value="{{ filters.machine }}">
+                    </label>
+                    <label>Rodzaj zdarzenia
+                        <select name="event_type">
+                            <option value="">Wszystkie</option>
+                            {% for event_type in event_types %}
+                                <option value="{{ event_type }}" {% if filters.event_type == event_type %}selected{% endif %}>{{ event_type }}</option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                    <label>Data wystąpienia od
+                        <input type="date" name="occurrence_from" value="{{ filters.occurrence_from }}">
+                    </label>
+                    <label>Data wystąpienia do
+                        <input type="date" name="occurrence_to" value="{{ filters.occurrence_to }}">
+                    </label>
+                    <label>Opis (słowa rozdzielone średnikiem)
+                        <input type="text" name="description_terms" value="{{ filters.description_terms }}">
+                    </label>
+                </div>
+                <div class="actions">
+                    <button type="submit">Filtruj</button>
+                    <a href="{{ url_for('export_data', **filters) }}">Eksport do Excel</a>
+                </div>
+            </form>
+        </section>
+
+        <section class="card">
+            <h2>Wpisane rekordy</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Nr</th>
+                        <th>Data wystąpienia</th>
+                        <th>Maszyna</th>
+                        <th>Typ</th>
+                        <th>Numer</th>
+                        <th>Rodzaj zdarzenia</th>
+                        <th>Opis</th>
+                        <th>Wykluczenie z produkcji [rob.godzina]</th>
+                        <th>Koszt brutto naprawy PLN</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for record in records %}
+                        <tr>
+                            <td>{{ record.id }}<br><span class="muted">{{ record.record_year }}/W{{ record.record_week }}/{{ record.week_sequence }}</span></td>
+                            <td>{{ record.occurrence_at }}</td>
+                            <td>{{ record.name }}</td>
+                            <td>{{ record.machine_type }}</td>
+                            <td>{{ record.serial_number }}</td>
+                            <td>{{ record.event_type }}</td>
+                            <td>{{ record.description }}</td>
+                            <td>{{ record.downtime_hours }}</td>
+                            <td>{{ record.total_cost }}</td>
+                        </tr>
+                    {% else %}
+                        <tr>
+                            <td colspan="9">Brak rekordów.</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </section>
+    </div>
+
+    <script>
+        const machineInput = document.getElementById("machine_name");
+        const typeInput = document.getElementById("machine_type");
+        const serialInput = document.getElementById("serial_number");
+        const typeList = document.getElementById("type-list");
+        const serialList = document.getElementById("serial-list");
+        const historyList = document.getElementById("history-list");
+
+        function fillDatalist(target, values) {
+            target.innerHTML = "";
+            values.forEach((value) => {
+                const option = document.createElement("option");
+                option.value = value;
+                target.appendChild(option);
+            });
+        }
+
+        async function refreshMachineData() {
+            const params = new URLSearchParams({
+                machine: machineInput.value,
+                machine_type: typeInput.value
+            });
+            const response = await fetch(`/api/machines?${params.toString()}`);
+            const payload = await response.json();
+            fillDatalist(typeList, payload.types || []);
+            fillDatalist(serialList, payload.serial_numbers || []);
+            historyList.innerHTML = "";
+            (payload.previous_entries || []).forEach((entry) => {
+                const item = document.createElement("li");
+                item.textContent = `${entry.occurrence_at} | ${entry.machine_type} | ${entry.serial_number} | ${entry.event_type} | ${entry.description}`;
+                historyList.appendChild(item);
+            });
+        }
+
+        machineInput.addEventListener("change", refreshMachineData);
+        typeInput.addEventListener("change", refreshMachineData);
+        serialInput.addEventListener("focus", refreshMachineData);
+    </script>
+</body>
+</html>

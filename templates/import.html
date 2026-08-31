@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="pl">
+<head>
+    <meta charset="utf-8">
+    <title>Import danych</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 2rem; }
+        form { display: grid; gap: 1rem; max-width: 480px; }
+    </style>
+</head>
+<body>
+    <h1>Import danych z Excel</h1>
+    <p>Załaduj plik XLSX z kolumnami zgodnymi z obecnym raportem. Daty i koszty zostaną przeliczone podczas importu.</p>
+    <form method="post" enctype="multipart/form-data">
+        <input type="file" name="file" accept=".xlsx" required>
+        <button type="submit">Importuj</button>
+    </form>
+    <p><a href="{{ url_for('index') }}">Wróć do raportu</a></p>
+</body>
+</html>
