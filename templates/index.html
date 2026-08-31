@@ -175,6 +175,11 @@
     </div>
     {% endif %}
 </div>
+<!-- static file input reused by the edit popup (dynamic innerHTML inputs don't open picker reliably) -->
+<input type="file" id="edit-file-input" multiple
+       accept="image/*,.pdf,.doc,.docx,.txt,.xls,.xlsx,.csv,.zip,.rar"
+       style="display:none;">
+
 <!-- ── Record detail popup ─────────────────────────────────────── -->
 <div class="modal-backdrop" id="record-modal">
     <div class="modal-box">
@@ -292,10 +297,8 @@ function buildEditForm(r) {
     <div>
         <div class="card-title" style="margin-bottom:.5rem;">Za&#322;&#261;czniki &#8212; dodaj nowe pliki</div>
         ${existingAttach}
-        <div id="ef-attach-zone" style="border:2px dashed var(--border);border-radius:6px;padding:1rem;text-align:center;color:var(--muted);font-size:.82rem;cursor:pointer;transition:border-color .15s;position:relative;user-select:none;">
+        <div id="ef-attach-zone" style="border:2px dashed var(--border);border-radius:6px;padding:1rem;text-align:center;color:var(--muted);font-size:.82rem;cursor:pointer;transition:border-color .15s;">
             Przeci&#261;gnij pliki, kliknij lub wklej ze schowka (Ctrl+V)
-            <input type="file" id="ef-attach-input" multiple accept="image/*,.pdf,.doc,.docx,.txt,.xls,.xlsx,.csv,.zip,.rar"
-                   style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;">
         </div>
         <div id="ef-attach-preview" style="display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.4rem;"></div>
     </div>`;
@@ -322,9 +325,10 @@ function addEditFiles(files) {
 function initEditAttachments() {
     editFiles = [];
     const zone  = document.getElementById('ef-attach-zone');
-    const input = document.getElementById('ef-attach-input');
+    const input = document.getElementById('edit-file-input'); // static input, not dynamic innerHTML
     if (!zone || !input) return;
-    // transparent overlay handles click natively — no JS click handler needed
+    input.value = '';
+    zone.addEventListener('click',     () => input.click());
     zone.addEventListener('dragover',  e => { e.preventDefault(); zone.style.borderColor = 'var(--accent)'; });
     zone.addEventListener('dragleave', () => { zone.style.borderColor = ''; });
     zone.addEventListener('drop',      e => { e.preventDefault(); e.stopPropagation(); zone.style.borderColor = ''; addEditFiles(e.dataTransfer.files); });
