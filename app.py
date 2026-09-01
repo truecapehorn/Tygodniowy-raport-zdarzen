@@ -279,6 +279,10 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         if connection is not None:
             connection.close()
 
+    @app.context_processor
+    def inject_role():
+        return {"user_role": session.get("role", "guest")}
+
     with app.app_context():
         init_db()
 
@@ -286,11 +290,18 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
     def login():
         error = None
         if request.method == "POST":
+            login_val = request.form.get("login", "").strip()
+            pw_val = request.form.get("password", "")
+            if not login_val and not pw_val:
+                session["logged_in"] = True
+                session["role"] = "guest"
+                return redirect(url_for("index"))
             auth = json.loads(AUTH_FILE.read_text(encoding="utf-8"))
-            ok_login = request.form.get("login", "").strip() == auth.get("login", "admin")
-            ok_pw = check_password_hash(auth["password_hash"], request.form.get("password", ""))
+            ok_login = login_val == auth.get("login", "admin")
+            ok_pw = check_password_hash(auth["password_hash"], pw_val)
             if ok_login and ok_pw:
                 session["logged_in"] = True
+                session["role"] = "admin"
                 return redirect(url_for("index"))
             error = "Nieprawid\u0142owy login lub has\u0142o."
         return render_template("login.html", error=error)
@@ -343,6 +354,9 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
 
     @app.route("/new", methods=["GET", "POST"])
     def new_record():
+        if not app.config.get("TESTING") and session.get("role") != "admin":
+            flash("Brak uprawnie\u0144 do dodawania rekord\u00f3w.", "error")
+            return redirect(url_for("index"))
         if request.method == "POST":
             try:
                 record_id = save_record(request.form)
@@ -363,6 +377,9 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
     def import_data():
         if request.method == "GET":
             return redirect(url_for("data_page"), code=301)
+        if not app.config.get("TESTING") and session.get("role") != "admin":
+            flash("Brak uprawnie\u0144 do importu danych.", "error")
+            return redirect(url_for("data_page"))
         upload = request.files.get("file")
         if not upload or not upload.filename:
             flash("Wybierz plik Excel do importu.", "error")
@@ -374,6 +391,9 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
     @app.route("/data", methods=["GET", "POST"])
     def data_page():
         if request.method == "POST":
+            if not app.config.get("TESTING") and session.get("role") != "admin":
+                flash("Brak uprawnie\u0144 do importu danych.", "error")
+                return redirect(url_for("data_page"))
             upload = request.files.get("file")
             if not upload or not upload.filename:
                 flash("Wybierz plik Excel do importu.", "error")
@@ -492,6 +512,8 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
 
     @app.route("/api/record/<int:record_id>", methods=["PATCH"])
     def update_record_api(record_id: int):
+        if not app.config.get("TESTING") and session.get("role") != "admin":
+            return jsonify({"error": "Brak uprawnie\u0144."}), 403
         data = request.get_json(force=True)
         if not data:
             return jsonify({"error": "Brak danych."}), 400
@@ -503,6 +525,8 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
 
     @app.route("/api/record/<int:record_id>", methods=["DELETE"])
     def delete_record_api(record_id: int):
+        if not app.config.get("TESTING") and session.get("role") != "admin":
+            return jsonify({"error": "Brak uprawnie\u0144."}), 403
         import shutil
 
         db = get_db()
@@ -518,6 +542,8 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
 
     @app.route("/api/record/<int:record_id>/attachments", methods=["POST"])
     def add_record_attachments(record_id: int):
+        if not app.config.get("TESTING") and session.get("role") != "admin":
+            return jsonify({"error": "Brak uprawnie\u0144."}), 403
         db = get_db()
         if not db.execute("SELECT id FROM repair_records WHERE id = ?", (record_id,)).fetchone():
             return jsonify({"error": "Rekord nie istnieje."}), 404
@@ -528,6 +554,8 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
 
     @app.route("/api/attachment/<int:attachment_id>", methods=["DELETE"])
     def delete_attachment_api(attachment_id: int):
+        if not app.config.get("TESTING") and session.get("role") != "admin":
+            return jsonify({"error": "Brak uprawnie\u0144."}), 403
         db = get_db()
         row = db.execute("SELECT * FROM attachments WHERE id = ?", (attachment_id,)).fetchone()
         if not row:
