@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import io
+import json
+import secrets
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -18,9 +20,11 @@ from flask import (
     request,
     send_file,
     send_from_directory,
+    session,
     url_for,
 )
 from openpyxl import Workbook, load_workbook
+from werkzeug.security import check_password_hash, generate_password_hash
 
 UTC = timezone.utc
 
@@ -221,11 +225,31 @@ def machine_key_from_form(form: dict[str, Any]) -> tuple[str, str, str]:
     )
 
 
+AUTH_FILE = Path(__file__).parent / "auth.json"
+
+
+def _ensure_auth_file() -> dict:
+    """Return auth data, creating auth.json with defaults on first run."""
+    if AUTH_FILE.exists():
+        try:
+            return json.loads(AUTH_FILE.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            pass
+    data = {
+        "login": "admin",
+        "password_hash": generate_password_hash("admin"),
+        "secret_key": secrets.token_hex(32),
+    }
+    AUTH_FILE.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    return data
+
+
 def create_app(test_config: dict[str, Any] | None = None) -> Flask:
     app = Flask(__name__)
     default_db = Path(app.instance_path) / "repair_reports.sqlite3"
+    auth_data = _ensure_auth_file()
     app.config.from_mapping(
-        SECRET_KEY="dev",
+        SECRET_KEY=auth_data.get("secret_key", "dev"),
         DATABASE=str(default_db),
         UPLOAD_DIR=str(Path(app.instance_path) / "uploads"),
     )
@@ -236,7 +260,17 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
     Path(app.config["UPLOAD_DIR"]).mkdir(parents=True, exist_ok=True)
 
     @app.before_request
-    def before_request() -> None:
+    def check_auth():
+        if app.config.get("TESTING"):
+            return
+        exempt = {"login", "logout", "static"}
+        if request.endpoint in exempt or request.endpoint is None:
+            return
+        if not session.get("logged_in"):
+            return redirect(url_for("login"))
+
+    @app.before_request
+    def open_db_connection() -> None:
         get_db()
 
     @app.teardown_appcontext
@@ -247,6 +281,44 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
 
     with app.app_context():
         init_db()
+
+    @app.route("/login", methods=["GET", "POST"])
+    def login():
+        error = None
+        if request.method == "POST":
+            auth = json.loads(AUTH_FILE.read_text(encoding="utf-8"))
+            ok_login = request.form.get("login", "").strip() == auth.get("login", "admin")
+            ok_pw = check_password_hash(auth["password_hash"], request.form.get("password", ""))
+            if ok_login and ok_pw:
+                session["logged_in"] = True
+                return redirect(url_for("index"))
+            error = "Nieprawid\u0142owy login lub has\u0142o."
+        return render_template("login.html", error=error)
+
+    @app.route("/logout")
+    def logout():
+        session.clear()
+        return redirect(url_for("login"))
+
+    @app.route("/change-password", methods=["GET", "POST"])
+    def change_password():
+        if request.method == "POST":
+            current = request.form.get("current_password", "")
+            new_pw = request.form.get("new_password", "")
+            confirm = request.form.get("confirm_password", "")
+            auth = json.loads(AUTH_FILE.read_text(encoding="utf-8"))
+            if not check_password_hash(auth["password_hash"], current):
+                flash("Nieprawid\u0142owe obecne has\u0142o.", "error")
+            elif len(new_pw) < 4:
+                flash("Nowe has\u0142o musi mie\u0107 co najmniej 4 znaki.", "error")
+            elif new_pw != confirm:
+                flash("Has\u0142a nie s\u0105 identyczne.", "error")
+            else:
+                auth["password_hash"] = generate_password_hash(new_pw)
+                AUTH_FILE.write_text(json.dumps(auth, indent=2), encoding="utf-8")
+                flash("Has\u0142o zosta\u0142o zmienione.", "success")
+                return redirect(url_for("index"))
+        return render_template("change_password.html")
 
     @app.route("/", methods=["GET", "POST"])
     def index():

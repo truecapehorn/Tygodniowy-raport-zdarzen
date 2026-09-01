@@ -65,6 +65,9 @@ db.sqlite3-journal
 instance/
 .webassets-cache
 
+# Local auth config – contains hashed password, not tracked in git
+auth.json
+
 # Scrapy stuff:
 .scrapy
 

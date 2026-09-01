@@ -40,7 +40,6 @@
                     <th>Opis</th>
                     <th>Przyczyna</th>
                     <th>Sposób naprawy</th>
-                    <th>Wymienione części</th>
                     <th title="Załączniki">&#128206;</th>
                 </tr>
             </thead>
@@ -55,13 +54,12 @@
                     <td>{{ r.description }}</td>
                     <td class="text-muted">{{ r.cause or '' }}</td>
                     <td class="text-muted">{{ r.repair_method or '' }}</td>
-                    <td class="text-muted">{{ r.replaced_parts or '' }}</td>
                     <td style="white-space:nowrap;text-align:center;">
                         {% if r.attachment_count > 0 %}<span style="color:var(--accent);font-size:.8rem;" title="{{ r.attachment_count }} plik(ów)">&#128206; {{ r.attachment_count }}</span>{% endif %}
                     </td>
                 </tr>
                 {% else %}
-                <tr class="empty-row"><td colspan="10">Brak rekordów. <a href="{{ url_for('new_record') }}">Dodaj pierwszy rekord →</a></td></tr>
+                <tr class="empty-row"><td colspan="9">Brak rekordów. <a href="{{ url_for('new_record') }}">Dodaj pierwszy rekord →</a></td></tr>
                 {% endfor %}
             </tbody>
         </table>
