@@ -450,6 +450,19 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
                 save_attachment(record_id, f)
         return jsonify({"ok": True})
 
+    @app.route("/api/attachment/<int:attachment_id>", methods=["DELETE"])
+    def delete_attachment_api(attachment_id: int):
+        db = get_db()
+        row = db.execute("SELECT * FROM attachments WHERE id = ?", (attachment_id,)).fetchone()
+        if not row:
+            return jsonify({"error": "Załącznik nie istnieje."}), 404
+        file_path = Path(current_app_uploads()) / str(row["record_id"]) / row["filename"]
+        if file_path.exists():
+            file_path.unlink()
+        db.execute("DELETE FROM attachments WHERE id = ?", (attachment_id,))
+        db.commit()
+        return jsonify({"ok": True})
+
     @app.route("/attachments/<int:record_id>/<path:filename>")
     def serve_attachment(record_id: int, filename: str):
         row = get_db().execute(

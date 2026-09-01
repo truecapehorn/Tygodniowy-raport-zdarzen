@@ -127,21 +127,41 @@ function buildView(r) {
         html += `<div style="margin-top:1rem;"><div class="card-title" style="margin-bottom:.5rem;">Za&#322;&#261;czniki</div><div class="attach-list">`;
         r.attachments.forEach(a => {
             const url = `/attachments/${r.id}/${encodeURIComponent(a.filename)}`;
-            html += a.content_type.startsWith('image/')
-                ? `<a href="${url}" target="_blank"><img src="${url}" alt="${esc(a.original_name)}" title="${esc(a.original_name)}"></a>`
-                : `<a href="${url}" target="_blank" class="btn btn-outline btn-sm">&#128206; ${esc(a.original_name)}</a>`;
+            const delBtn = `<button type="button" onclick="deleteAttachment(${a.id})" style="background:none;border:none;color:var(--red,#f87171);cursor:pointer;padding:.05rem .25rem;line-height:1;font-size:.8rem;border-radius:3px;" title="Usu\u0144 plik">\u00d7</button>`;
+            if (a.content_type.startsWith('image/')) {
+                html += `<span style="display:inline-flex;flex-direction:column;align-items:center;gap:.2rem;">`
+                    + `<a href="${url}" target="_blank"><img src="${url}" alt="${esc(a.original_name)}" title="${esc(a.original_name)}"></a>`
+                    + delBtn + `</span>`;
+            } else {
+                html += `<span style="display:inline-flex;align-items:center;gap:.3rem;">`
+                    + `<a href="${url}" target="_blank" class="btn btn-outline btn-sm">&#128206; ${esc(a.original_name)}</a>`
+                    + delBtn + `</span>`;
+            }
         });
         html += '</div></div>';
     }
     return html;
 }
 
+function buildExistingAttachList(attachments) {
+    if (!attachments || !attachments.length)
+        return '<p id="ef-existing-attach" style="font-size:.75rem;color:var(--muted);margin-bottom:.5rem;">Brak za\u0142\u0105cznik\u00f3w.</p>';
+    return '<div id="ef-existing-attach" style="display:flex;flex-wrap:wrap;gap:.35rem;margin-bottom:.5rem;">'
+        + attachments.map(a =>
+            `<span style="display:inline-flex;align-items:center;gap:.25rem;padding:.2rem .5rem;background:var(--bg-card-alt,#162032);border:1px solid var(--border);border-radius:4px;font-size:.75rem;">`
+            + `<span>${esc(a.original_name)}</span>`
+            + `<button type="button" onclick="deleteAttachment(${a.id})" style="background:none;border:none;color:var(--red,#f87171);cursor:pointer;padding:0 .1rem;line-height:1;font-size:.9rem;" title="Usu\u0144 plik">\u00d7</button>`
+            + `</span>`
+        ).join('')
+        + '</div>';
+}
+
 function buildEditForm(r) {
     const opts = EVENT_TYPES.map(et =>
         `<option value="${et}"${r.event_type===et?' selected':''}>${et}</option>`).join('');
     const existingAttach = (r.attachments && r.attachments.length)
-        ? '<p style="font-size:.75rem;color:var(--muted);margin-bottom:.5rem;">Istniej\u0105ce: '
-          + r.attachments.map(a => esc(a.original_name)).join(', ') + '</p>'
+        ? '<p style="font-size:.75rem;font-weight:700;color:var(--muted);margin-bottom:.35rem;">Istniej\u0105ce pliki:</p>'
+          + buildExistingAttachList(r.attachments)
         : '';
     return `
     <div class="form-grid" style="margin-bottom:.75rem;">
@@ -308,6 +328,19 @@ async function deleteRecord() {
         if (resp.ok) { closeModal(); window.location.reload(); }
         else { const r = await resp.json(); alert(r.error || 'B\u0142\u0105d podczas usuwania.'); }
     } finally { btn.disabled = false; }
+}
+
+async function deleteAttachment(attachmentId) {
+    if (!confirm('Usun\u0105\u0107 ten za\u0142\u0105cznik?\nOperacja jest nieodwracalna.')) return;
+    const resp = await fetch(`/api/attachment/${attachmentId}`, { method: 'DELETE' });
+    if (!resp.ok) { const d = await resp.json(); alert(d.error || 'B\u0142\u0105d podczas usuwania.'); return; }
+    currentRecord.attachments = currentRecord.attachments.filter(a => a.id !== attachmentId);
+    if (document.getElementById('modal-edit').style.display === 'none') {
+        document.getElementById('modal-view').innerHTML = buildView(currentRecord);
+    } else {
+        const el = document.getElementById('ef-existing-attach');
+        if (el) el.outerHTML = buildExistingAttachList(currentRecord.attachments);
+    }
 }
 
 // ── Row click handlers ──────────────────────────────────────────
