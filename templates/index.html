@@ -114,6 +114,7 @@ function buildView(r) {
         ['Data wyst&#261;pienia', r.occurrence_at, false], ['Data naprawienia', r.repaired_at, false],
         ['Opis', r.description, true], ['Przyczyna', r.cause, true],
         ['Spos&#243;b naprawy', r.repair_method, true], ['Wymienione cz&#281;&#347;ci', r.replaced_parts, true],
+        ['Uwagi', r.notes, true],
         ['Pracoch&#322;onno&#347;&#263; [h]', r.labor_cost, false], ['Materia&#322; PLN', r.material_cost, false],
         ['Cz&#281;&#347;ci zamienne PLN', r.spare_parts_cost, false], ['Serwis PLN', r.service_cost, false],
         ['Koszt brutto PLN', r.total_cost, false], ['Wykluczenie z prod.[h]', r.downtime_hours, false],
@@ -127,16 +128,9 @@ function buildView(r) {
         html += `<div style="margin-top:1rem;"><div class="card-title" style="margin-bottom:.5rem;">Za&#322;&#261;czniki</div><div class="attach-list">`;
         r.attachments.forEach(a => {
             const url = `/attachments/${r.id}/${encodeURIComponent(a.filename)}`;
-            const delBtn = `<button type="button" onclick="deleteAttachment(${a.id})" style="background:none;border:none;color:var(--red,#f87171);cursor:pointer;padding:.05rem .25rem;line-height:1;font-size:.8rem;border-radius:3px;" title="Usu\u0144 plik">\u00d7</button>`;
-            if (a.content_type.startsWith('image/')) {
-                html += `<span style="display:inline-flex;flex-direction:column;align-items:center;gap:.2rem;">`
-                    + `<a href="${url}" target="_blank"><img src="${url}" alt="${esc(a.original_name)}" title="${esc(a.original_name)}"></a>`
-                    + delBtn + `</span>`;
-            } else {
-                html += `<span style="display:inline-flex;align-items:center;gap:.3rem;">`
-                    + `<a href="${url}" target="_blank" class="btn btn-outline btn-sm">&#128206; ${esc(a.original_name)}</a>`
-                    + delBtn + `</span>`;
-            }
+            html += a.content_type.startsWith('image/')
+                ? `<a href="${url}" target="_blank"><img src="${url}" alt="${esc(a.original_name)}" title="${esc(a.original_name)}"></a>`
+                : `<a href="${url}" target="_blank" class="btn btn-outline btn-sm">&#128206; ${esc(a.original_name)}</a>`;
         });
         html += '</div></div>';
     }
@@ -184,6 +178,9 @@ function buildEditForm(r) {
         <div class="field"><label>Materia&#322; PLN</label><input type="number" step="0.01" min="0" id="ef-mat" value="${r.material_cost??0}"></div>
         <div class="field"><label>Cz&#281;&#347;ci zamienne PLN</label><input type="number" step="0.01" min="0" id="ef-sparts" value="${r.spare_parts_cost??0}"></div>
         <div class="field"><label>Serwis PLN</label><input type="number" step="0.01" min="0" id="ef-service" value="${r.service_cost??0}"></div>
+    </div>
+    <div class="form-grid3" style="margin-bottom:.75rem;">
+        <div class="field"><label>Uwagi</label><textarea id="ef-notes">${esc(r.notes??'')}</textarea></div>
     </div>
     <hr style="border:none;border-top:1px solid var(--border);margin:.75rem 0;">
     <div>
@@ -297,6 +294,7 @@ async function saveEdit() {
         material_cost:  document.getElementById('ef-mat').value,
         spare_parts_cost: document.getElementById('ef-sparts').value,
         service_cost:   document.getElementById('ef-service').value,
+        notes:          document.getElementById('ef-notes').value,
     };
     const btn = document.getElementById('modal-btn-save');
     btn.disabled = true; btn.textContent = 'Zapisywanie\u2026';

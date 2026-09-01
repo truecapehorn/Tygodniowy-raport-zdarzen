@@ -56,6 +56,7 @@ EXPORT_COLUMNS = [
     "Części zamienne PLN",
     "Serwis PLN",
     "Koszt brutto naprawy PLN",
+    "Uwagi",
 ]
 
 HEADER_ALIASES = {
@@ -86,6 +87,7 @@ HEADER_ALIASES = {
     "czesci zamienne pln": "Części zamienne PLN",
     "serwis pln": "Serwis PLN",
     "koszt brutto naprawy pln": "Koszt brutto naprawy PLN",
+    "uwagi": "Uwagi",
 }
 
 SCHEMA = """
@@ -117,6 +119,7 @@ CREATE TABLE IF NOT EXISTS repair_records (
     spare_parts_cost REAL NOT NULL DEFAULT 0,
     service_cost REAL NOT NULL DEFAULT 0,
     total_cost REAL NOT NULL DEFAULT 0,
+    notes TEXT,
     created_at TEXT NOT NULL,
     FOREIGN KEY(machine_id) REFERENCES machines(id)
 );
@@ -347,6 +350,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
                     record["spare_parts_cost"],
                     record["service_cost"],
                     record["total_cost"],
+                    record["notes"],
                 ]
             )
         output = io.BytesIO()
@@ -536,6 +540,10 @@ def save_attachment(record_id: int, file_storage: Any) -> None:
 def init_db() -> None:
     db = get_db()
     db.executescript(SCHEMA)
+    try:
+        db.execute("ALTER TABLE repair_records ADD COLUMN notes TEXT")
+    except sqlite3.OperationalError:
+        pass  # Column already exists
     db.commit()
 
 
@@ -596,9 +604,9 @@ def save_record(form: dict[str, Any]) -> int:
             record_year, record_week, week_sequence, machine_id, event_type,
             description, cause, repair_method, replaced_parts, occurrence_at,
             repaired_at, machine_mtg, downtime_hours, labor_cost, material_cost,
-            spare_parts_cost, service_cost, total_cost, created_at
+            spare_parts_cost, service_cost, total_cost, notes, created_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             record_year,
@@ -619,6 +627,7 @@ def save_record(form: dict[str, Any]) -> int:
             spare_parts_cost,
             service_cost,
             total_cost,
+            str(form.get("notes", "")).strip() or None,
             datetime.now(UTC).isoformat(timespec="seconds"),
         ),
     )
@@ -795,7 +804,7 @@ def update_record(record_id: int, data: dict[str, Any]) -> None:
             repair_method = ?, replaced_parts = ?, occurrence_at = ?,
             repaired_at = ?, machine_mtg = ?, downtime_hours = ?,
             labor_cost = ?, material_cost = ?, spare_parts_cost = ?,
-            service_cost = ?, total_cost = ?
+            service_cost = ?, total_cost = ?, notes = ?
         WHERE id = ?
         """,
         (
@@ -814,6 +823,7 @@ def update_record(record_id: int, data: dict[str, Any]) -> None:
             spare_parts_cost,
             service_cost,
             total_cost,
+            str(data.get("notes", "")).strip() or None,
             record_id,
         ),
     )
@@ -926,6 +936,7 @@ def _process_import_rows(rows: list[tuple[Any, ...]]) -> int:
             "material_cost": row_value(values, header_map, "Materiał własny PLN", 0) or 0,
             "spare_parts_cost": row_value(values, header_map, "Części zamienne PLN", 0) or 0,
             "service_cost": row_value(values, header_map, "Serwis PLN", 0) or 0,
+            "notes": row_value(values, header_map, "Uwagi", "") or "",
         }
         try:
             save_imported_record(record)
@@ -958,9 +969,9 @@ def save_imported_record(record: dict[str, Any]) -> int:
             record_year, record_week, week_sequence, machine_id, event_type,
             description, cause, repair_method, replaced_parts, occurrence_at,
             repaired_at, machine_mtg, downtime_hours, labor_cost, material_cost,
-            spare_parts_cost, service_cost, total_cost, created_at
+            spare_parts_cost, service_cost, total_cost, notes, created_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             record_year,
@@ -981,6 +992,7 @@ def save_imported_record(record: dict[str, Any]) -> int:
             spare_parts_cost,
             service_cost,
             total_cost,
+            str(record.get("notes", "")).strip() or None,
             datetime.now(UTC).isoformat(timespec="seconds"),
         ),
     )

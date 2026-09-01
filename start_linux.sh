@@ -52,7 +52,7 @@ echo " Serwer uruchomiony:"
 echo "   http://localhost:5001"
 
 # Otwórz przeglądarkę jeśli dostępna (działa na Ubuntu Desktop)
-if command -v xdg-open &>/dev/null; then
+if [ -n "${DISPLAY:-}" ] && command -v xdg-open &>/dev/null; then
     (sleep 2 && xdg-open http://localhost:5001) &
 fi
 
