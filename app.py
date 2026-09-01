@@ -259,24 +259,10 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             limit = max(1, min(int(request.args.get("limit", 20) or 20), 500))
         except (ValueError, TypeError):
             limit = 20
-        filters = {
-            "machine": request.args.get("machine", "").strip(),
-            "machine_type": request.args.get("machine_type", "").strip(),
-            "serial_number": request.args.get("serial_number", "").strip(),
-            "event_type": request.args.get("event_type", "").strip(),
-            "occurrence_from": request.args.get("occurrence_from", "").strip(),
-            "occurrence_to": request.args.get("occurrence_to", "").strip(),
-            "description_terms": request.args.get("description_terms", "").strip(),
-        }
-        filter_active = any(filters.values())
         return render_template(
             "index.html",
             latest_records=query_records_latest(limit),
-            filtered_records=query_records(filters) if filter_active else [],
-            filter_active=filter_active,
-            machine_names=list_machine_names(),
             event_types=EVENT_TYPES,
-            filters=filters,
             limit=limit,
         )
 
@@ -373,6 +359,27 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 
+    @app.route("/filter")
+    def filter_page():
+        filters = {
+            "machine": request.args.get("machine", "").strip(),
+            "machine_type": request.args.get("machine_type", "").strip(),
+            "serial_number": request.args.get("serial_number", "").strip(),
+            "event_type": request.args.get("event_type", "").strip(),
+            "occurrence_from": request.args.get("occurrence_from", "").strip(),
+            "occurrence_to": request.args.get("occurrence_to", "").strip(),
+            "description_terms": request.args.get("description_terms", "").strip(),
+        }
+        filter_active = any(filters.values())
+        return render_template(
+            "filter_export.html",
+            filtered_records=query_records(filters) if filter_active else [],
+            filter_active=filter_active,
+            machine_names=list_machine_names(),
+            event_types=EVENT_TYPES,
+            filters=filters,
+        )
+
     @app.route("/api/machines")
     def machine_lookup():
         machine_name = request.args.get("machine", "").strip()
@@ -431,6 +438,16 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         db.execute("DELETE FROM attachments WHERE record_id = ?", (record_id,))
         db.execute("DELETE FROM repair_records WHERE id = ?", (record_id,))
         db.commit()
+        return jsonify({"ok": True})
+
+    @app.route("/api/record/<int:record_id>/attachments", methods=["POST"])
+    def add_record_attachments(record_id: int):
+        db = get_db()
+        if not db.execute("SELECT id FROM repair_records WHERE id = ?", (record_id,)).fetchone():
+            return jsonify({"error": "Rekord nie istnieje."}), 404
+        for f in request.files.getlist("attachments"):
+            if f and f.filename:
+                save_attachment(record_id, f)
         return jsonify({"ok": True})
 
     @app.route("/attachments/<int:record_id>/<path:filename>")

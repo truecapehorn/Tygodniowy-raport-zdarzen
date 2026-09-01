@@ -341,9 +341,10 @@
             Tygodniowy raport napraw&nbsp;<span class="gort">GORT</span>
         </a>
         <ul class="navbar-links">
-            <li><a href="{{ url_for('index') }}"      {% if request.endpoint == 'index'      %}class="active"{% endif %}>Strona główna</a></li>
-            <li><a href="{{ url_for('new_record') }}" {% if request.endpoint == 'new_record' %}class="active"{% endif %}>Nowy rekord</a></li>
-            <li><a href="{{ url_for('data_page') }}"  {% if request.endpoint == 'data_page'  %}class="active"{% endif %}>Import / Export</a></li>
+            <li><a href="{{ url_for('index') }}"        {% if request.endpoint == 'index'        %}class="active"{% endif %}>Strona główna</a></li>
+            <li><a href="{{ url_for('filter_page') }}" {% if request.endpoint == 'filter_page' %}class="active"{% endif %}>Filtrowanie i eksport</a></li>
+            <li><a href="{{ url_for('new_record') }}"  {% if request.endpoint == 'new_record'  %}class="active"{% endif %}>Nowy rekord</a></li>
+            <li><a href="{{ url_for('data_page') }}"   {% if request.endpoint == 'data_page'   %}class="active"{% endif %}>Import / Export</a></li>
         </ul>
     </nav>
 

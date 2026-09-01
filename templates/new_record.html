@@ -5,7 +5,7 @@
 <div class="page-title">Nowy rekord <small>Dodaj zdarzenie utrzymania ruchu</small></div>
 
 <div class="card">
-    <form method="post" enctype="multipart/form-data">
+    <form id="main-form" method="post" enctype="multipart/form-data">
         <div class="card-title">Zdarzenie i czas</div>
         <div class="form-grid">
             <div class="field">
@@ -90,11 +90,6 @@
                 <input type="number" step="0.01" min="0" name="service_cost" placeholder="0.00">
             </div>
         </div>
-
-        <div class="actions">
-            <button type="submit" class="btn btn-primary">Zapisz rekord</button>
-            <a href="{{ url_for('index') }}" class="btn btn-outline">Anuluj</a>
-        </div>
     </form>
 </div>
 
@@ -108,6 +103,11 @@
                style="display:none;">
     </div>
     <div id="attach-preview" style="display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.5rem;"></div>
+</div>
+
+<div class="actions" style="margin-bottom:1.25rem;">
+    <button type="submit" form="main-form" class="btn btn-primary">Zapisz rekord</button>
+    <a href="{{ url_for('index') }}" class="btn btn-outline">Anuluj</a>
 </div>
 
 <div class="card" id="history-panel" style="display:none;">
