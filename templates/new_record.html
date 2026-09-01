@@ -136,7 +136,36 @@
     </div>
 </div>
 
+<!-- static file input reused by the edit popup -->
+<input type="file" id="edit-file-input" multiple
+       accept="image/*,.pdf,.doc,.docx,.txt,.xls,.xlsx,.csv,.zip,.rar"
+       style="display:none;">
+
+<!-- ── Record detail popup ─────────────────────────────────────── -->
+<div class="modal-backdrop" id="record-modal">
+    <div class="modal-box">
+        <div class="modal-header">
+            <strong id="modal-title" style="font-size:1rem;color:var(--text);"></strong>
+            <div style="display:flex;gap:.4rem;align-items:center;flex-shrink:0;">
+                <button id="modal-btn-edit"   class="btn btn-outline btn-sm" onclick="switchToEdit()">&#9998; Edytuj</button>
+                <button id="modal-btn-delete" class="btn btn-danger  btn-sm" onclick="deleteRecord()">&#128465; Usu&#324;</button>
+                <button id="modal-btn-save"   class="btn btn-primary btn-sm" onclick="saveEdit()" style="display:none;">&#10004; Zapisz</button>
+                <button id="modal-btn-cancel" class="btn btn-outline btn-sm" onclick="switchToView()" style="display:none;">Anuluj</button>
+                <button class="modal-close" onclick="closeModal()" title="Zamknij">&#10005;</button>
+            </div>
+        </div>
+        <div id="modal-view"></div>
+        <div id="modal-edit" style="display:none;"></div>
+    </div>
+</div>
+
 <script>
+    const EVENT_TYPES = {{ event_types | tojson }};
+    const USER_ROLE = {{ user_role | tojson }};
+    let currentRecord = null;
+
+    function dtl(s) { return s ? String(s).slice(0,16).replace(' ','T') : ''; }
+
     const machineInput = document.getElementById("machine_name");
     const typeInput    = document.getElementById("machine_type");
     const serialInput  = document.getElementById("serial_number");
@@ -162,18 +191,23 @@
     }
 
     async function refreshMachineData() {
-        const params = new URLSearchParams({ machine: machineInput.value, machine_type: typeInput.value });
+        const params = new URLSearchParams({
+            machine: machineInput.value,
+            machine_type: typeInput.value,
+            serial_number: serialInput.value,
+        });
         const resp = await fetch(`/api/machines?${params}`);
         const data = await resp.json();
         fillDatalist(typeList,   data.types           || []);
         fillDatalist(serialList, data.serial_numbers  || []);
-        const entries = data.previous_entries || [];
+        const allFilled = machineInput.value.trim() && typeInput.value.trim() && serialInput.value.trim();
+        const entries = allFilled ? (data.previous_entries || []) : [];
         historyPanel.style.display = entries.length ? '' : 'none';
         if (entries.length) {
             historyCount.textContent = entries.length;
             historyCount.style.display = '';
             historyBody.innerHTML = entries.map(e =>
-                `<tr style="border-bottom:1px solid rgba(51,65,85,.4);">
+                `<tr data-id="${e.id}" style="border-bottom:1px solid rgba(51,65,85,.4);cursor:pointer;" onmouseover="this.style.background='var(--bg-row-hover)'" onmouseout="this.style.background=''">
                     <td style="padding:.35rem .6rem;white-space:nowrap;color:var(--accent);font-size:.72rem;">${esc(e.occurrence_at)}</td>
                     <td style="padding:.35rem .6rem;"><span class="badge ${badgeClass(e.event_type)}">${esc(e.event_type)}</span></td>
                     <td style="padding:.35rem .6rem;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(e.description)}</td>
@@ -181,11 +215,15 @@
                     <td style="padding:.35rem .6rem;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);">${esc(e.repair_method)}</td>
                 </tr>`
             ).join('');
+            historyBody.querySelectorAll('tr[data-id]').forEach(row => {
+                row.addEventListener('click', () => openRecord(row.dataset.id));
+            });
         }
     }
 
     machineInput.addEventListener("change", refreshMachineData);
     typeInput.addEventListener("change",    refreshMachineData);
+    serialInput.addEventListener("change",  refreshMachineData);
     serialInput.addEventListener("focus",   refreshMachineData);
 
     // ── Attachment handling ────────────────────────────────────────
@@ -220,7 +258,14 @@
     });
     attachInput.addEventListener('change', () => { addFiles(attachInput.files); attachInput.value = ''; });
     document.addEventListener('paste', e => {
-        if (e.clipboardData && e.clipboardData.files.length) addFiles(e.clipboardData.files);
+        if (!e.clipboardData || !e.clipboardData.files.length) return;
+        const modal = document.getElementById('record-modal');
+        const modalEdit = document.getElementById('modal-edit');
+        if (modal && modal.classList.contains('open') && modalEdit && modalEdit.style.display !== 'none') {
+            addEditFiles(e.clipboardData.files);
+        } else {
+            addFiles(e.clipboardData.files);
+        }
     });
 
     // Submit via fetch so pasted/dropped files are included
@@ -233,5 +278,228 @@
         const resp = await fetch('', { method: 'POST', body: fd });
         window.location.href = resp.url;
     });
+
+    // ── Record popup ─────────────────────────────────────────────────
+    function buildExistingAttachList(attachments) {
+        if (!attachments || !attachments.length)
+            return '<p id="ef-existing-attach" style="font-size:.75rem;color:var(--muted);margin-bottom:.5rem;">Brak za\u0142\u0105cznik\u00f3w.</p>';
+        return '<div id="ef-existing-attach" style="display:flex;flex-wrap:wrap;gap:.35rem;margin-bottom:.5rem;">'
+            + attachments.map(a =>
+                `<span style="display:inline-flex;align-items:center;gap:.25rem;padding:.2rem .5rem;background:var(--bg-card-alt,#162032);border:1px solid var(--border);border-radius:4px;font-size:.75rem;">`
+                + `<span>${esc(a.original_name)}</span>`
+                + `<button type="button" onclick="deleteAttachment(${a.id})" style="background:none;border:none;color:var(--red,#f87171);cursor:pointer;padding:0 .1rem;line-height:1;font-size:.9rem;" title="Usu\u0144 plik">\u00d7</button>`
+                + `</span>`
+            ).join('')
+            + '</div>';
+    }
+
+    function buildView(r) {
+        const fields = [
+            ['Maszyna', r.name, false], ['Typ', r.machine_type, false], ['Numer', r.serial_number, false],
+            ['Rok / Tydzie&#324; / Lp.', `${r.record_year} / W${r.record_week} / ${r.week_sequence}`, false],
+            ['Rodzaj zdarzenia', r.event_type, false], ['MTG maszyny', r.machine_mtg, false],
+            ['Data wyst&#261;pienia', r.occurrence_at, false], ['Data naprawienia', r.repaired_at, false],
+            ['Opis', r.description, true], ['Przyczyna', r.cause, true],
+            ['Spos&#243;b naprawy', r.repair_method, true], ['Wymienione cz&#281;&#347;ci', r.replaced_parts, true],
+            ['Uwagi', r.notes, true],
+            ['Pracoch&#322;onno&#347;&#263; [h]', r.labor_cost, false], ['Materia&#322; PLN', r.material_cost, false],
+            ['Cz&#281;&#347;ci zamienne PLN', r.spare_parts_cost, false], ['Serwis PLN', r.service_cost, false],
+            ['Koszt brutto PLN', r.total_cost, false], ['Wykluczenie z prod.[h]', r.downtime_hours, false],
+        ];
+        let html = '<div class="detail-grid">';
+        fields.forEach(([label,val,full]) => {
+            html += `<div class="detail-item${full?' full':''}"><div class="dl">${label}</div><div class="dv">${esc(val)}</div></div>`;
+        });
+        html += '</div>';
+        if (r.attachments && r.attachments.length) {
+            html += `<div style="margin-top:1rem;"><div class="card-title" style="margin-bottom:.5rem;">Za&#322;&#261;czniki</div><div class="attach-list">`;
+            r.attachments.forEach(a => {
+                const url = `/attachments/${r.id}/${encodeURIComponent(a.filename)}`;
+                html += a.content_type.startsWith('image/')
+                    ? `<a href="${url}" target="_blank"><img src="${url}" alt="${esc(a.original_name)}" title="${esc(a.original_name)}"></a>`
+                    : `<a href="${url}" target="_blank" class="btn btn-outline btn-sm">&#128206; ${esc(a.original_name)}</a>`;
+            });
+            html += '</div></div>';
+        }
+        return html;
+    }
+
+    function buildEditForm(r) {
+        const opts = EVENT_TYPES.map(et =>
+            `<option value="${et}"${r.event_type===et?' selected':''}>${et}</option>`).join('');
+        const existingAttach = (r.attachments && r.attachments.length)
+            ? '<p style="font-size:.75rem;font-weight:700;color:var(--muted);margin-bottom:.35rem;">Istniej\u0105ce pliki:</p>'
+              + buildExistingAttachList(r.attachments)
+            : '';
+        return `
+        <div class="form-grid" style="margin-bottom:.75rem;">
+            <div class="field"><label>Maszyna *</label><input id="ef-machine" value="${esc(r.name)}"></div>
+            <div class="field"><label>Typ *</label><input id="ef-mtype" value="${esc(r.machine_type)}"></div>
+            <div class="field"><label>Numer *</label><input id="ef-serial" value="${esc(r.serial_number)}"></div>
+            <div class="field"><label>Rodzaj zdarzenia</label><select id="ef-event">${opts}</select></div>
+            <div class="field"><label>Data wyst&#261;pienia *</label><input type="datetime-local" id="ef-occ" value="${dtl(r.occurrence_at)}"></div>
+            <div class="field"><label>Data naprawienia</label><input type="datetime-local" id="ef-rep" value="${dtl(r.repaired_at)}"></div>
+            <div class="field"><label>MTG maszyny</label><input id="ef-mtg" value="${esc(r.machine_mtg)}"></div>
+        </div>
+        <div class="form-grid3" style="margin-bottom:.75rem;">
+            <div class="field"><label>Opis *</label><textarea id="ef-desc">${esc(r.description)}</textarea></div>
+            <div class="field"><label>Przyczyna</label><textarea id="ef-cause">${esc(r.cause)}</textarea></div>
+            <div class="field"><label>Spos&#243;b naprawy</label><textarea id="ef-repair">${esc(r.repair_method)}</textarea></div>
+            <div class="field"><label>Wymienione cz&#281;&#347;ci</label><textarea id="ef-parts">${esc(r.replaced_parts)}</textarea></div>
+        </div>
+        <div class="form-grid">
+            <div class="field"><label>Pracoch&#322;onno&#347;&#263; [h]</label><input type="number" step="0.01" min="0" id="ef-labor" value="${r.labor_cost??0}"></div>
+            <div class="field"><label>Materia&#322; PLN</label><input type="number" step="0.01" min="0" id="ef-mat" value="${r.material_cost??0}"></div>
+            <div class="field"><label>Cz&#281;&#347;ci zamienne PLN</label><input type="number" step="0.01" min="0" id="ef-sparts" value="${r.spare_parts_cost??0}"></div>
+            <div class="field"><label>Serwis PLN</label><input type="number" step="0.01" min="0" id="ef-service" value="${r.service_cost??0}"></div>
+        </div>
+        <div class="form-grid3" style="margin-bottom:.75rem;">
+            <div class="field"><label>Uwagi</label><textarea id="ef-notes">${esc(r.notes??'')}</textarea></div>
+        </div>
+        <hr style="border:none;border-top:1px solid var(--border);margin:.75rem 0;">
+        <div>
+            <div class="card-title" style="margin-bottom:.5rem;">Za&#322;&#261;czniki &#8212; dodaj nowe pliki</div>
+            ${existingAttach}
+            <div id="ef-attach-zone" style="border:2px dashed var(--border);border-radius:6px;padding:1rem;text-align:center;color:var(--muted);font-size:.82rem;cursor:pointer;transition:border-color .15s;">
+                Przeci&#261;gnij pliki, kliknij lub wklej ze schowka (Ctrl+V)
+            </div>
+            <div id="ef-attach-preview" style="display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.4rem;"></div>
+        </div>`;
+    }
+
+    let editFiles = [];
+    function renderEditPreview() {
+        const p = document.getElementById('ef-attach-preview');
+        if (!p) return;
+        p.innerHTML = '';
+        editFiles.forEach((f, i) => {
+            const el = document.createElement('div');
+            el.style.cssText = 'padding:.2rem .5rem;background:var(--bg-card-alt,#162032);border:1px solid var(--border);border-radius:4px;font-size:.75rem;display:flex;gap:.35rem;align-items:center;';
+            el.innerHTML = `<span>${f.name}</span><span style="color:var(--muted);">${(f.size/1024).toFixed(0)} KB</span><button type="button" onclick="removeEditFile(${i})" style="background:none;border:none;color:var(--muted);cursor:pointer;padding:0 .15rem;line-height:1;font-size:.95rem;" title="Usu\u0144">\u00d7</button>`;
+            p.appendChild(el);
+        });
+    }
+    function removeEditFile(i) { editFiles.splice(i, 1); renderEditPreview(); }
+    function addEditFiles(files) { for (const f of files) editFiles.push(f); renderEditPreview(); }
+    function initEditAttachments() {
+        editFiles = [];
+        const zone  = document.getElementById('ef-attach-zone');
+        const input = document.getElementById('edit-file-input');
+        if (!zone || !input) return;
+        input.value = '';
+        zone.addEventListener('click',     () => input.click());
+        zone.addEventListener('dragover',  e => { e.preventDefault(); zone.style.borderColor = 'var(--accent)'; });
+        zone.addEventListener('dragleave', () => { zone.style.borderColor = ''; });
+        zone.addEventListener('drop',      e => { e.preventDefault(); e.stopPropagation(); zone.style.borderColor = ''; addEditFiles(e.dataTransfer.files); });
+        input.addEventListener('change',   () => { addEditFiles(input.files); input.value = ''; });
+    }
+
+    async function openRecord(id) {
+        currentRecord = null;
+        document.getElementById('modal-title').textContent = 'Wczytywanie\u2026';
+        document.getElementById('modal-view').innerHTML = '';
+        document.getElementById('modal-edit').style.display = 'none';
+        document.getElementById('modal-view').style.display = '';
+        document.getElementById('modal-btn-edit').style.display   = USER_ROLE === 'admin' ? '' : 'none';
+        document.getElementById('modal-btn-delete').style.display = USER_ROLE === 'admin' ? '' : 'none';
+        document.getElementById('modal-btn-save').style.display   = 'none';
+        document.getElementById('modal-btn-cancel').style.display = 'none';
+        document.getElementById('record-modal').classList.add('open');
+        const r = await fetch(`/api/record/${id}`).then(res => res.json());
+        currentRecord = r;
+        document.getElementById('modal-title').innerHTML =
+            `Rekord <span style="color:var(--accent)">#${r.id}</span> \u2014 ${esc(r.name)}`;
+        document.getElementById('modal-view').innerHTML = buildView(r);
+    }
+    function closeModal() { document.getElementById('record-modal').classList.remove('open'); }
+    document.getElementById('record-modal').addEventListener('click', function(e) {
+        if (e.target === this) closeModal();
+    });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+    function switchToEdit() {
+        document.getElementById('modal-view').style.display = 'none';
+        document.getElementById('modal-edit').style.display = '';
+        document.getElementById('modal-btn-edit').style.display   = 'none';
+        document.getElementById('modal-btn-delete').style.display = 'none';
+        document.getElementById('modal-btn-save').style.display   = '';
+        document.getElementById('modal-btn-cancel').style.display = '';
+        document.getElementById('modal-edit').innerHTML = buildEditForm(currentRecord);
+        initEditAttachments();
+    }
+    function switchToView() {
+        document.getElementById('modal-edit').style.display = 'none';
+        document.getElementById('modal-view').style.display = '';
+        document.getElementById('modal-btn-edit').style.display   = USER_ROLE === 'admin' ? '' : 'none';
+        document.getElementById('modal-btn-delete').style.display = USER_ROLE === 'admin' ? '' : 'none';
+        document.getElementById('modal-btn-save').style.display   = 'none';
+        document.getElementById('modal-btn-cancel').style.display = 'none';
+    }
+
+    async function saveEdit() {
+        const data = {
+            machine_name:   document.getElementById('ef-machine').value.trim(),
+            machine_type:   document.getElementById('ef-mtype').value.trim(),
+            serial_number:  document.getElementById('ef-serial').value.trim(),
+            event_type:     document.getElementById('ef-event').value,
+            occurrence_at:  document.getElementById('ef-occ').value,
+            repaired_at:    document.getElementById('ef-rep').value,
+            machine_mtg:    document.getElementById('ef-mtg').value,
+            description:    document.getElementById('ef-desc').value,
+            cause:          document.getElementById('ef-cause').value,
+            repair_method:  document.getElementById('ef-repair').value,
+            replaced_parts: document.getElementById('ef-parts').value,
+            labor_cost:     document.getElementById('ef-labor').value,
+            material_cost:  document.getElementById('ef-mat').value,
+            spare_parts_cost: document.getElementById('ef-sparts').value,
+            service_cost:   document.getElementById('ef-service').value,
+            notes:          document.getElementById('ef-notes').value,
+        };
+        const btn = document.getElementById('modal-btn-save');
+        btn.disabled = true; btn.textContent = 'Zapisywanie\u2026';
+        try {
+            const resp = await fetch(`/api/record/${currentRecord.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data),
+            });
+            const result = await resp.json();
+            if (resp.ok) {
+                if (editFiles.length > 0) {
+                    const fd = new FormData();
+                    editFiles.forEach(f => fd.append('attachments', f));
+                    await fetch(`/api/record/${currentRecord.id}/attachments`, { method: 'POST', body: fd });
+                }
+                closeModal();
+                refreshMachineData();
+            } else {
+                alert(result.error || 'B\u0142\u0105d podczas zapisywania.');
+            }
+        } finally { btn.disabled = false; btn.textContent = '\u2714 Zapisz'; }
+    }
+
+    async function deleteRecord() {
+        if (!confirm(`Czy na pewno usun\u0105\u0107 rekord #${currentRecord.id}?\nOperacja jest nieodwracalna.`)) return;
+        const btn = document.getElementById('modal-btn-delete');
+        btn.disabled = true;
+        try {
+            const resp = await fetch(`/api/record/${currentRecord.id}`, { method: 'DELETE' });
+            if (resp.ok) { closeModal(); refreshMachineData(); }
+            else { const d = await resp.json(); alert(d.error || 'B\u0142\u0105d podczas usuwania.'); }
+        } finally { btn.disabled = false; }
+    }
+
+    async function deleteAttachment(attachmentId) {
+        if (!confirm('Usun\u0105\u0107 ten za\u0142\u0105cznik?\nOperacja jest nieodwracalna.')) return;
+        const resp = await fetch(`/api/attachment/${attachmentId}`, { method: 'DELETE' });
+        if (!resp.ok) { const d = await resp.json(); alert(d.error || 'B\u0142\u0105d podczas usuwania.'); return; }
+        currentRecord.attachments = currentRecord.attachments.filter(a => a.id !== attachmentId);
+        if (document.getElementById('modal-edit').style.display === 'none') {
+            document.getElementById('modal-view').innerHTML = buildView(currentRecord);
+        } else {
+            const el = document.getElementById('ef-existing-attach');
+            if (el) el.outerHTML = buildExistingAttachList(currentRecord.attachments);
+        }
+    }
 </script>
 {% endblock %}

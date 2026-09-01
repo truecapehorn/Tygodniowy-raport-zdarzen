@@ -480,11 +480,12 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
     def machine_lookup():
         machine_name = request.args.get("machine", "").strip()
         machine_type = request.args.get("machine_type", "").strip()
+        serial_number = request.args.get("serial_number", "").strip()
         return jsonify(
             {
                 "types": list_machine_types(machine_name),
                 "serial_numbers": list_serial_numbers(machine_name, machine_type),
-                "previous_entries": list_previous_entries(machine_name),
+                "previous_entries": list_previous_entries(machine_name, machine_type, serial_number),
             }
         )
 
@@ -837,12 +838,11 @@ def list_serial_numbers(machine_name: str, machine_type: str) -> list[str]:
     return [str(row["serial_number"]) for row in rows]
 
 
-def list_previous_entries(machine_name: str) -> list[dict[str, Any]]:
+def list_previous_entries(machine_name: str, machine_type: str = "", serial_number: str = "") -> list[dict[str, Any]]:
     if not machine_name:
         return []
     db = get_db()
-    rows = db.execute(
-        """
+    query = """
         SELECT
             r.id,
             r.occurrence_at,
@@ -856,10 +856,16 @@ def list_previous_entries(machine_name: str) -> list[dict[str, Any]]:
         FROM repair_records r
         JOIN machines m ON m.id = r.machine_id
         WHERE m.name = ?
-        ORDER BY r.occurrence_at DESC, r.id DESC
-        """,
-        (machine_name,),
-    ).fetchall()
+    """
+    params: list[Any] = [machine_name]
+    if machine_type:
+        query += " AND m.machine_type = ?"
+        params.append(machine_type)
+    if serial_number:
+        query += " AND m.serial_number = ?"
+        params.append(serial_number)
+    query += " ORDER BY r.occurrence_at DESC, r.id DESC"
+    rows = db.execute(query, params).fetchall()
     return [
         {
             "id": int(row["id"]),
