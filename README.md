@@ -82,4 +82,4 @@ python -m unittest discover -s tests
 
 ## Zmiany do wprowadzenia
 
-- [ ] Dodanie nowego pola do wypełnienia. Dodać pole do osób (po przecinku) biorące udział w interwencji
+- [ ] Dodanie nowego pola do wypełnienia. Dodać pole do osób (po przecinku) biorące udział w interwencji.
