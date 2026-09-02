@@ -68,6 +68,9 @@ instance/
 # Local auth config – contains hashed password, not tracked in git
 auth.json
 
+# Local config – may contain sensitive information or local paths, not tracked in git
+config.json
+
 # Scrapy stuff:
 .scrapy
 

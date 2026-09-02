@@ -38,6 +38,16 @@ EVENT_TYPES = [
 
 LABOR_RATE_PLN_PER_HOUR = 80
 
+
+def get_labor_rate() -> float:
+    """Get labor rate from app config or fallback to default."""
+    try:
+        from flask import current_app
+        return float(current_app.config.get("LABOR_RATE_PLN_PER_HOUR", LABOR_RATE_PLN_PER_HOUR))
+    except RuntimeError:
+        # No app context
+        return float(LABOR_RATE_PLN_PER_HOUR)
+
 EXPORT_COLUMNS = [
     "Nr",
     "ROK",
@@ -226,6 +236,65 @@ def machine_key_from_form(form: dict[str, Any]) -> tuple[str, str, str]:
 
 
 AUTH_FILE = Path(__file__).parent / "auth.json"
+CONFIG_FILE = Path(__file__).parent / "config.json"
+
+
+def _load_config() -> dict[str, Any]:
+    """Load configuration from config.json with fallback defaults."""
+    defaults = {
+        "DATABASE": "instance/repair_reports.sqlite3",
+        "UPLOAD_DIR": "instance/uploads",
+        "DEBUG": False,
+        "HOST": "0.0.0.0",
+        "PORT": 5001,
+        "LABOR_RATE_PLN_PER_HOUR": 80,
+        "MAX_UPLOAD_SIZE_MB": 50,
+        "REQUIRE_LOGIN": True,
+        "AUTH_FILE": "auth.json",
+    }
+    
+    if CONFIG_FILE.exists():
+        try:
+            user_config = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
+            # Filter out comment fields
+            user_config = {k: v for k, v in user_config.items() if not k.startswith("_")}
+            defaults.update(user_config)
+        except (json.JSONDecodeError, OSError):
+            pass
+    
+    return defaults
+
+
+def _resolve_path(path_str: str) -> Path:
+    """
+    Resolve a path that could be:
+    - Relative (instance/file.db) - relative to app root
+    - Absolute Windows UNC (\\\\server\\share\\file.db)
+    - Absolute Windows (C:\\path\\to\\file.db)
+    - Absolute Unix (/mnt/nas/file.db)
+    """
+    if not path_str:
+        return Path("instance/repair_reports.sqlite3")
+    
+    p = Path(path_str)
+    
+    # Handle forward-slash UNC paths (Windows network shares)
+    if path_str.startswith("//"):
+        # Convert // to \\ for Windows, keep // for Linux (network paths)
+        import sys
+        if sys.platform == "win32":
+            unc_path = path_str.replace("/", "\\")
+            return Path(unc_path)
+        else:
+            # Linux: treat as absolute path
+            return Path(path_str)
+    
+    # Already absolute
+    if p.is_absolute():
+        return p
+    
+    # Relative path: resolve relative to app root
+    return Path(__file__).parent / path_str
 
 
 def _ensure_auth_file() -> dict:
@@ -246,23 +315,42 @@ def _ensure_auth_file() -> dict:
 
 def create_app(test_config: dict[str, Any] | None = None) -> Flask:
     app = Flask(__name__)
-    default_db = Path(app.instance_path) / "repair_reports.sqlite3"
+    config = _load_config()
+    
+    # Resolve database and upload paths
+    db_path = _resolve_path(config["DATABASE"])
+    upload_dir = _resolve_path(config["UPLOAD_DIR"])
+    
     auth_data = _ensure_auth_file()
     app.config.from_mapping(
         SECRET_KEY=auth_data.get("secret_key", "dev"),
-        DATABASE=str(default_db),
-        UPLOAD_DIR=str(Path(app.instance_path) / "uploads"),
+        DATABASE=str(db_path),
+        UPLOAD_DIR=str(upload_dir),
+        MAX_CONTENT_LENGTH=config["MAX_UPLOAD_SIZE_MB"] * 1024 * 1024,
     )
+    
+    # Store config values for access in routes
+    app.config["LABOR_RATE_PLN_PER_HOUR"] = config["LABOR_RATE_PLN_PER_HOUR"]
+    app.config["REQUIRE_LOGIN"] = config["REQUIRE_LOGIN"]
+    
     if test_config:
         app.config.update(test_config)
 
-    Path(app.config["DATABASE"]).parent.mkdir(parents=True, exist_ok=True)
-    Path(app.config["UPLOAD_DIR"]).mkdir(parents=True, exist_ok=True)
+    # Ensure directories exist
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    upload_dir.mkdir(parents=True, exist_ok=True)
 
     @app.before_request
     def check_auth():
         if app.config.get("TESTING"):
             return
+        if not app.config.get("REQUIRE_LOGIN"):
+            # Login not required; automatically set guest session
+            if not session.get("logged_in"):
+                session["logged_in"] = True
+                session["role"] = "guest"
+            return
+        # Login required
         exempt = {"login", "logout", "static"}
         if request.endpoint in exempt or request.endpoint is None:
             return
@@ -697,7 +785,7 @@ def save_record(form: dict[str, Any]) -> int:
     material_cost = as_float(form.get("material_cost"))
     spare_parts_cost = as_float(form.get("spare_parts_cost"))
     service_cost = as_float(form.get("service_cost"))
-    total_cost = round((labor_cost * LABOR_RATE_PLN_PER_HOUR) + material_cost + spare_parts_cost + service_cost, 2)
+    total_cost = round((labor_cost * get_labor_rate()) + material_cost + spare_parts_cost + service_cost, 2)
     db = get_db()
     cursor = db.execute(
         """
@@ -901,7 +989,7 @@ def update_record(record_id: int, data: dict[str, Any]) -> None:
     spare_parts_cost = as_float(data.get("spare_parts_cost"))
     service_cost = as_float(data.get("service_cost"))
     total_cost = round(
-        (labor_cost * LABOR_RATE_PLN_PER_HOUR) + material_cost + spare_parts_cost + service_cost, 2
+        (labor_cost * get_labor_rate()) + material_cost + spare_parts_cost + service_cost, 2
     )
     db.execute(
         """
@@ -1067,7 +1155,7 @@ def save_imported_record(record: dict[str, Any]) -> int:
     material_cost = as_float(record.get("material_cost"))
     spare_parts_cost = as_float(record.get("spare_parts_cost"))
     service_cost = as_float(record.get("service_cost"))
-    total_cost = round((labor_cost * LABOR_RATE_PLN_PER_HOUR) + material_cost + spare_parts_cost + service_cost, 2)
+    total_cost = round((labor_cost * get_labor_rate()) + material_cost + spare_parts_cost + service_cost, 2)
     db = get_db()
     cursor = db.execute(
         """

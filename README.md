@@ -7,6 +7,7 @@ Przeglądarkowa aplikacja Flask do prowadzenia tygodniowego raportu napraw dla d
 - [Tygodniowy\_raport\_napraw](#tygodniowy_raport_napraw)
   - [Spis tresci](#spis-tresci)
   - [Uruchomienie](#uruchomienie)
+  - [Konfiguracja](#konfiguracja)
   - [Dostępne funkcje](#dostępne-funkcje)
   - [Testy](#testy)
 
@@ -33,7 +34,36 @@ na porcie `5001` i wszystkich interfejsach sieciowych.
 Na serwerze należy zezwolić w zaporze systemowej na przychodzące połączenia TCP
 na porcie `5001`. W Zaporze systemu Windows można to zrobić z poziomu
 „Reguły przychodzące” przez dodanie reguły dla portu TCP `5001`.
+## Konfiguracja
 
+Aplikacja obsługuje plik `config.json` do elastycznego konfigurowania:
+
+- **DATABASE** - ścieżka do bazy danych (obsługuje dyski sieciowe UNC/NFS)
+- **UPLOAD_DIR** - katalog dla przesyłanych plików
+- **PORT** - port nasłuchiwania
+- **HOST** - adres IP nasłuchiwania
+- **DEBUG** - tryb debugowania
+- **LABOR_RATE_PLN_PER_HOUR** - stawka godzinowa dla obliczeń
+- **MAX_UPLOAD_SIZE_MB** - maksymalny rozmiar pliku
+- **REQUIRE_LOGIN** - czy logowanie jest wymagane
+
+**Przykład dla dysku sieciowego (Windows UNC):**
+```json
+{
+  "DATABASE": "//nas-server/share/repair_reports.sqlite3",
+  "UPLOAD_DIR": "//nas-server/share/uploads"
+}
+```
+
+**Przykład dla Linux (NFS):**
+```json
+{
+  "DATABASE": "/mnt/nas/repair_reports.sqlite3",
+  "UPLOAD_DIR": "/mnt/nas/uploads"
+}
+```
+
+Pełna dokumentacja: [CONFIG.md](CONFIG.md), [CONFIG_EXAMPLES.md](CONFIG_EXAMPLES.md), [NETWORK_STORAGE.md](NETWORK_STORAGE.md)
 ## Dostępne funkcje
 
 - wpisywanie rekordów napraw i interwencji,
