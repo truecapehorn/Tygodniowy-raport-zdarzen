@@ -10,6 +10,7 @@ Przeglądarkowa aplikacja Flask do prowadzenia tygodniowego raportu napraw dla d
   - [Konfiguracja](#konfiguracja)
   - [Dostępne funkcje](#dostępne-funkcje)
   - [Testy](#testy)
+  - [Zmiany do wprowadzenia](#zmiany-do-wprowadzenia)
 
 
 ## Uruchomienie
@@ -78,3 +79,7 @@ Pełna dokumentacja: [CONFIG.md](CONFIG.md), [CONFIG_EXAMPLES.md](CONFIG_EXAMPLE
 ```bash
 python -m unittest discover -s tests
 ```
+
+## Zmiany do wprowadzenia
+
+- [ ] Dodanie nowego pola do wypełnienia. Dodać pole do osób (po przecinku) biorące udział w interwencji
