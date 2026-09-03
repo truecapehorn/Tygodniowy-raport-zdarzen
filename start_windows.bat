@@ -54,7 +54,7 @@ echo.
 :: Otwieranie przegladarki po 2 sekundach (w tle)
 start "" /b timeout /t 2 >nul && start http://localhost:5001
 
-set FLASK_DEBUG=0
+set FLASK_DEBUG=1
 python app.py
 
 pause
