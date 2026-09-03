@@ -61,6 +61,7 @@ EXPORT_COLUMNS = [
     "Przyczyna",
     "Sposób naprawy",
     "Wymienione części",
+    "Osoby biorące udział w interwencji",
     "Data wystąpienia",
     "Data naprawienia/ interwencji",
     "MTG maszyny",
@@ -88,6 +89,8 @@ HEADER_ALIASES = {
     "przyczyna": "Przyczyna",
     "sposob naprawy": "Sposób naprawy",
     "wymienione czesci": "Wymienione części",
+    "osoby biorace udzial w interwencji": "Osoby biorące udział w interwencji",
+    "uczestnicy interwencji": "Osoby biorące udział w interwencji",
     "data wystapienia": "Data wystąpienia",
     "data naprawienia interwencji": "Data naprawienia/ interwencji",
     "data naprawienia": "Data naprawienia/ interwencji",
@@ -124,6 +127,7 @@ CREATE TABLE IF NOT EXISTS repair_records (
     cause TEXT,
     repair_method TEXT,
     replaced_parts TEXT,
+    participants TEXT,
     occurrence_at TEXT NOT NULL,
     repaired_at TEXT,
     machine_mtg TEXT,
@@ -521,6 +525,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
                     record["cause"],
                     record["repair_method"],
                     record["replaced_parts"],
+                    record["participants"],
                     format_datetime(record["occurrence_at"]),
                     format_datetime(record["repaired_at"]),
                     record["machine_mtg"],
@@ -733,6 +738,10 @@ def init_db() -> None:
         db.execute("ALTER TABLE repair_records ADD COLUMN notes TEXT")
     except sqlite3.OperationalError:
         pass  # Column already exists
+    try:
+        db.execute("ALTER TABLE repair_records ADD COLUMN participants TEXT")
+    except sqlite3.OperationalError:
+        pass  # Column already exists
     db.commit()
 
 
@@ -791,11 +800,11 @@ def save_record(form: dict[str, Any]) -> int:
         """
         INSERT INTO repair_records(
             record_year, record_week, week_sequence, machine_id, event_type,
-            description, cause, repair_method, replaced_parts, occurrence_at,
+            description, cause, repair_method, replaced_parts, participants, occurrence_at,
             repaired_at, machine_mtg, downtime_hours, labor_cost, material_cost,
             spare_parts_cost, service_cost, total_cost, notes, created_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             record_year,
@@ -807,6 +816,7 @@ def save_record(form: dict[str, Any]) -> int:
             str(form.get("cause", "")).strip(),
             str(form.get("repair_method", "")).strip(),
             str(form.get("replaced_parts", "")).strip(),
+            str(form.get("participants", "")).strip() or None,
             occurrence_at.isoformat(sep=" ", timespec="minutes"),
             repaired_at.isoformat(sep=" ", timespec="minutes") if repaired_at else None,
             str(form.get("machine_mtg", "")).strip(),
@@ -995,7 +1005,7 @@ def update_record(record_id: int, data: dict[str, Any]) -> None:
         """
         UPDATE repair_records SET
             machine_id = ?, event_type = ?, description = ?, cause = ?,
-            repair_method = ?, replaced_parts = ?, occurrence_at = ?,
+            repair_method = ?, replaced_parts = ?, participants = ?, occurrence_at = ?,
             repaired_at = ?, machine_mtg = ?, downtime_hours = ?,
             labor_cost = ?, material_cost = ?, spare_parts_cost = ?,
             service_cost = ?, total_cost = ?, notes = ?
@@ -1008,6 +1018,7 @@ def update_record(record_id: int, data: dict[str, Any]) -> None:
             str(data.get("cause", "")).strip(),
             str(data.get("repair_method", "")).strip(),
             str(data.get("replaced_parts", "")).strip(),
+            str(data.get("participants", "")).strip() or None,
             occurrence_at.isoformat(sep=" ", timespec="minutes"),
             repaired_at.isoformat(sep=" ", timespec="minutes") if repaired_at else None,
             str(data.get("machine_mtg", "")).strip(),
@@ -1123,6 +1134,7 @@ def _process_import_rows(rows: list[tuple[Any, ...]]) -> int:
             "cause": row_value(values, header_map, "Przyczyna", "") or "",
             "repair_method": row_value(values, header_map, "Sposób naprawy", "") or "",
             "replaced_parts": row_value(values, header_map, "Wymienione części", "") or "",
+            "participants": row_value(values, header_map, "Osoby biorące udział w interwencji", "") or "",
             "occurrence_at": occurrence_at,
             "repaired_at": parse_datetime(row_value(values, header_map, "Data naprawienia/ interwencji", None)),
             "machine_mtg": row_value(values, header_map, "MTG maszyny", "") or "",
@@ -1161,11 +1173,11 @@ def save_imported_record(record: dict[str, Any]) -> int:
         """
         INSERT INTO repair_records(
             record_year, record_week, week_sequence, machine_id, event_type,
-            description, cause, repair_method, replaced_parts, occurrence_at,
+            description, cause, repair_method, replaced_parts, participants, occurrence_at,
             repaired_at, machine_mtg, downtime_hours, labor_cost, material_cost,
             spare_parts_cost, service_cost, total_cost, notes, created_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             record_year,
@@ -1177,6 +1189,7 @@ def save_imported_record(record: dict[str, Any]) -> int:
             str(record.get("cause", "")).strip(),
             str(record.get("repair_method", "")).strip(),
             str(record.get("replaced_parts", "")).strip(),
+            str(record.get("participants", "")).strip() or None,
             occurrence_at.isoformat(sep=" ", timespec="minutes"),
             repaired_at.isoformat(sep=" ", timespec="minutes") if repaired_at else None,
             str(record.get("machine_mtg", "")).strip(),

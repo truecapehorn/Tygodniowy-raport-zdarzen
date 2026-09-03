@@ -5,7 +5,7 @@ from pathlib import Path
 
 from openpyxl import Workbook, load_workbook
 
-from app import create_app
+from app import create_app, get_db
 
 
 class RepairReportAppTests(unittest.TestCase):
@@ -75,6 +75,7 @@ class RepairReportAppTests(unittest.TestCase):
                 "serial_number": "P-200",
                 "event_type": "Awaria",
                 "description": "Naprawa silnika",
+                "participants": "Jan Kowalski, Anna Nowak",
             },
         )
 
@@ -90,6 +91,8 @@ class RepairReportAppTests(unittest.TestCase):
         rows = list(workbook.active.iter_rows(values_only=True))
         self.assertEqual(len(rows), 2)
         self.assertEqual(rows[1][4], "Linia B")
+        self.assertEqual(rows[0][12], "Osoby biorące udział w interwencji")
+        self.assertEqual(rows[1][12], "Jan Kowalski, Anna Nowak")
 
     def test_import_excel_file(self):
         workbook = Workbook()
@@ -101,6 +104,7 @@ class RepairReportAppTests(unittest.TestCase):
                 "Numer",
                 "Rodzaj zdarzenia",
                 "Opis",
+                "Osoby biorące udział w interwencji",
                 "Data wystąpienia",
                 "Data naprawienia/ interwencji",
             ]
@@ -112,6 +116,7 @@ class RepairReportAppTests(unittest.TestCase):
                 "G-12",
                 "Awaria",
                 "Wymiana noża",
+                "Marek Nowak, Piotr Kowalski",
                 "2026-08-20 07:00",
                 "2026-08-20 08:30",
             ]
@@ -123,6 +128,7 @@ class RepairReportAppTests(unittest.TestCase):
                 "",
                 "Awaria",
                 "Niekompletny wiersz",
+                "",
                 "2026-08-21 07:00",
                 "2026-08-21 08:00",
             ]
@@ -142,6 +148,12 @@ class RepairReportAppTests(unittest.TestCase):
         page = response.get_data(as_text=True)
         self.assertIn("Zaimportowano 1 rekordów.", page)
         self.assertIn("Gilotyna", page)
+        with self.app.app_context():
+            participants = get_db().execute(
+                "SELECT participants FROM repair_records WHERE description = ?",
+                ("Wymiana noża",),
+            ).fetchone()["participants"]
+        self.assertEqual(participants, "Marek Nowak, Piotr Kowalski")
 
 
 if __name__ == "__main__":
