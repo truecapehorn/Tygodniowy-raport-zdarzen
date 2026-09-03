@@ -193,6 +193,7 @@ function buildView(r) {
         ['Data wyst&#261;pienia', r.occurrence_at, false], ['Data naprawienia', r.repaired_at, false],
         ['Opis', r.description, true], ['Przyczyna', r.cause, true],
         ['Spos&#243;b naprawy', r.repair_method, true], ['Wymienione cz&#281;&#347;ci', r.replaced_parts, true],
+        ['Osoby bior&#261;ce udzia&#322; w interwencji', r.participants, true],
         ['Uwagi', r.notes, true],
         ['Pracoch&#322;onno&#347;&#263; [h]', r.labor_cost, false], ['Materia&#322; PLN', r.material_cost, false],
         ['Cz&#281;&#347;ci zamienne PLN', r.spare_parts_cost, false], ['Serwis PLN', r.service_cost, false],
@@ -238,6 +239,7 @@ function buildEditForm(r) {
         <div class="field"><label>Przyczyna</label><textarea id="ef-cause">${esc(r.cause)}</textarea></div>
         <div class="field"><label>Spos&#243;b naprawy</label><textarea id="ef-repair">${esc(r.repair_method)}</textarea></div>
         <div class="field"><label>Wymienione cz&#281;&#347;ci</label><textarea id="ef-parts">${esc(r.replaced_parts)}</textarea></div>
+        <div class="field"><label>Osoby bior&#261;ce udzia&#322; w interwencji</label><input id="ef-participants" value="${esc(r.participants??'')}"></div>
     </div>
     <div class="form-grid">
         <div class="field"><label>Pracoch&#322;onno&#347;&#263; [h]</label><input type="number" step="0.01" min="0" id="ef-labor" value="${r.labor_cost??0}"></div>
@@ -353,6 +355,7 @@ async function saveEdit() {
         cause:          document.getElementById('ef-cause').value,
         repair_method:  document.getElementById('ef-repair').value,
         replaced_parts: document.getElementById('ef-parts').value,
+        participants:   document.getElementById('ef-participants').value,
         labor_cost:     document.getElementById('ef-labor').value,
         material_cost:  document.getElementById('ef-mat').value,
         spare_parts_cost: document.getElementById('ef-sparts').value,
