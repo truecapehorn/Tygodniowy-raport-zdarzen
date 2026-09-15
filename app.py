@@ -742,20 +742,65 @@ def init_db() -> None:
         db.execute("ALTER TABLE repair_records ADD COLUMN participants TEXT")
     except sqlite3.OperationalError:
         pass  # Column already exists
+    duplicate_serials = db.execute(
+        """
+        SELECT serial_number
+        FROM machines
+        WHERE lower(trim(serial_number)) NOT IN ('', 'brak', '-', 'n/a', 'nie dotyczy')
+        GROUP BY serial_number
+        HAVING COUNT(*) > 1
+        """
+    ).fetchall()
+    for duplicate in duplicate_serials:
+        machines = db.execute(
+            """
+            SELECT m.id, COUNT(r.id) AS record_count
+            FROM machines m
+            LEFT JOIN repair_records r ON r.machine_id = m.id
+            WHERE m.serial_number = ?
+            GROUP BY m.id
+            ORDER BY record_count DESC, m.id ASC
+            """,
+            (duplicate["serial_number"],),
+        ).fetchall()
+        canonical_id = int(machines[0]["id"])
+        for machine in machines[1:]:
+            db.execute(
+                "UPDATE repair_records SET machine_id = ? WHERE machine_id = ?",
+                (canonical_id, int(machine["id"])),
+            )
+            db.execute("DELETE FROM machines WHERE id = ?", (int(machine["id"]),))
+    db.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_machines_serial_number
+        ON machines(serial_number)
+        WHERE lower(trim(serial_number)) NOT IN ('', 'brak', '-', 'n/a', 'nie dotyczy')
+        """
+    )
     db.commit()
+
+
+def is_placeholder_serial(serial_number: str) -> bool:
+    return serial_number.strip().lower() in {"", "brak", "-", "n/a", "nie dotyczy"}
 
 
 def get_or_create_machine(name: str, machine_type: str, serial_number: str) -> int:
     if not all([name, machine_type, serial_number]):
         raise ValueError("Maszyna, typ i numer są wymagane.")
     db = get_db()
-    existing = db.execute(
-        """
-        SELECT id FROM machines
-        WHERE name = ? AND machine_type = ? AND serial_number = ?
-        """,
-        (name, machine_type, serial_number),
-    ).fetchone()
+    if is_placeholder_serial(serial_number):
+        existing = db.execute(
+            """
+            SELECT id FROM machines
+            WHERE name = ? AND machine_type = ? AND serial_number = ?
+            """,
+            (name, machine_type, serial_number),
+        ).fetchone()
+    else:
+        existing = db.execute(
+            "SELECT id FROM machines WHERE serial_number = ?",
+            (serial_number,),
+        ).fetchone()
     if existing:
         return int(existing["id"])
     cursor = db.execute(

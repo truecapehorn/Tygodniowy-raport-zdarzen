@@ -94,6 +94,40 @@ class RepairReportAppTests(unittest.TestCase):
         self.assertEqual(rows[0][12], "Osoby biorące udział w interwencji")
         self.assertEqual(rows[1][12], "Jan Kowalski, Anna Nowak")
 
+    def test_serial_number_reuses_existing_machine_even_with_different_label(self):
+        first = {
+            "occurrence_at": "2026-08-30T08:00",
+            "machine_name": "BOSCHERT",
+            "machine_type": "Twin 1000",
+            "serial_number": "282",
+            "event_type": "Awaria",
+            "description": "Pierwszy wpis",
+        }
+        second = {
+            **first,
+            "machine_name": "Inna nazwa",
+            "machine_type": "Inny typ",
+            "description": "Drugi wpis",
+        }
+
+        self.client.post("/", data=first)
+        self.client.post("/", data=second)
+
+        with self.app.app_context():
+            machines = get_db().execute(
+                "SELECT id, name, machine_type FROM machines WHERE serial_number = ?",
+                ("282",),
+            ).fetchall()
+            records = get_db().execute(
+                "SELECT DISTINCT machine_id FROM repair_records WHERE description IN (?, ?)",
+                ("Pierwszy wpis", "Drugi wpis"),
+            ).fetchall()
+
+        self.assertEqual(len(machines), 1)
+        self.assertEqual(machines[0]["name"], "BOSCHERT")
+        self.assertEqual(machines[0]["machine_type"], "Twin 1000")
+        self.assertEqual(len(records), 1)
+
     def test_import_excel_file(self):
         workbook = Workbook()
         sheet = workbook.active
