@@ -83,3 +83,5 @@ python -m unittest discover -s tests
 ## Zmiany do wprowadzenia
 
 - [x] Dodano pole osób (oddzielonych przecinkami) biorących udział w interwencji, obsługiwane także przez import i eksport Excel.
+- [ ] Stworzenie możliwości tworzenia użytkowników i zarządzania prawami tworzenia, edycji, kasowania, czy wyświetlania rekordów. Chciałbym mieć też dziennik zdarzeń (wykonanych przez nich operacji) dla każdego z tych użytkowników. Wszystko zarządzane po zalogowaniu przez konto admin.
+- [ ] 
