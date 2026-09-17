@@ -309,7 +309,7 @@
             ['Uwagi', r.notes, true],
             ['Pracoch&#322;onno&#347;&#263; [h]', r.labor_cost, false], ['Materia&#322; PLN', r.material_cost, false],
             ['Cz&#281;&#347;ci zamienne PLN', r.spare_parts_cost, false], ['Serwis PLN', r.service_cost, false],
-            ['Koszt brutto PLN', r.total_cost, false], ['Wykluczenie z prod.[h]', r.downtime_hours, false],
+            ['Koszt netto PLN', r.total_cost, false], ['Wykluczenie z prod.[h]', r.downtime_hours, false],
         ];
         let html = '<div class="detail-grid">';
         fields.forEach(([label,val,full]) => {
