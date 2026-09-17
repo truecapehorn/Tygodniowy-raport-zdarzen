@@ -24,6 +24,15 @@ from flask import (
     url_for,
 )
 from openpyxl import Workbook, load_workbook
+from reportlab.lib import colors
+from reportlab.lib.enums import TA_LEFT
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.units import mm
+from reportlab.platypus import Image as PdfImage
+from reportlab.platypus import KeepTogether, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 from werkzeug.security import check_password_hash, generate_password_hash
 
 UTC = timezone.utc
@@ -603,6 +612,90 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         ).fetchall()
         record["attachments"] = [dict(a) for a in attachments]
         return jsonify(record)
+
+    @app.route("/record/<int:record_id>/pdf")
+    def record_pdf(record_id: int):
+        """Export one record as a monochrome PDF, including image attachments."""
+        db = get_db()
+        row = db.execute(
+            """
+            SELECT r.*, m.name, m.machine_type, m.serial_number
+            FROM repair_records r JOIN machines m ON m.id = r.machine_id
+            WHERE r.id = ?
+            """,
+            (record_id,),
+        ).fetchone()
+        if not row:
+            return "Rekord nie istnieje.", 404
+
+        attachments = db.execute(
+            "SELECT filename, original_name, content_type FROM attachments WHERE record_id = ? ORDER BY created_at",
+            (record_id,),
+        ).fetchall()
+        record = dict(row)
+        output = io.BytesIO()
+
+        # Prefer an installed Windows font so Polish characters are preserved.
+        font_path = next((Path(p) for p in (
+            r"C:\Windows\Fonts\arial.ttf",
+            r"C:\Windows\Fonts\segoeui.ttf",
+            r"/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        ) if Path(p).exists()), None)
+        font_name = "Helvetica"
+        if font_path:
+            font_name = "ReportFont"
+            pdfmetrics.registerFont(TTFont(font_name, str(font_path)))
+
+        styles = getSampleStyleSheet()
+        normal = ParagraphStyle("record-normal", parent=styles["Normal"], fontName=font_name,
+                                fontSize=8.5, leading=11, textColor=colors.black)
+        heading = ParagraphStyle("record-heading", parent=normal, fontSize=15, leading=18,
+                                 spaceAfter=5, alignment=TA_LEFT)
+        label = ParagraphStyle("record-label", parent=normal, fontName=font_name,
+                       fontSize=8, leading=10, textColor=colors.black)
+
+        def text(value: Any) -> str:
+            return str(value if value not in (None, "") else "—").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br/>")
+
+        fields = [
+            ("Maszyna", record["name"]), ("Typ", record["machine_type"]), ("Numer", record["serial_number"]),
+            ("Rok / tydzień / Lp.", f'{record["record_year"]} / W{record["record_week"]} / {record["week_sequence"]}'),
+            ("Rodzaj zdarzenia", record["event_type"]), ("MTG maszyny", record["machine_mtg"]),
+            ("Data wystąpienia", format_datetime(record["occurrence_at"])), ("Data naprawienia", format_datetime(record["repaired_at"])),
+            ("Opis", record["description"]), ("Przyczyna", record["cause"]), ("Sposób naprawy", record["repair_method"]),
+            ("Wymienione części", record["replaced_parts"]), ("Osoby biorące udział w interwencji", record["participants"]),
+            ("Uwagi", record["notes"]), ("Pracochłonność [h]", record["labor_cost"]), ("Materiał PLN", record["material_cost"]),
+            ("Części zamienne PLN", record["spare_parts_cost"]), ("Serwis PLN", record["service_cost"]),
+            ("Koszt netto PLN", record["total_cost"]), ("Wykluczenie z produkcji [h]", record["downtime_hours"]),
+        ]
+        data = [[Paragraph(f"<b>{text(name)}</b>", label), Paragraph(text(value), normal)] for name, value in fields]
+        table = Table(data, colWidths=[48 * mm, 130 * mm], repeatRows=0)
+        table.setStyle(TableStyle([
+            ("BOX", (0, 0), (-1, -1), 0.7, colors.black),
+            ("INNERGRID", (0, 0), (-1, -1), 0.35, colors.black),
+            ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#eeeeee")),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 5), ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+            ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ]))
+        story = [Paragraph(f"Rekord #{record_id} — {text(record['name'])}", heading), table]
+        image_files = []
+        for attachment in attachments:
+            if not attachment["content_type"].startswith("image/"):
+                continue
+            path = Path(current_app_uploads()) / str(record_id) / attachment["filename"]
+            if path.exists():
+                image_files.append((path, attachment["original_name"]))
+        if image_files:
+            story += [PageBreak(), Paragraph("Załączniki — zdjęcia", heading)]
+            for path, original_name in image_files:
+                image = PdfImage(str(path), width=170 * mm, height=105 * mm, kind="proportional")
+                story += [Paragraph(text(original_name), normal), Spacer(1, 2 * mm), image, Spacer(1, 6 * mm)]
+        SimpleDocTemplate(output, pagesize=A4, rightMargin=16 * mm, leftMargin=16 * mm,
+                          topMargin=15 * mm, bottomMargin=15 * mm,
+                          title=f"Rekord {record_id}").build(story)
+        output.seek(0)
+        return send_file(output, as_attachment=True, download_name=f"rekord_{record_id}.pdf", mimetype="application/pdf")
 
     @app.route("/api/record/<int:record_id>", methods=["PATCH"])
     def update_record_api(record_id: int):
