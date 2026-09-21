@@ -30,7 +30,7 @@
             <label class="field"><input type="checkbox" name="can_delete_records"{% if edit_user and edit_user.can_delete_records %} checked{% endif %}> Kasowanie rekordów</label>
         </div>
         <div class="actions">
-            <button type="submit" class="btn btn-success">{% if edit_user %}Zapisz zmiany{% else %}Zapisz użytkownika{% endif %}</button>
+            <button type="submit" class="btn btn-primary">{% if edit_user %}Zapisz zmiany{% else %}Zapisz użytkownika{% endif %}</button>
             {% if edit_user %}<a href="{{ url_for('admin_users') }}" class="btn btn-outline">Anuluj</a>{% endif %}
         </div>
     </form>
