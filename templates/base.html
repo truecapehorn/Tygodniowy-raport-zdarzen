@@ -348,10 +348,10 @@
             {% if user_role == 'admin' or (current_user and current_user.can_create_records) %}
             <li><a href="{{ url_for('new_record') }}"     {% if request.endpoint == 'new_record'     %}class="active"{% endif %}>Nowy rekord</a></li>
             {% endif %}
+            <li><a href="{{ url_for('data_page') }}"      {% if request.endpoint == 'data_page'      %}class="active"{% endif %}>Import / Export</a></li>
             {% if user_role == 'admin' %}
             <li><a href="{{ url_for('admin_users') }}"    {% if request.endpoint == 'admin_users'    %}class="active"{% endif %}>Użytkownicy</a></li>
             {% endif %}
-            <li><a href="{{ url_for('data_page') }}"      {% if request.endpoint == 'data_page'      %}class="active"{% endif %}>Import / Export</a></li>
             <li><a href="{{ url_for('change_password') }}" {% if request.endpoint == 'change_password' %}class="active"{% endif %}>Zmień hasło</a></li>
             <li><a href="{{ url_for('logout') }}" style="color:var(--red);">Wyloguj</a></li>
         </ul>
