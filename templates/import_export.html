@@ -4,7 +4,7 @@
 
 <div class="page-title">Import / Export <small>Zarządzanie danymi bazy</small></div>
 
-{% if user_role == 'admin' %}
+{% if user_role == 'admin' or (current_user and current_user.can_create_records) %}
 <div class="card">
     <div class="card-title">Import z pliku Excel</div>
     <p class="text-muted" style="font-size:.875rem;margin-bottom:1rem;line-height:1.6;">

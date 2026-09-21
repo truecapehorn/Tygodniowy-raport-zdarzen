@@ -160,6 +160,31 @@ CREATE TABLE IF NOT EXISTS attachments (
     created_at TEXT NOT NULL,
     FOREIGN KEY(record_id) REFERENCES repair_records(id)
 );
+
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    is_admin INTEGER NOT NULL DEFAULT 0,
+    can_view_records INTEGER NOT NULL DEFAULT 1,
+    can_create_records INTEGER NOT NULL DEFAULT 0,
+    can_edit_records INTEGER NOT NULL DEFAULT 0,
+    can_delete_records INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS user_activity_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    username TEXT,
+    action TEXT NOT NULL,
+    target_type TEXT,
+    target_id INTEGER,
+    details TEXT,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY(user_id) REFERENCES users(id)
+);
 """
 
 
@@ -326,6 +351,174 @@ def _ensure_auth_file() -> dict:
     return data
 
 
+def get_current_user() -> sqlite3.Row | None:
+    user_id = session.get("user_id")
+    if not user_id:
+        return None
+    db = get_db()
+    return db.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+
+
+def user_has_permission(permission_name: str) -> bool:
+    if session.get("role") == "admin":
+        return True
+    user = get_current_user()
+    if not user:
+        return False
+    if bool(user["is_admin"]):
+        return True
+    permission_map = {
+        "can_view_records": bool(user["can_view_records"]),
+        "can_create_records": bool(user["can_create_records"]),
+        "can_edit_records": bool(user["can_edit_records"]),
+        "can_delete_records": bool(user["can_delete_records"]),
+    }
+    return permission_map.get(permission_name, False)
+
+
+def log_user_activity(
+    action: str,
+    details: str = "",
+    *,
+    target_type: str | None = None,
+    target_id: int | None = None,
+    user_id: int | None = None,
+    username: str | None = None,
+) -> None:
+    db = get_db()
+    if user_id is None:
+        user = get_current_user()
+        if user:
+            user_id = int(user["id"])
+    if username is None:
+        if user_id is not None:
+            user_row = db.execute("SELECT username FROM users WHERE id = ?", (user_id,)).fetchone()
+            if user_row is not None:
+                username = str(user_row["username"])
+        if username is None:
+            username = str(session.get("username") or ("admin" if session.get("role") == "admin" else "guest"))
+    db.execute(
+        """
+        INSERT INTO user_activity_log(user_id, username, action, target_type, target_id, details, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            user_id,
+            username,
+            action,
+            target_type,
+            target_id,
+            details,
+            datetime.now(UTC).isoformat(timespec="seconds"),
+        ),
+    )
+    db.commit()
+
+
+def ensure_default_admin_user() -> None:
+    db = get_db()
+    auth = _ensure_auth_file()
+    username = str(auth.get("login", "admin")).strip() or "admin"
+    existing = db.execute("SELECT id FROM users WHERE username = ?", (username,)).fetchone()
+    if existing:
+        return
+    password_hash = auth.get("password_hash") or generate_password_hash("admin")
+    timestamp = datetime.now(UTC).isoformat(timespec="seconds")
+    db.execute(
+        """
+        INSERT INTO users(username, password_hash, is_admin, can_view_records, can_create_records,
+                         can_edit_records, can_delete_records, created_at, updated_at)
+        VALUES (?, ?, 1, 1, 1, 1, 1, ?, ?)
+        """,
+        (username, password_hash, timestamp, timestamp),
+    )
+    db.commit()
+
+
+def get_user_history(limit: int = 20, offset: int = 0) -> list[sqlite3.Row]:
+    db = get_db()
+    return list(
+        db.execute(
+            "SELECT * FROM user_activity_log ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?",
+            (limit, offset),
+        ).fetchall()
+    )
+
+
+def create_or_update_user(user_data: dict[str, Any], user_id: int | None = None) -> int:
+    db = get_db()
+    username = str(user_data.get("username", "")).strip()
+    if not username:
+        raise ValueError("Nazwa użytkownika jest wymagana.")
+    if user_id is None:
+        existing = db.execute("SELECT id FROM users WHERE lower(username) = lower(?)", (username,)).fetchone()
+        if existing:
+            raise ValueError("Użytkownik o tej nazwie już istnieje.")
+    else:
+        existing = db.execute("SELECT id FROM users WHERE id = ?", (user_id,)).fetchone()
+        if not existing:
+            raise ValueError("Użytkownik nie istnieje.")
+        conflict = db.execute(
+            "SELECT id FROM users WHERE lower(username) = lower(?) AND id != ?",
+            (username, user_id),
+        ).fetchone()
+        if conflict:
+            raise ValueError("Użytkownik o tej nazwie już istnieje.")
+
+    now = datetime.now(UTC).isoformat(timespec="seconds")
+    is_admin = 1 if str(user_data.get("is_admin", "0")).lower() in {"1", "true", "yes", "on"} else 0
+    permissions = {
+        "can_view_records": 1 if str(user_data.get("can_view_records", "0")).lower() in {"1", "true", "yes", "on"} else 0,
+        "can_create_records": 1 if str(user_data.get("can_create_records", "0")).lower() in {"1", "true", "yes", "on"} else 0,
+        "can_edit_records": 1 if str(user_data.get("can_edit_records", "0")).lower() in {"1", "true", "yes", "on"} else 0,
+        "can_delete_records": 1 if str(user_data.get("can_delete_records", "0")).lower() in {"1", "true", "yes", "on"} else 0,
+    }
+    if is_admin:
+        permissions = {key: 1 for key in permissions}
+
+    if user_id is None:
+        password_hash = generate_password_hash(str(user_data.get("password", "admin123")).strip() or "admin123")
+        cursor = db.execute(
+            """
+            INSERT INTO users(username, password_hash, is_admin, can_view_records, can_create_records,
+                             can_edit_records, can_delete_records, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (username, password_hash, is_admin, permissions["can_view_records"], permissions["can_create_records"],
+             permissions["can_edit_records"], permissions["can_delete_records"], now, now),
+        )
+        user_id = int(cursor.lastrowid)
+        log_user_activity("create_user", f"Utworzono użytkownika {username}", target_type="user", target_id=user_id, user_id=session.get("user_id"))
+    else:
+        password = str(user_data.get("password", "")).strip()
+        sql = """
+            UPDATE users
+            SET username = ?, is_admin = ?, can_view_records = ?, can_create_records = ?,
+                can_edit_records = ?, can_delete_records = ?, updated_at = ?
+        """
+        params = [username, is_admin, permissions["can_view_records"], permissions["can_create_records"],
+                  permissions["can_edit_records"], permissions["can_delete_records"], now]
+        if password:
+            sql += ", password_hash = ?"
+            params.append(generate_password_hash(password))
+        sql += " WHERE id = ?"
+        params.append(user_id)
+        db.execute(sql, params)
+        log_user_activity("update_user", f"Zaktualizowano użytkownika {username}", target_type="user", target_id=user_id, user_id=session.get("user_id"))
+    db.commit()
+    return int(user_id)
+
+
+def delete_user(user_id: int) -> None:
+    db = get_db()
+    if int(user_id) == int(session.get("user_id") or -1):
+        raise ValueError("Nie można usunąć własnego konta.")
+    db.execute("DELETE FROM user_activity_log WHERE user_id = ?", (user_id,))
+    db.execute("DELETE FROM users WHERE id = ?", (user_id,))
+    db.commit()
+    log_user_activity("delete_user", "Usunięto użytkownika", target_type="user", target_id=user_id, user_id=session.get("user_id"))
+
+
 def create_app(test_config: dict[str, Any] | None = None) -> Flask:
     app = Flask(__name__)
     config = _load_config()
@@ -358,17 +551,23 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         if app.config.get("TESTING"):
             return
         if not app.config.get("REQUIRE_LOGIN"):
-            # Login not required; automatically set guest session
             if not session.get("logged_in"):
                 session["logged_in"] = True
                 session["role"] = "guest"
             return
-        # Login required
         exempt = {"login", "logout", "static"}
         if request.endpoint in exempt or request.endpoint is None:
             return
         if not session.get("logged_in"):
             return redirect(url_for("login"))
+        if session.get("role") in {"admin", "user"} and session.get("user_id"):
+            user = get_current_user()
+            if user is None:
+                session.clear()
+                return redirect(url_for("login"))
+            if not bool(user["can_view_records"]) and request.endpoint not in {"logout", "login"}:
+                flash("Brak uprawnień do przeglądania rekordów.", "error")
+                return redirect(url_for("logout"))
 
     @app.before_request
     def open_db_connection() -> None:
@@ -382,10 +581,11 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
 
     @app.context_processor
     def inject_role():
-        return {"user_role": session.get("role", "guest")}
+        return {"user_role": session.get("role", "guest"), "current_user": get_current_user()}
 
     with app.app_context():
         init_db()
+        ensure_default_admin_user()
 
     @app.route("/login", methods=["GET", "POST"])
     def login():
@@ -397,18 +597,36 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
                 session["logged_in"] = True
                 session["role"] = "guest"
                 return redirect(url_for("index"))
+
+            db = get_db()
+            user = db.execute("SELECT * FROM users WHERE lower(username) = lower(?)", (login_val,)).fetchone()
+            if user is not None and check_password_hash(user["password_hash"], pw_val):
+                session["logged_in"] = True
+                session["role"] = "admin" if user["is_admin"] else "user"
+                session["user_id"] = int(user["id"])
+                session["username"] = user["username"]
+                log_user_activity("login", f"Użytkownik {user['username']} zalogował się.", user_id=int(user["id"]))
+                return redirect(url_for("index"))
+
             auth = json.loads(AUTH_FILE.read_text(encoding="utf-8"))
             ok_login = login_val == auth.get("login", "admin")
             ok_pw = check_password_hash(auth["password_hash"], pw_val)
             if ok_login and ok_pw:
                 session["logged_in"] = True
                 session["role"] = "admin"
+                session["username"] = auth.get("login", "admin")
+                session["legacy_admin"] = True
+                log_user_activity("login", "Zalogowano przez legacy admin.", username=auth.get("login", "admin"))
                 return redirect(url_for("index"))
             error = "Nieprawid\u0142owy login lub has\u0142o."
         return render_template("login.html", error=error)
 
     @app.route("/logout")
     def logout():
+        if session.get("user_id"):
+            log_user_activity("logout", "Wylogowanie użytkownika.", user_id=int(session["user_id"]))
+        elif session.get("role") == "admin":
+            log_user_activity("logout", "Wylogowanie użytkownika.", username=str(session.get("username") or "admin"))
         session.clear()
         return redirect(url_for("login"))
 
@@ -418,19 +636,94 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             current = request.form.get("current_password", "")
             new_pw = request.form.get("new_password", "")
             confirm = request.form.get("confirm_password", "")
-            auth = json.loads(AUTH_FILE.read_text(encoding="utf-8"))
-            if not check_password_hash(auth["password_hash"], current):
-                flash("Nieprawid\u0142owe obecne has\u0142o.", "error")
-            elif len(new_pw) < 4:
-                flash("Nowe has\u0142o musi mie\u0107 co najmniej 4 znaki.", "error")
-            elif new_pw != confirm:
-                flash("Has\u0142a nie s\u0105 identyczne.", "error")
+            user = get_current_user()
+            if user is not None:
+                if not check_password_hash(user["password_hash"], current):
+                    flash("Nieprawid\u0142owe obecne has\u0142o.", "error")
+                elif len(new_pw) < 4:
+                    flash("Nowe has\u0142o musi mie\u0107 co najmniej 4 znaki.", "error")
+                elif new_pw != confirm:
+                    flash("Has\u0142a nie s\u0105 identyczne.", "error")
+                else:
+                    db = get_db()
+                    db.execute(
+                        "UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?",
+                        (generate_password_hash(new_pw), datetime.now(UTC).isoformat(timespec="seconds"), user["id"]),
+                    )
+                    db.commit()
+                    auth = json.loads(AUTH_FILE.read_text(encoding="utf-8"))
+                    if auth.get("login") == user["username"]:
+                        auth["password_hash"] = generate_password_hash(new_pw)
+                        AUTH_FILE.write_text(json.dumps(auth, indent=2), encoding="utf-8")
+                    log_user_activity("change_password", f"Zmiana hasła użytkownika {user['username']}.", user_id=int(user["id"]))
+                    flash("Has\u0142o zosta\u0142o zmienione.", "success")
+                    return redirect(url_for("index"))
             else:
-                auth["password_hash"] = generate_password_hash(new_pw)
-                AUTH_FILE.write_text(json.dumps(auth, indent=2), encoding="utf-8")
-                flash("Has\u0142o zosta\u0142o zmienione.", "success")
-                return redirect(url_for("index"))
+                auth = json.loads(AUTH_FILE.read_text(encoding="utf-8"))
+                if not check_password_hash(auth["password_hash"], current):
+                    flash("Nieprawid\u0142owe obecne has\u0142o.", "error")
+                elif len(new_pw) < 4:
+                    flash("Nowe has\u0142o musi mie\u0107 co najmniej 4 znaki.", "error")
+                elif new_pw != confirm:
+                    flash("Has\u0142a nie s\u0105 identyczne.", "error")
+                else:
+                    auth["password_hash"] = generate_password_hash(new_pw)
+                    AUTH_FILE.write_text(json.dumps(auth, indent=2), encoding="utf-8")
+                    flash("Has\u0142o zosta\u0142o zmienione.", "success")
+                    return redirect(url_for("index"))
         return render_template("change_password.html")
+
+    @app.route("/admin/users", methods=["GET", "POST"])
+    def admin_users():
+        if not session.get("role") == "admin":
+            flash("Brak uprawnień administratora.", "error")
+            return redirect(url_for("index"))
+
+        if request.method == "POST":
+            user_id = request.form.get("user_id")
+            payload = dict(request.form)
+            try:
+                if user_id:
+                    create_or_update_user(payload, int(user_id))
+                    flash("Użytkownik został zaktualizowany.", "success")
+                else:
+                    create_or_update_user(payload)
+                    flash("Użytkownik został utworzony.", "success")
+            except ValueError as exc:
+                flash(str(exc), "error")
+            return redirect(url_for("admin_users"))
+
+        db = get_db()
+        users = db.execute("SELECT * FROM users ORDER BY id").fetchall()
+        edit_user = None
+        edit_user_id = request.args.get("edit", type=int)
+        if edit_user_id:
+            edit_user = db.execute("SELECT * FROM users WHERE id = ?", (edit_user_id,)).fetchone()
+        activity_page = max(1, request.args.get("page", 1, type=int) or 1)
+        activity_per_page = 20
+        activity_total = db.execute("SELECT COUNT(*) AS total FROM user_activity_log").fetchone()["total"]
+        activity_pages = max(1, (int(activity_total) + activity_per_page - 1) // activity_per_page)
+        activity_page = min(activity_page, activity_pages)
+        return render_template(
+            "admin_users.html",
+            users=users,
+            edit_user=edit_user,
+            recent_activity=get_user_history(activity_per_page, (activity_page - 1) * activity_per_page),
+            activity_page=activity_page,
+            activity_pages=activity_pages,
+        )
+
+    @app.route("/admin/users/<int:user_id>/delete", methods=["POST"])
+    def admin_delete_user(user_id: int):
+        if not session.get("role") == "admin":
+            flash("Brak uprawnień administratora.", "error")
+            return redirect(url_for("index"))
+        try:
+            delete_user(user_id)
+            flash("Użytkownik został usunięty.", "success")
+        except ValueError as exc:
+            flash(str(exc), "error")
+        return redirect(url_for("admin_users"))
 
     @app.route("/", methods=["GET", "POST"])
     def index():
@@ -455,7 +748,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
 
     @app.route("/new", methods=["GET", "POST"])
     def new_record():
-        if not app.config.get("TESTING") and session.get("role") != "admin":
+        if not app.config.get("TESTING") and not user_has_permission("can_create_records"):
             flash("Brak uprawnie\u0144 do dodawania rekord\u00f3w.", "error")
             return redirect(url_for("index"))
         if request.method == "POST":
@@ -478,7 +771,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
     def import_data():
         if request.method == "GET":
             return redirect(url_for("data_page"), code=301)
-        if not app.config.get("TESTING") and session.get("role") != "admin":
+        if not app.config.get("TESTING") and not user_has_permission("can_create_records"):
             flash("Brak uprawnie\u0144 do importu danych.", "error")
             return redirect(url_for("data_page"))
         upload = request.files.get("file")
@@ -486,13 +779,18 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             flash("Wybierz plik Excel do importu.", "error")
             return redirect(url_for("data_page"))
         imported = import_workbook(upload.read(), upload.filename or "")
+        log_user_activity(
+            "import_records",
+            f"Zaimportowano {imported} rekordów z pliku {upload.filename or 'bez nazwy'}.",
+            target_type="import",
+        )
         flash(f"Zaimportowano {imported} rekordów.", "success")
         return redirect(url_for("index"))
 
     @app.route("/data", methods=["GET", "POST"])
     def data_page():
         if request.method == "POST":
-            if not app.config.get("TESTING") and session.get("role") != "admin":
+            if not app.config.get("TESTING") and not user_has_permission("can_create_records"):
                 flash("Brak uprawnie\u0144 do importu danych.", "error")
                 return redirect(url_for("data_page"))
             upload = request.files.get("file")
@@ -500,6 +798,11 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
                 flash("Wybierz plik Excel do importu.", "error")
                 return redirect(url_for("data_page"))
             imported = import_workbook(upload.read(), upload.filename or "")
+            log_user_activity(
+                "import_records",
+                f"Zaimportowano {imported} rekordów z pliku {upload.filename or 'bez nazwy'}.",
+                target_type="import",
+            )
             flash(f"Zaimportowano {imported} rekordów.", "success")
             return redirect(url_for("index"))
         return render_template("import_export.html")
@@ -550,6 +853,11 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         output = io.BytesIO()
         workbook.save(output)
         output.seek(0)
+        log_user_activity(
+            "export_records",
+            "Wyeksportowano rekordy do pliku Excel.",
+            target_type="export",
+        )
         return send_file(
             output,
             as_attachment=True,
@@ -611,6 +919,12 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             (record_id,),
         ).fetchall()
         record["attachments"] = [dict(a) for a in attachments]
+        log_user_activity(
+            "view_record",
+            f"Wyświetlono rekord #{record_id}.",
+            target_type="record",
+            target_id=record_id,
+        )
         return jsonify(record)
 
     @app.route("/record/<int:record_id>/pdf")
@@ -695,24 +1009,36 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
                           topMargin=15 * mm, bottomMargin=15 * mm,
                           title=f"Rekord {record_id}").build(story)
         output.seek(0)
+        log_user_activity(
+            "export_record_pdf",
+            f"Wyeksportowano rekord #{record_id} do PDF.",
+            target_type="record",
+            target_id=record_id,
+        )
         return send_file(output, as_attachment=True, download_name=f"rekord_{record_id}.pdf", mimetype="application/pdf")
 
     @app.route("/api/record/<int:record_id>", methods=["PATCH"])
     def update_record_api(record_id: int):
-        if not app.config.get("TESTING") and session.get("role") != "admin":
+        if not app.config.get("TESTING") and not user_has_permission("can_edit_records"):
             return jsonify({"error": "Brak uprawnie\u0144."}), 403
         data = request.get_json(force=True)
         if not data:
             return jsonify({"error": "Brak danych."}), 400
         try:
             update_record(record_id, data)
+            log_user_activity(
+                "update_record",
+                f"Zaktualizowano rekord #{record_id}.",
+                target_type="record",
+                target_id=record_id,
+            )
             return jsonify({"ok": True})
         except ValueError as exc:
             return jsonify({"error": str(exc)}), 400
 
     @app.route("/api/record/<int:record_id>", methods=["DELETE"])
     def delete_record_api(record_id: int):
-        if not app.config.get("TESTING") and session.get("role") != "admin":
+        if not app.config.get("TESTING") and not user_has_permission("can_delete_records"):
             return jsonify({"error": "Brak uprawnie\u0144."}), 403
         import shutil
 
@@ -725,11 +1051,17 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         db.execute("DELETE FROM attachments WHERE record_id = ?", (record_id,))
         db.execute("DELETE FROM repair_records WHERE id = ?", (record_id,))
         db.commit()
+        log_user_activity(
+            "delete_record",
+            f"Usunięto rekord #{record_id}.",
+            target_type="record",
+            target_id=record_id,
+        )
         return jsonify({"ok": True})
 
     @app.route("/api/record/<int:record_id>/attachments", methods=["POST"])
     def add_record_attachments(record_id: int):
-        if not app.config.get("TESTING") and session.get("role") != "admin":
+        if not app.config.get("TESTING") and not user_has_permission("can_edit_records"):
             return jsonify({"error": "Brak uprawnie\u0144."}), 403
         db = get_db()
         if not db.execute("SELECT id FROM repair_records WHERE id = ?", (record_id,)).fetchone():
@@ -741,7 +1073,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
 
     @app.route("/api/attachment/<int:attachment_id>", methods=["DELETE"])
     def delete_attachment_api(attachment_id: int):
-        if not app.config.get("TESTING") and session.get("role") != "admin":
+        if not app.config.get("TESTING") and not user_has_permission("can_delete_records"):
             return jsonify({"error": "Brak uprawnie\u0144."}), 403
         db = get_db()
         row = db.execute("SELECT * FROM attachments WHERE id = ?", (attachment_id,)).fetchone()
@@ -752,6 +1084,12 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             file_path.unlink()
         db.execute("DELETE FROM attachments WHERE id = ?", (attachment_id,))
         db.commit()
+        log_user_activity(
+            "delete_attachment",
+            f"Usunięto załącznik {row['original_name']} z rekordu #{row['record_id']}.",
+            target_type="record",
+            target_id=int(row["record_id"]),
+        )
         return jsonify({"ok": True})
 
     @app.route("/attachments/<int:record_id>/<path:filename>")
@@ -822,6 +1160,12 @@ def save_attachment(record_id: int, file_storage: Any) -> None:
         (record_id, dest.name, original_name, content_type, datetime.now(UTC).isoformat(timespec="seconds")),
     )
     db.commit()
+    log_user_activity(
+        "add_attachment",
+        f"Dodano załącznik {original_name} do rekordu #{record_id}.",
+        target_type="record",
+        target_id=record_id,
+    )
 
 
 def init_db() -> None:
@@ -969,6 +1313,12 @@ def save_record(form: dict[str, Any]) -> int:
         ),
     )
     db.commit()
+    log_user_activity(
+        "create_record",
+        f"Utworzono rekord #{cursor.lastrowid} dla maszyny {str(form.get('machine_name', '')).strip()}.",
+        target_type="record",
+        target_id=int(cursor.lastrowid),
+    )
     return int(cursor.lastrowid)
 
 
@@ -1342,6 +1692,12 @@ def save_imported_record(record: dict[str, Any]) -> int:
         ),
     )
     db.commit()
+    log_user_activity(
+        "create_record",
+        f"Utworzono rekord #{cursor.lastrowid} podczas importu.",
+        target_type="record",
+        target_id=int(cursor.lastrowid),
+    )
     return int(cursor.lastrowid)
 
 

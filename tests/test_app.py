@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 
 from openpyxl import Workbook, load_workbook
+from werkzeug.security import generate_password_hash
 
 from app import create_app, get_db
 
@@ -188,6 +189,136 @@ class RepairReportAppTests(unittest.TestCase):
                 ("Wymiana noża",),
             ).fetchone()["participants"]
         self.assertEqual(participants, "Marek Nowak, Piotr Kowalski")
+
+    def test_user_login_and_create_permission(self):
+        app = create_app(
+            {
+                "TESTING": False,
+                "REQUIRE_LOGIN": True,
+                "DATABASE": str(self.database_path),
+                "SECRET_KEY": "test",
+            }
+        )
+        client = app.test_client()
+
+        with app.app_context():
+            get_db().execute(
+                """
+                CREATE TABLE IF NOT EXISTS users (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    username TEXT NOT NULL UNIQUE,
+                    password_hash TEXT NOT NULL,
+                    is_admin INTEGER NOT NULL DEFAULT 0,
+                    can_view_records INTEGER NOT NULL DEFAULT 1,
+                    can_create_records INTEGER NOT NULL DEFAULT 0,
+                    can_edit_records INTEGER NOT NULL DEFAULT 0,
+                    can_delete_records INTEGER NOT NULL DEFAULT 0,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+                """
+            )
+            get_db().execute(
+                "INSERT INTO users(username, password_hash, is_admin, can_view_records, can_create_records, can_edit_records, can_delete_records, created_at, updated_at) VALUES (?, ?, 0, 1, 1, 1, 0, ?, ?)",
+                ("operator", generate_password_hash("test"), "2026-01-01T00:00:00", "2026-01-01T00:00:00"),
+            )
+            get_db().commit()
+
+        response = client.post(
+            "/login",
+            data={"login": "operator", "password": "test"},
+            follow_redirects=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Strona główna", response.get_data(as_text=True))
+
+        response = client.get("/new")
+        self.assertEqual(response.status_code, 200)
+
+        response = client.post(
+            "/new",
+            data={
+                "occurrence_at": "2026-09-21T08:00",
+                "machine_name": "Maszyna operatora",
+                "machine_type": "Testowa",
+                "serial_number": "OP-001",
+                "event_type": "Awaria",
+                "description": "Rekord utworzony przez operatora",
+            },
+            follow_redirects=True,
+        )
+        self.assertEqual(response.status_code, 200)
+
+        with app.app_context():
+            activity = get_db().execute(
+                """
+                SELECT action, username, target_type
+                FROM user_activity_log
+                WHERE action = 'create_record'
+                ORDER BY id DESC
+                LIMIT 1
+                """
+            ).fetchone()
+        self.assertIsNotNone(activity)
+        self.assertEqual(activity["action"], "create_record")
+        self.assertEqual(activity["username"], "operator")
+        self.assertEqual(activity["target_type"], "record")
+
+        with app.app_context():
+            get_db().execute("DELETE FROM users WHERE username = ?", ("operator",))
+            get_db().commit()
+
+    def test_admin_can_edit_existing_user_permissions(self):
+        with self.app.app_context():
+            cursor = get_db().execute(
+                """
+                INSERT INTO users(
+                    username, password_hash, is_admin, can_view_records,
+                    can_create_records, can_edit_records, can_delete_records,
+                    created_at, updated_at
+                ) VALUES (?, ?, 0, 1, 1, 0, 0, ?, ?)
+                """,
+                (
+                    "permissions_user",
+                    generate_password_hash("unchanged"),
+                    "2026-01-01T00:00:00",
+                    "2026-01-01T00:00:00",
+                ),
+            )
+            user_id = int(cursor.lastrowid)
+            get_db().commit()
+
+        with self.client.session_transaction() as session:
+            session["logged_in"] = True
+            session["role"] = "admin"
+            session["user_id"] = 1
+            session["username"] = "admin"
+
+        response = self.client.get(f"/admin/users?edit={user_id}")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('name="user_id"', response.get_data(as_text=True))
+        self.assertIn("permissions_user", response.get_data(as_text=True))
+
+        response = self.client.post(
+            "/admin/users",
+            data={
+                "user_id": str(user_id),
+                "username": "permissions_user",
+                "is_admin": "0",
+                "can_view_records": "on",
+                "can_create_records": "on",
+                "can_edit_records": "on",
+            },
+            follow_redirects=True,
+        )
+        self.assertEqual(response.status_code, 200)
+
+        with self.app.app_context():
+            user = get_db().execute(
+                "SELECT can_view_records, can_create_records, can_edit_records, can_delete_records FROM users WHERE id = ?",
+                (user_id,),
+            ).fetchone()
+        self.assertEqual(tuple(user), (1, 1, 1, 0))
 
 
 if __name__ == "__main__":

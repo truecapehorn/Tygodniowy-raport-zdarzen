@@ -1,0 +1,122 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="page-title">Zarządzanie użytkownikami <small>Uprawnienia i log zdarzeń</small></div>
+
+<div class="card">
+    <div class="card-title">{% if edit_user %}Edytuj użytkownika{% else %}Dodaj użytkownika{% endif %}</div>
+    <form method="post" autocomplete="off">
+        {% if edit_user %}<input type="hidden" name="user_id" value="{{ edit_user.id }}">{% endif %}
+        <div class="form-grid3">
+            <div class="field">
+                <label>Login</label>
+                <input type="text" name="username" autocomplete="off" placeholder="np. jan.kowalski" value="{{ edit_user.username if edit_user else '' }}" required>
+            </div>
+            <div class="field">
+                <label>Hasło {% if edit_user %}(pozostaw puste bez zmiany){% endif %}</label>
+                <input type="password" name="password" autocomplete="new-password" placeholder="{% if edit_user %}Bez zmiany{% else %}Min. 4 znaki{% endif %}">
+            </div>
+            <div class="field">
+                <label>Rola</label>
+                <select name="is_admin">
+                    <option value="0"{% if edit_user and not edit_user.is_admin %} selected{% endif %}>Użytkownik</option>
+                    <option value="1"{% if edit_user and edit_user.is_admin %} selected{% endif %}>Administrator</option>
+                </select>
+            </div>
+        </div>
+        <div class="form-grid3" style="margin-top: 0.75rem;">
+            <label class="field"><input type="checkbox" name="can_view_records"{% if not edit_user or edit_user.can_view_records %} checked{% endif %}> Przeglądanie rekordów</label>
+            <label class="field"><input type="checkbox" name="can_create_records"{% if edit_user and edit_user.can_create_records %} checked{% endif %}> Tworzenie rekordów</label>
+            <label class="field"><input type="checkbox" name="can_edit_records"{% if edit_user and edit_user.can_edit_records %} checked{% endif %}> Edycja rekordów</label>
+            <label class="field"><input type="checkbox" name="can_delete_records"{% if edit_user and edit_user.can_delete_records %} checked{% endif %}> Kasowanie rekordów</label>
+        </div>
+        <div class="actions">
+            <button type="submit" class="btn btn-success">{% if edit_user %}Zapisz zmiany{% else %}Zapisz użytkownika{% endif %}</button>
+            {% if edit_user %}<a href="{{ url_for('admin_users') }}" class="btn btn-outline">Anuluj</a>{% endif %}
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <div class="card-title">Lista użytkowników</div>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Login</th>
+                    <th>Rola</th>
+                    <th>Widok</th>
+                    <th>Tworzenie</th>
+                    <th>Edycja</th>
+                    <th>Kasowanie</th>
+                    <th>Akcje</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user in users %}
+                <tr>
+                    <td>{{ user.id }}</td>
+                    <td>{{ user.username }}</td>
+                    <td>{% if user.is_admin %}Admin{% else %}User{% endif %}</td>
+                    <td>{% if user.can_view_records %}✅{% else %}—{% endif %}</td>
+                    <td>{% if user.can_create_records %}✅{% else %}—{% endif %}</td>
+                    <td>{% if user.can_edit_records %}✅{% else %}—{% endif %}</td>
+                    <td>{% if user.can_delete_records %}✅{% else %}—{% endif %}</td>
+                    <td>
+                        <a href="{{ url_for('admin_users', edit=user.id) }}" class="btn btn-outline btn-sm">Edytuj</a>
+                        <form method="post" action="{{ url_for('admin_delete_user', user_id=user.id) }}" style="display:inline;">
+                            <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Usunąć użytkownika?');">Usuń</button>
+                        </form>
+                    </td>
+                </tr>
+                {% else %}
+                <tr class="empty-row"><td colspan="8">Brak użytkowników.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-title">Ostatnie zdarzenia</div>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Data</th>
+                    <th>Użytkownik</th>
+                    <th>Akcja</th>
+                    <th>Szczegóły</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in recent_activity %}
+                <tr>
+                    <td>{{ item.created_at }}</td>
+                    <td>{{ item.username or '-' }}</td>
+                    <td>{{ item.action }}</td>
+                    <td>{{ item.details or '-' }}</td>
+                </tr>
+                {% else %}
+                <tr class="empty-row"><td colspan="4">Brak zdarzeń.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% if activity_pages > 1 %}
+    <div class="actions" style="justify-content:space-between;align-items:center;margin-top:.75rem;">
+        {% if activity_page > 1 %}
+        <a href="{{ url_for('admin_users', page=activity_page - 1) }}" class="btn btn-outline btn-sm">&laquo; Nowsze</a>
+        {% else %}
+        <span></span>
+        {% endif %}
+        <span style="color:var(--muted);font-size:.8rem;">Strona {{ activity_page }} z {{ activity_pages }}</span>
+        {% if activity_page < activity_pages %}
+        <a href="{{ url_for('admin_users', page=activity_page + 1) }}" class="btn btn-outline btn-sm">Starsze &raquo;</a>
+        {% else %}
+        <span></span>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
