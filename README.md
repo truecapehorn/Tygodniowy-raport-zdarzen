@@ -9,6 +9,7 @@ Przeglądarkowa aplikacja Flask do prowadzenia tygodniowego raportu napraw dla d
   - [Uruchomienie](#uruchomienie)
   - [Konfiguracja](#konfiguracja)
   - [Dostępne funkcje](#dostępne-funkcje)
+  - [Panel użytkowników](#panel-użytkowników)
   - [Testy](#testy)
   - [Zmiany do wprowadzenia](#zmiany-do-wprowadzenia)
 
@@ -72,7 +73,26 @@ Pełna dokumentacja: [CONFIG.md](CONFIG.md), [CONFIG_EXAMPLES.md](CONFIG_EXAMPLE
 - filtrowanie rekordów po maszynie, rodzaju zdarzenia, zakresie dat i słowach z opisu,
 - podgląd poprzednich wpisów dla wybranej maszyny,
 - import danych z plików `.xlsx`,
-- eksport przefiltrowanych danych do `.xlsx`.
+- eksport przefiltrowanych danych do `.xlsx`,
+- logowanie użytkowników i administratorów,
+- zarządzanie uprawnieniami do przeglądania, tworzenia, edycji i usuwania rekordów.
+
+## Panel użytkowników
+
+Administrator może otworzyć panel użytkowników pod adresem `/admin/users` i zarządzać kontami bezpośrednio z poziomu aplikacji.
+
+Panel umożliwia:
+
+- tworzenie nowych kont użytkowników,
+- edycję istniejących kont i ich uprawnień,
+- zmianę roli użytkownika na użytkownika lub administratora,
+- zmianę hasła użytkownika,
+- nadawanie niezależnych uprawnień do przeglądania, tworzenia, edycji i usuwania rekordów,
+- usuwanie kont użytkowników.
+
+W panelu znajduje się również dziennik aktywności. Rejestrowane są między innymi logowania i wylogowania, zmiany haseł, operacje na rekordach i załącznikach, import i eksport danych oraz zarządzanie kontami. Dziennik wyświetla 20 zdarzeń na stronie i posiada paginację.
+
+Administrator ma pełne uprawnienia niezależnie od ustawień poszczególnych pól. Zwykły użytkownik może wykonywać tylko operacje wynikające z przyznanych mu uprawnień.
 
 ## Testy
 
@@ -83,5 +103,5 @@ python -m unittest discover -s tests
 ## Zmiany do wprowadzenia
 
 - [x] Dodano pole osób (oddzielonych przecinkami) biorących udział w interwencji, obsługiwane także przez import i eksport Excel.
-- [ ] Dodanie możliwości tworzenia użytkowników oraz zarządzania uprawnieniami do tworzenia, edycji, usuwania i przeglądania rekordów. Dodatkowo chciałbym mieć dziennik zdarzeń (wykonanych przez użytkowników operacji) dla każdego z nich. Wszystko miałoby być zarządzane po zalogowaniu przez konto administratora.
+- [x] Dodano panel użytkowników, zarządzanie uprawnieniami oraz dziennik aktywności użytkowników i administratorów.
 - [ ] 
