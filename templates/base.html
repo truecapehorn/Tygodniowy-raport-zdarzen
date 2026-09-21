@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{% block title %}Tygodniowy raport napraw GORT{% endblock %}</title>
+    <title>{% block title %}Tygodniowy raport napraw DUR{% endblock %}</title>
     <style>
         :root {
             --bg:           #0f172a;
@@ -340,7 +340,7 @@
                 <circle cx="12" cy="12" r="3"/>
                 <path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/>
             </svg>
-            Tygodniowy raport napraw&nbsp;<span class="gort">GORT</span>
+            Tygodniowy raport napraw&nbsp;<span class="gort">DUR</span>
         </a>
         <ul class="navbar-links">
             <li><a href="{{ url_for('index') }}"           {% if request.endpoint == 'index'           %}class="active"{% endif %}>Strona główna</a></li>

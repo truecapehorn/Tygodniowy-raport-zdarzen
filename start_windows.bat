@@ -1,10 +1,10 @@
 @echo off
 chcp 65001 >nul
-title Tygodniowy raport napraw GORT
+title Tygodniowy raport napraw DUR
 
 echo.
 echo  =============================================
-echo   Tygodniowy raport napraw GORT
+echo   Tygodniowy raport napraw DUR
 echo  =============================================
 echo.
 
