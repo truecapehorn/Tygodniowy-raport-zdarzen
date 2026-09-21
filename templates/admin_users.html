@@ -78,7 +78,10 @@
 </div>
 
 <div class="card">
-    <div class="card-title">Ostatnie zdarzenia</div>
+    <div class="card-title">
+        Ostatnie zdarzenia
+        <a href="{{ url_for('export_user_activity') }}" class="btn btn-success" style="margin-left:auto;">Eksportuj do Excel</a>
+    </div>
     <div class="table-wrap">
         <table>
             <thead>

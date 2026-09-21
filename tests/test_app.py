@@ -320,6 +320,32 @@ class RepairReportAppTests(unittest.TestCase):
             ).fetchone()
         self.assertEqual(tuple(user), (1, 1, 1, 0))
 
+    def test_admin_can_export_full_activity_log(self):
+        with self.app.app_context():
+            get_db().execute(
+                """
+                INSERT INTO user_activity_log(
+                    user_id, username, action, target_type, target_id, details, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (1, "admin", "create_record", "record", 123, "Testowe zdarzenie", "2026-09-21T11:50:00+00:00"),
+            )
+            get_db().commit()
+
+        with self.client.session_transaction() as session:
+            session["logged_in"] = True
+            session["role"] = "admin"
+            session["user_id"] = 1
+            session["username"] = "admin"
+
+        response = self.client.get("/admin/users/activity/export")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.mimetype, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        workbook = load_workbook(io.BytesIO(response.data))
+        rows = list(workbook.active.iter_rows(values_only=True))
+        self.assertEqual(rows[0], ("Data", "Użytkownik", "Akcja", "Typ obiektu", "ID obiektu", "Szczegóły"))
+        self.assertIn(("2026-09-21 13:50:00", "admin", "create_record", "record", 123, "Testowe zdarzenie"), rows)
+
 
 if __name__ == "__main__":
     unittest.main()

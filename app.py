@@ -727,6 +727,46 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             activity_pages=activity_pages,
         )
 
+    @app.route("/admin/users/activity/export")
+    def export_user_activity():
+        if not session.get("role") == "admin":
+            flash("Brak uprawnień administratora.", "error")
+            return redirect(url_for("index"))
+
+        db = get_db()
+        activity = db.execute(
+            "SELECT * FROM user_activity_log ORDER BY created_at DESC, id DESC"
+        ).fetchall()
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = "REJESTR ZDARZEŃ"
+        sheet.append(["Data", "Użytkownik", "Akcja", "Typ obiektu", "ID obiektu", "Szczegóły"])
+        for item in activity:
+            sheet.append(
+                [
+                    format_activity_datetime(item["created_at"]),
+                    item["username"] or "",
+                    item["action"],
+                    item["target_type"] or "",
+                    item["target_id"] or "",
+                    item["details"] or "",
+                ]
+            )
+        output = io.BytesIO()
+        workbook.save(output)
+        output.seek(0)
+        log_user_activity(
+            "export_activity",
+            "Wyeksportowano rejestr zdarzeń do pliku Excel.",
+            target_type="activity_log",
+        )
+        return send_file(
+            output,
+            as_attachment=True,
+            download_name="rejestr_zdarzen.xlsx",
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
     @app.route("/admin/users/<int:user_id>/delete", methods=["POST"])
     def admin_delete_user(user_id: int):
         if not session.get("role") == "admin":
