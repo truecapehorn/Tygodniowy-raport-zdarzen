@@ -129,6 +129,34 @@ class RepairReportAppTests(unittest.TestCase):
         self.assertEqual(machines[0]["machine_type"], "Twin 1000")
         self.assertEqual(len(records), 1)
 
+    def test_recent_records_limit_all_displays_all_rows(self):
+        valid_dates = [
+            ("2026-08-30T08:00", "2026-08-30T09:00"),
+            ("2026-08-31T08:00", "2026-08-31T09:00"),
+            ("2026-09-01T08:00", "2026-09-01T09:00"),
+        ]
+        for idx, (occurrence_at, repaired_at) in enumerate(valid_dates):
+            self.client.post(
+                "/",
+                data={
+                    "occurrence_at": occurrence_at,
+                    "repaired_at": repaired_at,
+                    "machine_name": f"Maszyna {idx}",
+                    "machine_type": "Typ",
+                    "serial_number": f"SER-{idx}",
+                    "event_type": "Awaria",
+                    "description": f"Opis {idx}",
+                },
+            )
+
+        response = self.client.get("/?limit=all")
+        self.assertEqual(response.status_code, 200)
+        page = response.get_data(as_text=True)
+        self.assertIn("Ostatnie wszystkie rekordów", page)
+        self.assertIn("Opis 0", page)
+        self.assertIn("Opis 1", page)
+        self.assertIn("Opis 2", page)
+
     def test_import_excel_file(self):
         workbook = Workbook()
         sheet = workbook.active

@@ -789,13 +789,17 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             except ValueError as exc:
                 flash(str(exc), "error")
 
-        try:
-            limit = max(1, min(int(request.args.get("limit", 20) or 20), 500))
-        except (ValueError, TypeError):
-            limit = 20
+        raw_limit = request.args.get("limit", "20")
+        if raw_limit == "all":
+            limit = "all"
+        else:
+            try:
+                limit = max(1, min(int(raw_limit or 20), 500))
+            except (ValueError, TypeError):
+                limit = 20
         return render_template(
             "index.html",
-            latest_records=query_records_latest(limit),
+            latest_records=query_records_latest(None if limit == "all" else limit),
             event_types=EVENT_TYPES,
             limit=limit,
         )
@@ -1376,21 +1380,20 @@ def save_record(form: dict[str, Any]) -> int:
     return int(cursor.lastrowid)
 
 
-def query_records_latest(limit: int = 20) -> list[sqlite3.Row]:
+def query_records_latest(limit: int | str | None = 20) -> list[sqlite3.Row]:
     db = get_db()
-    return list(
-        db.execute(
-            """
-            SELECT r.*, m.name, m.machine_type, m.serial_number,
-                (SELECT COUNT(*) FROM attachments a WHERE a.record_id = r.id) AS attachment_count
-            FROM repair_records r
-            JOIN machines m ON m.id = r.machine_id
-            ORDER BY r.occurrence_at DESC, r.id DESC
-            LIMIT ?
-            """,
-            (limit,),
-        ).fetchall()
-    )
+    query = """
+        SELECT r.*, m.name, m.machine_type, m.serial_number,
+            (SELECT COUNT(*) FROM attachments a WHERE a.record_id = r.id) AS attachment_count
+        FROM repair_records r
+        JOIN machines m ON m.id = r.machine_id
+        ORDER BY r.occurrence_at DESC, r.id DESC
+    """
+    params: list[Any] = []
+    if limit is not None and limit != "all":
+        query += " LIMIT ?"
+        params.append(int(limit))
+    return list(db.execute(query, params).fetchall())
 
 
 def query_records(filters: dict[str, str]) -> list[sqlite3.Row]:
