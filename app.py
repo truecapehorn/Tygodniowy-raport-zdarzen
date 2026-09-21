@@ -243,6 +243,19 @@ def format_datetime(value: str | None) -> str:
     return parsed.strftime("%Y-%m-%d %H:%M")
 
 
+def format_activity_datetime(value: str | None) -> str:
+    """Display UTC audit timestamps in the application's local timezone."""
+    if not value:
+        return ""
+    try:
+        parsed = datetime.fromisoformat(str(value))
+    except ValueError:
+        return str(value)
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed.astimezone().strftime("%Y-%m-%d %H:%M:%S")
+
+
 def as_float(value: Any) -> float:
     if value in (None, ""):
         return 0.0
@@ -521,6 +534,7 @@ def delete_user(user_id: int) -> None:
 
 def create_app(test_config: dict[str, Any] | None = None) -> Flask:
     app = Flask(__name__)
+    app.jinja_env.filters["activity_datetime"] = format_activity_datetime
     config = _load_config()
     
     # Resolve database and upload paths

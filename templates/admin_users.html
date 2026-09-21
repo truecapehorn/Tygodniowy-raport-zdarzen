@@ -92,7 +92,7 @@
             <tbody>
                 {% for item in recent_activity %}
                 <tr>
-                    <td>{{ item.created_at }}</td>
+                    <td>{{ item.created_at|activity_datetime }}</td>
                     <td>{{ item.username or '-' }}</td>
                     <td>{{ item.action }}</td>
                     <td>{{ item.details or '-' }}</td>
