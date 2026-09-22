@@ -374,6 +374,49 @@ class RepairReportAppTests(unittest.TestCase):
         self.assertEqual(rows[0], ("Data", "Użytkownik", "Akcja", "Typ obiektu", "ID obiektu", "Szczegóły"))
         self.assertIn(("2026-09-21 13:50:00", "admin", "create_record", "record", 123, "Testowe zdarzenie"), rows)
 
+    def test_editor_can_open_edit_controls_in_filter_and_machine_history(self):
+        app = create_app(
+            {
+                "TESTING": False,
+                "REQUIRE_LOGIN": True,
+                "DATABASE": str(self.database_path),
+                "SECRET_KEY": "test",
+            }
+        )
+        client = app.test_client()
+        with app.app_context():
+            get_db().execute(
+                """
+                INSERT INTO users(
+                    username, password_hash, is_admin, can_view_records,
+                    can_create_records, can_edit_records, can_delete_records,
+                    created_at, updated_at
+                ) VALUES (?, ?, 0, 1, 1, 1, 1, ?, ?)
+                """,
+                (
+                    "editor",
+                    generate_password_hash("editor-pass"),
+                    "2026-01-01T00:00:00",
+                    "2026-01-01T00:00:00",
+                ),
+            )
+            get_db().commit()
+
+        response = client.post(
+            "/login",
+            data={"login": "editor", "password": "editor-pass"},
+            follow_redirects=True,
+        )
+        self.assertEqual(response.status_code, 200)
+
+        filter_page = client.get("/filter")
+        new_record_page = client.get("/new")
+        for page in (filter_page, new_record_page):
+            html = page.get_data(as_text=True)
+            self.assertEqual(page.status_code, 200)
+            self.assertIn("const CAN_EDIT = 1;", html)
+            self.assertIn("(USER_ROLE === 'admin' || CAN_EDIT)", html)
+
 
 if __name__ == "__main__":
     unittest.main()

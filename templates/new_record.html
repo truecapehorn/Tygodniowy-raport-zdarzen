@@ -167,6 +167,8 @@
 <script>
     const EVENT_TYPES = {{ event_types | tojson }};
     const USER_ROLE = {{ user_role | tojson }};
+    const CAN_EDIT = {{ (current_user and current_user.can_edit_records) | tojson }};
+    const CAN_DELETE = {{ (current_user and current_user.can_delete_records) | tojson }};
     let currentRecord = null;
 
     function dtl(s) { return s ? String(s).slice(0,16).replace(' ','T') : ''; }
@@ -407,8 +409,8 @@
         document.getElementById('modal-view').innerHTML = '';
         document.getElementById('modal-edit').style.display = 'none';
         document.getElementById('modal-view').style.display = '';
-        document.getElementById('modal-btn-edit').style.display   = USER_ROLE === 'admin' ? '' : 'none';
-        document.getElementById('modal-btn-delete').style.display = USER_ROLE === 'admin' ? '' : 'none';
+        document.getElementById('modal-btn-edit').style.display   = (USER_ROLE === 'admin' || CAN_EDIT) ? '' : 'none';
+        document.getElementById('modal-btn-delete').style.display = (USER_ROLE === 'admin' || CAN_DELETE) ? '' : 'none';
         document.getElementById('modal-btn-save').style.display   = 'none';
         document.getElementById('modal-btn-cancel').style.display = 'none';
         document.getElementById('record-modal').classList.add('open');
@@ -440,8 +442,8 @@
     function switchToView() {
         document.getElementById('modal-edit').style.display = 'none';
         document.getElementById('modal-view').style.display = '';
-        document.getElementById('modal-btn-edit').style.display   = USER_ROLE === 'admin' ? '' : 'none';
-        document.getElementById('modal-btn-delete').style.display = USER_ROLE === 'admin' ? '' : 'none';
+        document.getElementById('modal-btn-edit').style.display   = (USER_ROLE === 'admin' || CAN_EDIT) ? '' : 'none';
+        document.getElementById('modal-btn-delete').style.display = (USER_ROLE === 'admin' || CAN_DELETE) ? '' : 'none';
         document.getElementById('modal-btn-save').style.display   = 'none';
         document.getElementById('modal-btn-cancel').style.display = 'none';
     }
