@@ -68,6 +68,15 @@
         }
         .navbar-brand .gort { color: var(--cyan); }
         .navbar-brand svg { width: 20px; height: 20px; flex-shrink: 0; }
+        .navbar-user {
+            color: var(--muted);
+            font-size: 0.8rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 180px;
+        }
+        .navbar-user strong { color: var(--text); font-weight: 600; }
         .navbar-links {
             display: flex;
             gap: 0.2rem;
@@ -342,6 +351,9 @@
             </svg>
             Tygodniowy raport napraw&nbsp;<span class="gort">DUR</span>
         </a>
+        <div class="navbar-user" title="Aktualnie zalogowany użytkownik">
+            Zalogowany: <strong>{{ current_username }}</strong>
+        </div>
         <ul class="navbar-links">
             <li><a href="{{ url_for('index') }}"           {% if request.endpoint == 'index'           %}class="active"{% endif %}>Strona główna</a></li>
             <li><a href="{{ url_for('filter_page') }}"    {% if request.endpoint == 'filter_page'    %}class="active"{% endif %}>Filtrowanie i eksport</a></li>

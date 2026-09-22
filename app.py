@@ -595,7 +595,15 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
 
     @app.context_processor
     def inject_role():
-        return {"user_role": session.get("role", "guest"), "current_user": get_current_user()}
+        current_user = get_current_user()
+        username = session.get("username")
+        if not username and current_user:
+            username = current_user["username"]
+        return {
+            "user_role": session.get("role", "guest"),
+            "current_user": current_user,
+            "current_username": username or "gość",
+        }
 
     with app.app_context():
         init_db()

@@ -259,6 +259,7 @@ class RepairReportAppTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertIn("Strona główna", response.get_data(as_text=True))
+        self.assertIn("Zalogowany: <strong>operator</strong>", response.get_data(as_text=True))
 
         response = client.get("/new")
         self.assertEqual(response.status_code, 200)
