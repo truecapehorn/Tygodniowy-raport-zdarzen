@@ -17,8 +17,11 @@
 <!-- ── Ostatnie N rekordów ─────────────────────────────────────── -->
 <div class="card">
     <div class="card-title" style="justify-content:flex-start;gap:.6rem;">
-        Ostatnie {{ 'wszystkie' if limit == 'all' else limit }} rekordów
-        {% if latest_records %}<span class="count-badge">{{ latest_records | length }}</span>{% endif %}
+        {% if latest_records %}
+            Ostatnie {{ (latest_records | length) if limit == 'all' else limit }} rekordów
+        {% else %}
+            Brak rekordów
+        {% endif %}
         <span style="margin-left:auto;display:flex;align-items:center;gap:.4rem;font-size:.78rem;color:var(--muted);text-transform:none;letter-spacing:0;">
             Pokaż:
             <select id="limit-select" style="background:var(--bg-input);border:1px solid var(--border);border-radius:4px;color:var(--text);font:inherit;padding:.2rem .4rem;font-size:.78rem;">
