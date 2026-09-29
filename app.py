@@ -1438,7 +1438,7 @@ def query_records(filters: dict[str, str]) -> list[sqlite3.Row]:
         params.append(filters["occurrence_to"])
     description_terms = [term.strip() for term in filters.get("description_terms", "").split(";") if term.strip()]
     if description_terms:
-        text_fields = ["r.description", "r.cause", "r.repair_method", "r.replaced_parts"]
+        text_fields = ["r.description", "r.cause", "r.repair_method", "r.replaced_parts", "r.notes"]
         term_clauses = []
         for term in description_terms:
             field_conditions = " OR ".join(

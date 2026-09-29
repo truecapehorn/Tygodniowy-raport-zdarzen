@@ -76,6 +76,7 @@ class RepairReportAppTests(unittest.TestCase):
                 "serial_number": "P-200",
                 "event_type": "Awaria",
                 "description": "Naprawa silnika",
+                "notes": "Kontrola łożyska",
                 "participants": "Jan Kowalski, Anna Nowak",
             },
         )
@@ -94,6 +95,16 @@ class RepairReportAppTests(unittest.TestCase):
         self.assertEqual(rows[1][4], "Linia B")
         self.assertEqual(rows[0][12], "Osoby biorące udział w interwencji")
         self.assertEqual(rows[1][12], "Jan Kowalski, Anna Nowak")
+
+        filter_response = self.client.get("/filter?description_terms=łożyska")
+        self.assertIn("Linia B", filter_response.get_data(as_text=True))
+
+        notes_export_response = self.client.get("/export?description_terms=łożyska")
+        self.assertEqual(notes_export_response.status_code, 200)
+        notes_workbook = load_workbook(io.BytesIO(notes_export_response.data))
+        notes_rows = list(notes_workbook.active.iter_rows(values_only=True))
+        self.assertEqual(len(notes_rows), 2)
+        self.assertEqual(notes_rows[1][4], "Linia B")
 
     def test_serial_number_reuses_existing_machine_even_with_different_label(self):
         first = {
