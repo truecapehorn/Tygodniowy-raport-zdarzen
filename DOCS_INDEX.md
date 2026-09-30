@@ -1,6 +1,6 @@
 # 📚 Dokumentacja - Indeks
 
-Poniżej znajduje się spis wszystkich plików dokumentacji do konfiguracji i dysków sieciowych.
+Poniżej znajduje się spis dokumentacji aplikacji, jej konfiguracji i dysków sieciowych.
 
 ## 🚀 Szybki Start (zacznij tu!)
 
@@ -16,7 +16,7 @@ Poniżej znajduje się spis wszystkich plików dokumentacji do konfiguracji i dy
 | [CONFIG.md](CONFIG.md) | **Pełna dokumentacja konfiguracji** - wszystkie parametry i formaty ścieżek | Chcesz zrozumieć wszystkie opcje |
 | [CONFIG_EXAMPLES.md](CONFIG_EXAMPLES.md) | **10 praktycznych przykładów** dla różnych scenariuszy | Szukasz gotowego przykładu dla Twojej sytuacji |
 | [NETWORK_STORAGE.md](NETWORK_STORAGE.md) | **Szczegółowy przewodnik dysków sieciowych** - instalacja, montowanie, troubleshooting | Chcesz poprawnie skonfigurować dysk sieciowy |
-| [README.md](README.md) | **Główny plik** - ogólny opis aplikacji i nowa sekcja o konfiguracji | Chcesz poznać całą aplikację |
+| [README.md](README.md) | **Główny plik** - funkcje aplikacji, panele administratora i konfiguracja | Chcesz poznać aplikację lub obsłużyć panel administratora |
 
 ## 🎯 Wybierz swoją ścieżkę
 
@@ -38,6 +38,9 @@ Przeczytaj [CONFIG_EXAMPLES.md](CONFIG_EXAMPLES.md) - Przykład 3-10 (Production
 
 ### Chcę szczegółów o wszystkich parametrach
 Przeczytaj [CONFIG.md](CONFIG.md)
+
+### Jestem administratorem i chcę zarządzać maszynami
+Przeczytaj sekcję [Panel maszyn](README.md#panel-maszyn) w README.
 
 ## 📁 Pliki pomocnicze
 

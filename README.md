@@ -9,6 +9,7 @@ Przeglądarkowa aplikacja Flask do prowadzenia tygodniowego raportu napraw dla d
   - [Uruchomienie](#uruchomienie)
   - [Konfiguracja](#konfiguracja)
   - [Dostępne funkcje](#dostępne-funkcje)
+  - [Panel maszyn](#panel-maszyn)
   - [Panel użytkowników](#panel-użytkowników)
   - [Testy](#testy)
   - [Zmiany do wprowadzenia](#zmiany-do-wprowadzenia)
@@ -75,7 +76,22 @@ Pełna dokumentacja: [CONFIG.md](CONFIG.md), [CONFIG_EXAMPLES.md](CONFIG_EXAMPLE
 - import danych z plików `.xlsx`,
 - eksport przefiltrowanych danych do `.xlsx`,
 - logowanie użytkowników i administratorów,
-- zarządzanie uprawnieniami do przeglądania, tworzenia, edycji i usuwania rekordów.
+- zarządzanie uprawnieniami do przeglądania, tworzenia, edycji i usuwania rekordów,
+- administracyjne zarządzanie danymi maszyn i ich wpisami.
+
+## Panel maszyn
+
+Po zalogowaniu jako administrator wybierz w menu aplikacji pozycję **Maszyny**
+lub otwórz adres `/admin/machines`. Panel wyświetla nazwę, typ, numer seryjny
+każdej maszyny oraz liczbę powiązanych z nią wpisów.
+
+Administrator może edytować nazwę, typ i numer seryjny. Zmiana dotyczy wszystkich
+wpisów przypisanych do tej maszyny. Numer seryjny musi być unikalny; zapis nie
+powiedzie się, jeśli jest już używany przez inną maszynę.
+
+Usunięcie maszyny usuwa również wszystkie jej wpisy i załączone pliki. Przed
+operacją aplikacja pokazuje liczbę wpisów do usunięcia i prosi o potwierdzenie.
+Usunięcia nie można cofnąć.
 
 ## Panel użytkowników
 

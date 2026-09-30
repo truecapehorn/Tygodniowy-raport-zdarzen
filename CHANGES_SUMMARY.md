@@ -218,3 +218,14 @@ Wszystkie zmiany są w pełni kompatybilne wstecz:
 **Testy:** ✅ Wszystkie przechodzą
 **Dokumentacja:** ✅ Kompletna
 **Kompatybilność:** ✅ Windows i Linux
+
+## Panel administratora maszyn
+
+Dodano stronę `/admin/machines`, dostępną po zalogowaniu jako administrator.
+Umożliwia ona:
+
+- przeglądanie maszyn wraz z liczbą przypisanych wpisów,
+- edycję nazwy, typu i unikalnego numeru seryjnego; zmiany dotyczą wszystkich wpisów maszyny,
+- usunięcie maszyny razem ze wszystkimi jej wpisami i plikami załączników, po potwierdzeniu operacji.
+
+Instrukcja obsługi znajduje się w sekcji [Panel maszyn](README.md#panel-maszyn) pliku README.
