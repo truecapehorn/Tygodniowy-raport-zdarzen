@@ -17,6 +17,7 @@ class RepairReportAppTests(unittest.TestCase):
             {
                 "TESTING": True,
                 "DATABASE": str(self.database_path),
+                "UPLOAD_DIR": str(Path(self.temp_dir.name) / "uploads"),
                 "SECRET_KEY": "test",
             }
         )
@@ -105,6 +106,149 @@ class RepairReportAppTests(unittest.TestCase):
         notes_rows = list(notes_workbook.active.iter_rows(values_only=True))
         self.assertEqual(len(notes_rows), 2)
         self.assertEqual(notes_rows[1][4], "Linia B")
+
+    def test_admin_can_edit_machine_details_for_all_linked_records(self):
+        for day in ("30", "31"):
+            self.client.post(
+                "/",
+                data={
+                    "occurrence_at": f"2026-08-{day}T08:00",
+                    "machine_name": "Linia A",
+                    "machine_type": "Pakowarka",
+                    "serial_number": "P-100",
+                    "event_type": "Awaria",
+                    "description": f"Wpis {day}",
+                },
+            )
+        self.client.post(
+            "/",
+            data={
+                "occurrence_at": "2026-09-01T08:00",
+                "machine_name": "Linia B",
+                "machine_type": "Pakowarka",
+                "serial_number": "P-200",
+                "event_type": "Awaria",
+                "description": "Druga maszyna",
+            },
+        )
+        with self.client.session_transaction() as session:
+            session["logged_in"] = True
+            session["role"] = "admin"
+
+        with self.app.app_context():
+            machine_id = get_db().execute(
+                "SELECT id FROM machines WHERE serial_number = ?", ("P-100",)
+            ).fetchone()["id"]
+
+        response = self.client.post(
+            f"/admin/machines/{machine_id}/edit",
+            data={
+                "name": "Linia A po zmianie",
+                "machine_type": "Nowa pakowarka",
+                "serial_number": "P-101",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        page = self.client.get("/admin/machines").get_data(as_text=True)
+        self.assertIn("Linia A po zmianie", page)
+        self.assertIn("P-101", page)
+        with self.app.app_context():
+            names = get_db().execute(
+                """
+                SELECT DISTINCT m.name, m.machine_type, m.serial_number
+                FROM repair_records r JOIN machines m ON m.id = r.machine_id
+                WHERE r.description IN (?, ?)
+                """,
+                ("Wpis 30", "Wpis 31"),
+            ).fetchall()
+        self.assertEqual(len(names), 1)
+        self.assertEqual(tuple(names[0]), ("Linia A po zmianie", "Nowa pakowarka", "P-101"))
+
+        response = self.client.post(
+            f"/admin/machines/{machine_id}/edit",
+            data={
+                "name": "Konflikt",
+                "machine_type": "Pakowarka",
+                "serial_number": "P-200",
+            },
+            follow_redirects=True,
+        )
+        self.assertIn("Maszyna o takich danych lub numerze seryjnym już istnieje.", response.get_data(as_text=True))
+        with self.app.app_context():
+            serial_number = get_db().execute(
+                "SELECT serial_number FROM machines WHERE id = ?", (machine_id,)
+            ).fetchone()["serial_number"]
+        self.assertEqual(serial_number, "P-101")
+
+    def test_admin_can_delete_machine_with_records_and_attachments(self):
+        self.client.post(
+            "/",
+            data={
+                "occurrence_at": "2026-08-30T08:00",
+                "machine_name": "Linia do usunięcia",
+                "machine_type": "Pakowarka",
+                "serial_number": "P-DEL",
+                "event_type": "Awaria",
+                "description": "Wpis do usunięcia",
+            },
+        )
+        with self.app.app_context():
+            record_id = int(
+                get_db().execute(
+                    "SELECT id FROM repair_records WHERE description = ?",
+                    ("Wpis do usunięcia",),
+                ).fetchone()["id"]
+            )
+        attachment_response = self.client.post(
+            f"/api/record/{record_id}/attachments",
+            data={"attachments": (io.BytesIO(b"test file"), "test.txt")},
+            content_type="multipart/form-data",
+        )
+        self.assertEqual(attachment_response.status_code, 200)
+        attachment_dir = Path(self.app.config["UPLOAD_DIR"]) / str(record_id)
+        self.assertTrue(attachment_dir.exists())
+
+        with self.client.session_transaction() as session:
+            session["logged_in"] = True
+            session["role"] = "admin"
+        with self.app.app_context():
+            machine_id = get_db().execute(
+                "SELECT id FROM machines WHERE serial_number = ?", ("P-DEL",)
+            ).fetchone()["id"]
+
+        response = self.client.post(f"/admin/machines/{machine_id}/delete")
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(attachment_dir.exists())
+        with self.app.app_context():
+            self.assertEqual(
+                get_db().execute(
+                    "SELECT COUNT(*) FROM repair_records WHERE machine_id = ?", (machine_id,)
+                ).fetchone()[0],
+                0,
+            )
+            self.assertEqual(
+                get_db().execute(
+                    "SELECT COUNT(*) FROM attachments WHERE record_id = ?", (record_id,)
+                ).fetchone()[0],
+                0,
+            )
+            self.assertIsNone(
+                get_db().execute("SELECT id FROM machines WHERE id = ?", (machine_id,)).fetchone()
+            )
+
+    def test_machine_management_requires_admin_role(self):
+        response = self.client.get("/admin/machines")
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.location, "/")
+        edit_response = self.client.post(
+            "/admin/machines/1/edit",
+            data={"name": "Nieuprawniona zmiana", "machine_type": "Typ", "serial_number": "123"},
+        )
+        delete_response = self.client.post("/admin/machines/1/delete")
+        self.assertEqual(edit_response.status_code, 302)
+        self.assertEqual(delete_response.status_code, 302)
+        self.assertEqual(edit_response.location, "/")
+        self.assertEqual(delete_response.location, "/")
 
     def test_serial_number_reuses_existing_machine_even_with_different_label(self):
         first = {

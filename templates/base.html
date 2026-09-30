@@ -362,6 +362,7 @@
             {% endif %}
             <li><a href="{{ url_for('data_page') }}"      {% if request.endpoint == 'data_page'      %}class="active"{% endif %}>Import / Export</a></li>
             {% if user_role == 'admin' %}
+            <li><a href="{{ url_for('admin_machines') }}" {% if request.endpoint in ('admin_machines', 'admin_edit_machine', 'admin_delete_machine') %}class="active"{% endif %}>Maszyny</a></li>
             <li><a href="{{ url_for('admin_users') }}"    {% if request.endpoint == 'admin_users'    %}class="active"{% endif %}>Użytkownicy</a></li>
             {% endif %}
             <li><a href="{{ url_for('change_password') }}" {% if request.endpoint == 'change_password' %}class="active"{% endif %}>Zmień hasło</a></li>

@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="page-title">Zarządzanie maszynami <small>Maszyny i powiązane wpisy</small></div>
+
+{% if edit_machine %}
+<div class="card">
+    <div class="card-title">Edytuj maszynę</div>
+    <form method="post" action="{{ url_for('admin_edit_machine', machine_id=edit_machine.id) }}">
+        <div class="form-grid3">
+            <div class="field">
+                <label for="machine-name">Nazwa maszyny</label>
+                <input id="machine-name" name="name" value="{{ edit_machine.name }}" required>
+            </div>
+            <div class="field">
+                <label for="machine-type">Typ</label>
+                <input id="machine-type" name="machine_type" value="{{ edit_machine.machine_type }}" required>
+            </div>
+            <div class="field">
+                <label for="machine-serial">Numer seryjny</label>
+                <input id="machine-serial" name="serial_number" value="{{ edit_machine.serial_number }}" required>
+            </div>
+        </div>
+        <div class="actions">
+            <button type="submit" class="btn btn-primary">Zapisz zmiany</button>
+            <a href="{{ url_for('admin_machines') }}" class="btn btn-outline">Anuluj</a>
+        </div>
+    </form>
+</div>
+{% endif %}
+
+<div class="card">
+    <div class="card-title">Lista maszyn</div>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Nazwa</th>
+                    <th>Typ</th>
+                    <th>Numer seryjny</th>
+                    <th>Wpisy</th>
+                    <th>Akcje</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for machine in machines %}
+                <tr>
+                    <td>{{ machine.name }}</td>
+                    <td>{{ machine.machine_type }}</td>
+                    <td>{{ machine.serial_number }}</td>
+                    <td>{{ machine.record_count }}</td>
+                    <td>
+                        <a href="{{ url_for('admin_machines', edit=machine.id) }}" class="btn btn-outline btn-sm">Edytuj</a>
+                        <form method="post" action="{{ url_for('admin_delete_machine', machine_id=machine.id) }}" style="display:inline;">
+                            <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Usunąć tę maszynę i wszystkie jej wpisy ({{ machine.record_count }})? Tej operacji nie można cofnąć.');">Usuń</button>
+                        </form>
+                    </td>
+                </tr>
+                {% else %}
+                <tr class="empty-row"><td colspan="5">Brak maszyn w bazie.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

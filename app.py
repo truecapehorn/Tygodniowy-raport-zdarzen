@@ -735,6 +735,121 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             activity_pages=activity_pages,
         )
 
+    @app.route("/admin/machines")
+    def admin_machines():
+        if session.get("role") != "admin":
+            flash("Brak uprawnień administratora.", "error")
+            return redirect(url_for("index"))
+
+        db = get_db()
+        machines = db.execute(
+            """
+            SELECT m.*, COUNT(r.id) AS record_count
+            FROM machines m
+            LEFT JOIN repair_records r ON r.machine_id = m.id
+            GROUP BY m.id
+            ORDER BY m.name, m.machine_type, m.serial_number
+            """
+        ).fetchall()
+        edit_machine_id = request.args.get("edit", type=int)
+        edit_machine = None
+        if edit_machine_id:
+            edit_machine = db.execute(
+                "SELECT * FROM machines WHERE id = ?", (edit_machine_id,)
+            ).fetchone()
+        return render_template(
+            "admin_machines.html", machines=machines, edit_machine=edit_machine
+        )
+
+    @app.route("/admin/machines/<int:machine_id>/edit", methods=["POST"])
+    def admin_edit_machine(machine_id: int):
+        if session.get("role") != "admin":
+            flash("Brak uprawnień administratora.", "error")
+            return redirect(url_for("index"))
+
+        name = request.form.get("name", "").strip()
+        machine_type = request.form.get("machine_type", "").strip()
+        serial_number = request.form.get("serial_number", "").strip()
+        if not all((name, machine_type, serial_number)):
+            flash("Nazwa, typ i numer seryjny są wymagane.", "error")
+            return redirect(url_for("admin_machines", edit=machine_id))
+
+        db = get_db()
+        try:
+            cursor = db.execute(
+                """
+                UPDATE machines
+                SET name = ?, machine_type = ?, serial_number = ?
+                WHERE id = ?
+                """,
+                (name, machine_type, serial_number, machine_id),
+            )
+            if cursor.rowcount == 0:
+                flash("Maszyna nie istnieje.", "error")
+                return redirect(url_for("admin_machines"))
+            db.commit()
+        except sqlite3.IntegrityError:
+            db.rollback()
+            flash("Maszyna o takich danych lub numerze seryjnym już istnieje.", "error")
+            return redirect(url_for("admin_machines", edit=machine_id))
+
+        log_user_activity(
+            "update_machine",
+            f"Zmieniono dane maszyny {name} (ID {machine_id}).",
+            target_type="machine",
+            target_id=machine_id,
+        )
+        flash("Dane maszyny zostały zaktualizowane.", "success")
+        return redirect(url_for("admin_machines"))
+
+    @app.route("/admin/machines/<int:machine_id>/delete", methods=["POST"])
+    def admin_delete_machine(machine_id: int):
+        if session.get("role") != "admin":
+            flash("Brak uprawnień administratora.", "error")
+            return redirect(url_for("index"))
+
+        db = get_db()
+        machine = db.execute(
+            "SELECT name FROM machines WHERE id = ?", (machine_id,)
+        ).fetchone()
+        if machine is None:
+            flash("Maszyna nie istnieje.", "error")
+            return redirect(url_for("admin_machines"))
+
+        record_ids = [
+            int(row["id"])
+            for row in db.execute(
+                "SELECT id FROM repair_records WHERE machine_id = ?", (machine_id,)
+            ).fetchall()
+        ]
+        import shutil
+
+        uploads = Path(current_app_uploads())
+        for record_id in record_ids:
+            record_upload_dir = uploads / str(record_id)
+            if record_upload_dir.exists():
+                shutil.rmtree(record_upload_dir)
+
+        with db:
+            db.execute(
+                "DELETE FROM attachments WHERE record_id IN "
+                "(SELECT id FROM repair_records WHERE machine_id = ?)",
+                (machine_id,),
+            )
+            db.execute("DELETE FROM repair_records WHERE machine_id = ?", (machine_id,))
+            db.execute("DELETE FROM machines WHERE id = ?", (machine_id,))
+
+        log_user_activity(
+            "delete_machine",
+            f"Usunięto maszynę {machine['name']} (ID {machine_id}) wraz z {len(record_ids)} wpisami.",
+            target_type="machine",
+            target_id=machine_id,
+        )
+        flash(
+            f"Usunięto maszynę i {len(record_ids)} powiązanych wpisów.", "success"
+        )
+        return redirect(url_for("admin_machines"))
+
     @app.route("/admin/users/activity/export")
     def export_user_activity():
         if not session.get("role") == "admin":
