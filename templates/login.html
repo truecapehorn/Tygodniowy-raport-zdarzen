@@ -7,8 +7,8 @@
     <style>
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-            background: #0f172a;
-            color: #e2e8f0;
+            background: #f3f6f8;
+            color: #1f2933;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
             font-size: 14px;
             min-height: 100vh;
@@ -17,50 +17,50 @@
             justify-content: center;
         }
         .login-box {
-            background: #1e293b;
-            border: 1px solid #334155;
-            border-radius: 12px;
+            background: #ffffff;
+            border: 1px solid #d5dde5;
+            border-radius: 8px;
             padding: 2rem 2.25rem;
             width: min(92vw, 400px);
         }
         .login-title {
             font-size: 1.05rem;
             font-weight: 700;
-            color: #22d3ee;
+            color: #1f2933;
             margin-bottom: 1.75rem;
             display: flex;
             align-items: center;
             gap: .4rem;
         }
-        .login-title .gort { color: #4f9cf9; }
+        .login-title .gort { color: #1769aa; }
         label {
             display: block;
             font-size: .72rem;
             font-weight: 700;
-            color: #94a3b8;
+            color: #667085;
             text-transform: uppercase;
             letter-spacing: .06em;
             margin-bottom: .35rem;
         }
         input[type="text"], input[type="password"] {
             width: 100%;
-            background: #0d1726;
-            border: 1px solid #334155;
+            background: #ffffff;
+            border: 1px solid #d5dde5;
             border-radius: 6px;
-            color: #e2e8f0;
+            color: #1f2933;
             font: inherit;
             padding: .6rem .75rem;
             margin-bottom: 1.1rem;
             transition: border-color .15s;
         }
-        input:focus { outline: none; border-color: #4f9cf9; }
+        input:focus { outline: none; border-color: #1769aa; box-shadow: 0 0 0 3px rgba(23,105,170,.15); }
         .btn-login {
             width: 100%;
             padding: .75rem;
-            background: #22d3ee;
+            background: #1769aa;
             border: none;
             border-radius: 6px;
-            color: #0f172a;
+            color: #ffffff;
             font: inherit;
             font-size: .95rem;
             font-weight: 700;
@@ -68,11 +68,11 @@
             margin-top: .25rem;
             transition: background .15s;
         }
-        .btn-login:hover { background: #67e8f9; }
+        .btn-login:hover { background: #12588f; }
         .error {
-            background: #450a0a;
-            color: #f87171;
-            border: 1px solid #f87171;
+            background: #fef0ef;
+            color: #b42318;
+            border: 1px solid #e7a8a3;
             border-radius: 6px;
             padding: .5rem .75rem;
             font-size: .875rem;
@@ -95,7 +95,7 @@
             <input type="password" name="password" autocomplete="current-password">
             <button type="submit" class="btn-login">Zaloguj się</button>
         </form>
-        <p style="text-align:center;font-size:.76rem;color:#475569;margin-top:1rem;">Zostaw pola puste, aby uzyskać dostęp tylko do odczytu.</p>
+        <p style="text-align:center;font-size:.76rem;color:#667085;margin-top:1rem;">Zostaw pola puste, aby uzyskać dostęp tylko do odczytu.</p>
     </div>
 </body>
 </html>

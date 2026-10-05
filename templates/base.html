@@ -6,31 +6,31 @@
     <title>{% block title %}Tygodniowy raport napraw DUR{% endblock %}</title>
     <style>
         :root {
-            --bg:           #0f172a;
-            --bg-nav:       #020617;
-            --bg-card:      #1e293b;
-            --bg-card-alt:  #162032;
-            --bg-input:     #0d1726;
-            --bg-th:        #162032;
-            --bg-row:       #1e293b;
-            --bg-row-alt:   #192538;
-            --bg-row-hover: #263348;
-            --border:       #334155;
-            --text:         #e2e8f0;
-            --muted:        #94a3b8;
-            --accent:       #4f9cf9;
-            --accent-dim:   #1e3a5f;
-            --cyan:         #22d3ee;
-            --green:        #4ade80;
-            --green-dim:    #14532d;
-            --red:          #f87171;
-            --red-dim:      #450a0a;
-            --orange:       #fb923c;
-            --orange-dim:   #431407;
-            --yellow:       #fbbf24;
-            --yellow-dim:   #451a03;
-            --purple:       #c084fc;
-            --purple-dim:   #3b0764;
+            --bg:           #f3f6f8;
+            --bg-nav:       #ffffff;
+            --bg-card:      #ffffff;
+            --bg-card-alt:  #f7f9fb;
+            --bg-input:     #ffffff;
+            --bg-th:        #edf2f6;
+            --bg-row:       #ffffff;
+            --bg-row-alt:   #f8fafb;
+            --bg-row-hover: #eaf2f8;
+            --border:       #d5dde5;
+            --text:         #1f2933;
+            --muted:        #667085;
+            --accent:       #1769aa;
+            --accent-dim:   #e6f1fa;
+            --cyan:         #007f9e;
+            --green:        #167a45;
+            --green-dim:    #e7f4ec;
+            --red:          #b42318;
+            --red-dim:      #fef0ef;
+            --orange:       #b54708;
+            --orange-dim:   #fff3e8;
+            --yellow:       #8a6100;
+            --yellow-dim:   #fff7d6;
+            --purple:       #6941a5;
+            --purple-dim:   #f1eafe;
         }
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -93,7 +93,7 @@
             font-weight: 500;
             transition: color 0.15s, background 0.15s;
         }
-        .navbar-links a:hover { color: var(--text); background: rgba(255,255,255,0.06); }
+        .navbar-links a:hover { color: var(--text); background: rgba(31,41,51,0.05); }
         .navbar-links a.active { color: var(--text); background: rgba(79,156,249,0.15); border: 1px solid rgba(79,156,249,0.25); }
 
         /* ─── Layout ─── */
@@ -158,7 +158,7 @@
         .field textarea:focus {
             outline: none;
             border-color: var(--accent);
-            box-shadow: 0 0 0 3px rgba(79,156,249,0.15);
+            box-shadow: 0 0 0 3px rgba(23,105,170,0.15);
         }
         .field textarea { min-height: 78px; resize: vertical; }
         .field select option { background: var(--bg-card); }
@@ -200,14 +200,14 @@
             white-space: nowrap;
             line-height: 1.4;
         }
-        .btn-primary  { background: #1d4ed8; border-color: #2563eb; color: #fff; }
-        .btn-primary:hover  { background: #2563eb; }
-        .btn-success  { background: #15803d; border-color: #16a34a; color: #fff; }
-        .btn-success:hover  { background: #16a34a; }
-        .btn-danger   { background: #991b1b; border-color: #b91c1c; color: #fff; }
-        .btn-danger:hover   { background: #b91c1c; }
+        .btn-primary  { background: #1769aa; border-color: #12588f; color: #fff; }
+        .btn-primary:hover  { background: #12588f; }
+        .btn-success  { background: #167a45; border-color: #116638; color: #fff; }
+        .btn-success:hover  { background: #116638; }
+        .btn-danger   { background: #b42318; border-color: #912018; color: #fff; }
+        .btn-danger:hover   { background: #912018; }
         .btn-outline  { background: transparent; border-color: var(--border); color: var(--text); }
-        .btn-outline:hover  { background: rgba(255,255,255,0.05); border-color: var(--muted); }
+        .btn-outline:hover  { background: rgba(31,41,51,0.04); border-color: var(--muted); }
         .btn-sm { padding: 0.3rem 0.65rem; font-size: 0.8rem; }
         .actions { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; margin-top: 0.85rem; }
 
@@ -241,7 +241,7 @@
         }
         td {
             padding: 0.5rem 0.75rem;
-            border-bottom: 1px solid rgba(51,65,85,0.5);
+            border-bottom: 1px solid rgba(31,41,51,0.12);
             vertical-align: top;
             max-width: 220px;
             overflow-wrap: break-word;
@@ -301,7 +301,7 @@
         /* ─── Record detail modal ─── */
         .modal-backdrop {
             position: fixed; inset: 0;
-            background: rgba(0,0,0,.7);
+            background: rgba(15,23,42,.45);
             z-index: 200;
             display: flex; align-items: center; justify-content: center;
             opacity: 0; pointer-events: none;
@@ -326,13 +326,15 @@
             cursor: pointer; font-size: 1.25rem; padding: .2rem .4rem;
             border-radius: 4px; line-height: 1; flex-shrink: 0;
         }
-        .modal-close:hover { color: var(--text); background: rgba(255,255,255,.07); }
+        .modal-close:hover { color: var(--text); background: rgba(31,41,51,.05); }
         .detail-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
             gap: .65rem;
         }
         .detail-item .dl { font-size: .7rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin-bottom: .15rem; }
+        .detail-item.full .dl { display: flex; align-items: center; gap: .6rem; }
+        .detail-item.full .dl::after { content: ''; flex: 1; height: 1px; background: var(--border); }
         .detail-item .dv { font-size: .85rem; color: var(--text); white-space: pre-wrap; word-break: break-word; }
         .detail-item .dv:empty::before { content: '—'; color: var(--muted); }
         .detail-item.full { grid-column: 1 / -1; }
