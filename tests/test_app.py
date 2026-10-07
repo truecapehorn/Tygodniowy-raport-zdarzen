@@ -312,6 +312,31 @@ class RepairReportAppTests(unittest.TestCase):
         self.assertIn("Opis 1", page)
         self.assertIn("Opis 2", page)
 
+    def test_record_summaries_are_limited_in_recent_and_filtered_tables(self):
+        description = "Opis z limitem\n" + ("szczegółowy tekst " * 60)
+        self.client.post(
+            "/",
+            data={
+                "occurrence_at": "2026-08-30T08:00",
+                "repaired_at": "2026-08-30T09:00",
+                "machine_name": "Maszyna testowa",
+                "machine_type": "Typ",
+                "serial_number": "SER-400",
+                "event_type": "Awaria",
+                "description": description,
+            },
+        )
+        expected_summary = description[:397] + "..."
+
+        for path in ("/?limit=all", "/filter?description_terms=Opis"):
+            with self.subTest(path=path):
+                response = self.client.get(path)
+                page = response.get_data(as_text=True)
+                self.assertEqual(response.status_code, 200)
+                self.assertIn(expected_summary, page)
+                self.assertNotIn(description, page)
+                self.assertIn("class=\"record-summary\"", page)
+
     def test_import_excel_file(self):
         workbook = Workbook()
         sheet = workbook.active

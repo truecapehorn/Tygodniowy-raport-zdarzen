@@ -57,9 +57,9 @@
                     <td>{{ r.name }}</td>
                     <td class="text-muted">{{ r.machine_type }}<br>{{ r.serial_number }}</td>
                     <td>{{ event_badge(r.event_type) }}</td>
-                    <td>{{ r.description }}</td>
-                    <td class="text-muted">{{ r.cause or '' }}</td>
-                    <td class="text-muted">{{ r.repair_method or '' }}</td>
+                    <td><span class="record-summary">{{ (r.description or '') | truncate(400, true, '...', 0) }}</span></td>
+                    <td class="text-muted"><span class="record-summary">{{ (r.cause or '') | truncate(400, true, '...', 0) }}</span></td>
+                    <td class="text-muted"><span class="record-summary">{{ (r.repair_method or '') | truncate(400, true, '...', 0) }}</span></td>
                     <td style="white-space:nowrap;text-align:center;">
                         {% if r.attachment_count > 0 %}<span style="color:var(--accent);font-size:.8rem;" title="{{ r.attachment_count }} plik(ów)">&#128206; {{ r.attachment_count }}</span>{% endif %}
                     </td>
