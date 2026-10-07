@@ -424,9 +424,6 @@
         if (currentRecord && currentRecord.id) window.location.href = `/record/${currentRecord.id}/pdf`;
     }
     function closeModal() { document.getElementById('record-modal').classList.remove('open'); }
-    document.getElementById('record-modal').addEventListener('click', function(e) {
-        if (e.target === this) closeModal();
-    });
     document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 
     function switchToEdit() {
