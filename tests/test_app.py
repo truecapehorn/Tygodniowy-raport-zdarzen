@@ -71,7 +71,14 @@ class RepairReportAppTests(unittest.TestCase):
 
         page = self.client.get("/").get_data(as_text=True)
         self.assertIn("08-10-2026 14:35", page)
-        self.assertIn('placeholder="dd-mm-rrrr gg:mm"', self.client.get("/new").get_data(as_text=True))
+        for path in ("/new", "/", "/filter"):
+            with self.subTest(path=path):
+                page = self.client.get(path).get_data(as_text=True)
+                self.assertIn('type="datetime-local"', page)
+                self.assertIn("syncDisplayDateTime(this)", page)
+                self.assertIn("syncNativeDateTime(this)", page)
+                self.assertIn('onclick="openDateTimePicker(this)"', page)
+                self.assertIn("picker.showPicker()", page)
 
         with self.app.app_context():
             record_id = get_db().execute(
