@@ -240,7 +240,16 @@ def format_datetime(value: str | None) -> str:
     parsed = parse_datetime(value)
     if not parsed:
         return value
-    return parsed.strftime("%Y-%m-%d %H:%M")
+    return parsed.strftime("%d-%m-%Y %H:%M")
+
+
+def format_date(value: str | None) -> str:
+    if not value:
+        return ""
+    parsed = parse_datetime(value)
+    if not parsed:
+        return value
+    return parsed.strftime("%d-%m-%Y")
 
 
 def format_activity_datetime(value: str | None) -> str:
@@ -253,7 +262,7 @@ def format_activity_datetime(value: str | None) -> str:
         return str(value)
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=UTC)
-    return parsed.astimezone().strftime("%Y-%m-%d %H:%M:%S")
+    return parsed.astimezone().strftime("%d-%m-%Y %H:%M")
 
 
 def as_float(value: Any) -> float:
@@ -535,6 +544,7 @@ def delete_user(user_id: int) -> None:
 def create_app(test_config: dict[str, Any] | None = None) -> Flask:
     app = Flask(__name__)
     app.jinja_env.filters["activity_datetime"] = format_activity_datetime
+    app.jinja_env.filters["datetime"] = format_datetime
     config = _load_config()
     
     # Resolve database and upload paths
@@ -995,8 +1005,8 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             "machine_type": request.args.get("machine_type", "").strip(),
             "serial_number": request.args.get("serial_number", "").strip(),
             "event_type": request.args.get("event_type", "").strip(),
-            "occurrence_from": request.args.get("occurrence_from", "").strip(),
-            "occurrence_to": request.args.get("occurrence_to", "").strip(),
+            "occurrence_from": format_date(request.args.get("occurrence_from", "").strip()),
+            "occurrence_to": format_date(request.args.get("occurrence_to", "").strip()),
             "description_terms": request.args.get("description_terms", "").strip(),
         }
         workbook = Workbook()
@@ -1053,8 +1063,8 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             "machine_type": request.args.get("machine_type", "").strip(),
             "serial_number": request.args.get("serial_number", "").strip(),
             "event_type": request.args.get("event_type", "").strip(),
-            "occurrence_from": request.args.get("occurrence_from", "").strip(),
-            "occurrence_to": request.args.get("occurrence_to", "").strip(),
+            "occurrence_from": format_date(request.args.get("occurrence_from", "").strip()),
+            "occurrence_to": format_date(request.args.get("occurrence_to", "").strip()),
             "description_terms": request.args.get("description_terms", "").strip(),
         }
         filter_active = any(filters.values())
@@ -1547,10 +1557,12 @@ def query_records(filters: dict[str, str]) -> list[sqlite3.Row]:
         params.append(filters["event_type"])
     if filters.get("occurrence_from"):
         query += " AND date(r.occurrence_at) >= date(?)"
-        params.append(filters["occurrence_from"])
+        occurrence_from = parse_datetime(filters["occurrence_from"])
+        params.append(occurrence_from.date().isoformat() if occurrence_from else filters["occurrence_from"])
     if filters.get("occurrence_to"):
         query += " AND date(r.occurrence_at) <= date(?)"
-        params.append(filters["occurrence_to"])
+        occurrence_to = parse_datetime(filters["occurrence_to"])
+        params.append(occurrence_to.date().isoformat() if occurrence_to else filters["occurrence_to"])
     description_terms = [term.strip() for term in filters.get("description_terms", "").split(";") if term.strip()]
     if description_terms:
         text_fields = ["r.description", "r.cause", "r.repair_method", "r.replaced_parts", "r.notes"]

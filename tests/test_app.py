@@ -54,6 +54,49 @@ class RepairReportAppTests(unittest.TestCase):
         self.assertIn("2.5", page)
         self.assertIn("200.0", page)
 
+    def test_polish_date_format_is_displayed_and_accepted(self):
+        response = self.client.post(
+            "/",
+            data={
+                "occurrence_at": "08-10-2026 14:35",
+                "repaired_at": "08-10-2026 15:05",
+                "machine_name": "Maszyna dat",
+                "machine_type": "Testowa",
+                "serial_number": "DATE-001",
+                "event_type": "Awaria",
+                "description": "Test formatu daty",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+
+        page = self.client.get("/").get_data(as_text=True)
+        self.assertIn("08-10-2026 14:35", page)
+        self.assertIn('placeholder="dd-mm-rrrr gg:mm"', self.client.get("/new").get_data(as_text=True))
+
+        with self.app.app_context():
+            record_id = get_db().execute(
+                """
+                SELECT r.id
+                FROM repair_records r
+                JOIN machines m ON m.id = r.machine_id
+                WHERE m.serial_number = ?
+                """,
+                ("DATE-001",),
+            ).fetchone()
+            self.assertIsNotNone(record_id)
+            record_id = int(record_id["id"])
+
+        record = self.client.get(f"/api/record/{record_id}").get_json()
+        self.assertEqual(record["occurrence_at"], "2026-10-08 14:35")
+        history = self.client.get(
+            "/api/machines?machine=Maszyna%20dat&machine_type=Testowa&serial_number=DATE-001"
+        ).get_json()
+        self.assertEqual(history["previous_entries"][0]["occurrence_at"], "08-10-2026 14:35")
+
+        filtered_page = self.client.get("/filter?occurrence_from=08-10-2026").get_data(as_text=True)
+        self.assertIn("Test formatu daty", filtered_page)
+        self.assertIn('value="08-10-2026"', filtered_page)
+
     def test_machine_api_and_filtered_export(self):
         self.client.post(
             "/",
@@ -553,7 +596,7 @@ class RepairReportAppTests(unittest.TestCase):
         workbook = load_workbook(io.BytesIO(response.data))
         rows = list(workbook.active.iter_rows(values_only=True))
         self.assertEqual(rows[0], ("Data", "Użytkownik", "Akcja", "Typ obiektu", "ID obiektu", "Szczegóły"))
-        self.assertIn(("2026-09-21 13:50:00", "admin", "create_record", "record", 123, "Testowe zdarzenie"), rows)
+        self.assertIn(("21-09-2026 13:50", "admin", "create_record", "record", 123, "Testowe zdarzenie"), rows)
 
     def test_editor_can_open_edit_controls_in_filter_and_machine_history(self):
         app = create_app(
