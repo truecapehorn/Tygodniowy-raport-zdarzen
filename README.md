@@ -9,6 +9,7 @@ Przeglądarkowa aplikacja Flask do prowadzenia tygodniowego raportu napraw dla d
   - [Uruchomienie](#uruchomienie)
   - [Konfiguracja](#konfiguracja)
   - [Dostępne funkcje](#dostępne-funkcje)
+  - [Przykładowy wygląd aplikacji](#przykładowy-wygląd-aplikacji)
   - [Panel maszyn](#panel-maszyn)
   - [Panel użytkowników](#panel-użytkowników)
   - [Testy](#testy)
@@ -78,6 +79,19 @@ Pełna dokumentacja: [CONFIG.md](CONFIG.md), [CONFIG_EXAMPLES.md](CONFIG_EXAMPLE
 - logowanie użytkowników i administratorów,
 - zarządzanie uprawnieniami do przeglądania, tworzenia, edycji i usuwania rekordów,
 - administracyjne zarządzanie danymi maszyn i ich wpisami.
+
+## Przykładowy wygląd aplikacji
+
+Poniższe zrzuty ekranu pokazują przykładowy widok rejestru oraz filtrowanie
+rekordów. Zawierają wyłącznie fikcyjne dane demonstracyjne.
+
+### Strona główna
+
+![Strona główna aplikacji z listą ostatnich rekordów](docs/screenshots/strona-glowna.png)
+
+### Filtrowanie i eksport
+
+![Filtrowanie rekordów i tabela wyników](docs/screenshots/filtrowanie.png)
 
 ## Panel maszyn
 
