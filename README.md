@@ -97,11 +97,11 @@ rekordów. Zawierają wyłącznie fikcyjne dane demonstracyjne.
 
 ### Nowy rekord
 
-![Dodawanie zdarzeń utrzymania ruchu](docs/screenshots/nowy-rekord.png)
+![Dodawanie zdarzeń utrzymania ruchu](docs/screenshots/nowy-rekord.PNG)
 
 ## Panel maszyn
 
-![Lista maszyn w bazie danych](docs/screenshots/panel-maszyn.png)
+![Lista maszyn w bazie danych](docs/screenshots/panel-maszyn.PNG)
 
 Po zalogowaniu jako administrator wybierz w menu aplikacji pozycję **Maszyny**
 lub otwórz adres `/admin/machines`. Panel wyświetla nazwę, typ, numer seryjny
@@ -117,7 +117,7 @@ Usunięcia nie można cofnąć.
 
 ## Panel użytkowników
 
-![Dodawanie i usuwanie użytkowników](docs/screenshots/uzytkownicy.png)
+![Dodawanie i usuwanie użytkowników](docs/screenshots/uzytkownicy.PNG)
 
 Administrator może otworzyć panel użytkowników pod adresem `/admin/users` i zarządzać kontami bezpośrednio z poziomu aplikacji.
 
