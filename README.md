@@ -16,7 +16,6 @@ Przeglądarkowa aplikacja Flask do prowadzenia tygodniowego raportu napraw dla d
   - [Panel maszyn](#panel-maszyn)
   - [Panel użytkowników](#panel-użytkowników)
   - [Testy](#testy)
-  - [Zmiany do wprowadzenia](#zmiany-do-wprowadzenia)
 
 
 ## Uruchomienie
