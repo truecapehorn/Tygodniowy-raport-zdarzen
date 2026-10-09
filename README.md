@@ -10,6 +10,9 @@ Przeglądarkowa aplikacja Flask do prowadzenia tygodniowego raportu napraw dla d
   - [Konfiguracja](#konfiguracja)
   - [Dostępne funkcje](#dostępne-funkcje)
   - [Przykładowy wygląd aplikacji](#przykładowy-wygląd-aplikacji)
+    - [Strona główna](#strona-główna)
+    - [Filtrowanie i eksport](#filtrowanie-i-eksport)
+    - [Nowy rekord](#nowy-rekord)
   - [Panel maszyn](#panel-maszyn)
   - [Panel użytkowników](#panel-użytkowników)
   - [Testy](#testy)
@@ -93,7 +96,13 @@ rekordów. Zawierają wyłącznie fikcyjne dane demonstracyjne.
 
 ![Filtrowanie rekordów i tabela wyników](docs/screenshots/filtrowanie.png)
 
+### Nowy rekord
+
+![Dodawanie zdarzeń utrzymania ruchu](docs/screenshots/nowy-rekord.png)
+
 ## Panel maszyn
+
+![Lista maszyn w bazie danych](docs/screenshots/panel-maszyn.png)
 
 Po zalogowaniu jako administrator wybierz w menu aplikacji pozycję **Maszyny**
 lub otwórz adres `/admin/machines`. Panel wyświetla nazwę, typ, numer seryjny
@@ -108,6 +117,8 @@ operacją aplikacja pokazuje liczbę wpisów do usunięcia i prosi o potwierdzen
 Usunięcia nie można cofnąć.
 
 ## Panel użytkowników
+
+![Dodawanie i usuwanie użytkowników](docs/screenshots/uzytkownicy.png)
 
 Administrator może otworzyć panel użytkowników pod adresem `/admin/users` i zarządzać kontami bezpośrednio z poziomu aplikacji.
 
@@ -129,9 +140,3 @@ Administrator ma pełne uprawnienia niezależnie od ustawień poszczególnych p�
 ```bash
 python -m unittest discover -s tests
 ```
-
-## Zmiany do wprowadzenia
-
-- [x] Dodano pole osób (oddzielonych przecinkami) biorących udział w interwencji, obsługiwane także przez import i eksport Excel.
-- [x] Dodano panel użytkowników, zarządzanie uprawnieniami oraz dziennik aktywności użytkowników i administratorów.
-- [ ] 
