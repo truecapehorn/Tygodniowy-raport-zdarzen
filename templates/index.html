@@ -53,7 +53,7 @@
                 {% for r in latest_records %}
                 <tr class="record-row" data-id="{{ r.id }}" data-downtime="{{ r.downtime_hours }}" data-cost="{{ r.total_cost }}">
                     <td class="td-id">{{ r.id }}<br><span class="td-week">{{ r.record_year }}/W{{ r.record_week }}/{{ r.week_sequence }}</span></td>
-                    <td style="white-space:nowrap;">{{ r.occurrence_at|datetime }}</td>
+                    <td style="white-space:pre-line;">{{ r.occurrence_at|datetime|replace(' ', '\n', 1) }}</td>
                     <td>{{ r.name }}</td>
                     <td class="text-muted">{{ r.machine_type }}<br>{{ r.serial_number }}</td>
                     <td>{{ event_badge(r.event_type) }}</td>

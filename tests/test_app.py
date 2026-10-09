@@ -70,7 +70,7 @@ class RepairReportAppTests(unittest.TestCase):
         self.assertEqual(response.status_code, 302)
 
         page = self.client.get("/").get_data(as_text=True)
-        self.assertIn("08-10-2026 14:35", page)
+        self.assertIn("08-10-2026\n14:35", page)
         for path in ("/new", "/", "/filter"):
             with self.subTest(path=path):
                 page = self.client.get(path).get_data(as_text=True)
@@ -144,11 +144,15 @@ class RepairReportAppTests(unittest.TestCase):
         rows = list(workbook.active.iter_rows(values_only=True))
         self.assertEqual(len(rows), 2)
         self.assertEqual(rows[1][4], "Linia B")
+        self.assertEqual(rows[1][13], "31-08-2026 08:00")
+        self.assertEqual(rows[1][14], "31-08-2026 09:00")
         self.assertEqual(rows[0][12], "Osoby biorące udział w interwencji")
         self.assertEqual(rows[1][12], "Jan Kowalski, Anna Nowak")
 
         filter_response = self.client.get("/filter?description_terms=łożyska")
-        self.assertIn("Linia B", filter_response.get_data(as_text=True))
+        filter_page = filter_response.get_data(as_text=True)
+        self.assertIn("Linia B", filter_page)
+        self.assertIn("31-08-2026\n08:00", filter_page)
 
         notes_export_response = self.client.get("/export?description_terms=łożyska")
         self.assertEqual(notes_export_response.status_code, 200)
