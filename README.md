@@ -13,8 +13,8 @@ Przeglądarkowa aplikacja Flask do prowadzenia tygodniowego raportu napraw dla d
     - [Strona główna](#strona-główna)
     - [Filtrowanie i eksport](#filtrowanie-i-eksport)
     - [Nowy rekord](#nowy-rekord)
-  - [Panel maszyn](#panel-maszyn)
-  - [Panel użytkowników](#panel-użytkowników)
+    - [Panel maszyn](#panel-maszyn)
+    - [Panel użytkowników](#panel-użytkowników)
   - [Testy](#testy)
 
 
@@ -99,7 +99,7 @@ rekordów. Zawierają wyłącznie fikcyjne dane demonstracyjne.
 
 ![Dodawanie zdarzeń utrzymania ruchu](docs/screenshots/nowy-rekord.PNG)
 
-## Panel maszyn
+### Panel maszyn
 
 ![Lista maszyn w bazie danych](docs/screenshots/panel-maszyn.PNG)
 
@@ -115,7 +115,7 @@ Usunięcie maszyny usuwa również wszystkie jej wpisy i załączone pliki. Prze
 operacją aplikacja pokazuje liczbę wpisów do usunięcia i prosi o potwierdzenie.
 Usunięcia nie można cofnąć.
 
-## Panel użytkowników
+### Panel użytkowników
 
 ![Dodawanie i usuwanie użytkowników](docs/screenshots/uzytkownicy.PNG)
 
