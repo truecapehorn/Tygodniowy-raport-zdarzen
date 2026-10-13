@@ -391,6 +391,27 @@ class RepairReportAppTests(unittest.TestCase):
                 self.assertNotIn(description, page)
                 self.assertIn("class=\"record-summary\"", page)
 
+    def test_records_without_repair_date_are_highlighted_in_recent_and_filtered_tables(self):
+        self.client.post(
+            "/",
+            data={
+                "occurrence_at": "2026-08-30T08:00",
+                "machine_name": "Maszyna bez daty naprawienia",
+                "machine_type": "Typ",
+                "serial_number": "SER-401",
+                "event_type": "Awaria",
+                "description": "Oczekuje na naprawę",
+            },
+        )
+
+        for path in ("/?limit=all", "/filter?description_terms=Oczekuje"):
+            with self.subTest(path=path):
+                response = self.client.get(path)
+                page = response.get_data(as_text=True)
+                self.assertEqual(response.status_code, 200)
+                self.assertIn('class="date-no-repair"', page)
+                self.assertIn('title="Brak daty naprawienia"', page)
+
     def test_import_excel_file(self):
         workbook = Workbook()
         sheet = workbook.active
