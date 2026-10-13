@@ -54,6 +54,38 @@ class RepairReportAppTests(unittest.TestCase):
         self.assertIn("2.5", page)
         self.assertIn("200.0", page)
 
+    def test_guest_can_view_and_export_but_cannot_create_records(self):
+        app = create_app(
+            {
+                "TESTING": False,
+                "REQUIRE_LOGIN": False,
+                "DATABASE": str(self.database_path),
+                "UPLOAD_DIR": str(Path(self.temp_dir.name) / "uploads"),
+                "SECRET_KEY": "test",
+            }
+        )
+        client = app.test_client()
+
+        self.assertEqual(client.get("/").status_code, 200)
+        self.assertEqual(client.get("/export").status_code, 200)
+
+        response = client.post(
+            "/",
+            data={
+                "occurrence_at": "2026-08-30T08:00",
+                "machine_name": "Maszyna gościa",
+                "event_type": "Awaria",
+                "description": "Nieautoryzowany wpis",
+            },
+            follow_redirects=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Brak uprawnień do dodawania rekordów.", response.get_data(as_text=True))
+
+        with app.app_context():
+            record_count = get_db().execute("SELECT COUNT(*) FROM repair_records").fetchone()[0]
+        self.assertEqual(record_count, 0)
+
     def test_polish_date_format_is_displayed_and_accepted(self):
         response = self.client.post(
             "/",

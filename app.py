@@ -915,6 +915,9 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
     @app.route("/", methods=["GET", "POST"])
     def index():
         if request.method == "POST":
+            if not app.config.get("TESTING") and not user_has_permission("can_create_records"):
+                flash("Brak uprawnień do dodawania rekordów.", "error")
+                return redirect(url_for("index"))
             try:
                 save_record(request.form)
                 flash("Rekord został zapisany.", "success")
