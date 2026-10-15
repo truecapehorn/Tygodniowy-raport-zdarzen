@@ -101,7 +101,7 @@ rekordów. Zawierają wyłącznie fikcyjne dane demonstracyjne.
 
 ### Panel maszyn
 
-![Lista maszyn w bazie danych](docs/screenshots/panel-maszyn.PNG)
+![Lista maszyn w bazie danych](docs/screenshots/1-panel-maszyn.jpg)
 
 Po zalogowaniu jako administrator wybierz w menu aplikacji pozycję **Maszyny**
 lub otwórz adres `/admin/machines`. Panel wyświetla nazwę, typ, numer seryjny
@@ -117,7 +117,7 @@ Usunięcia nie można cofnąć.
 
 ### Panel użytkowników
 
-![Dodawanie i usuwanie użytkowników](docs/screenshots/uzytkownicy.PNG)
+![Dodawanie i usuwanie użytkowników](docs/screenshots/2-uzytkownicy.jpg)
 
 Administrator może otworzyć panel użytkowników pod adresem `/admin/users` i zarządzać kontami bezpośrednio z poziomu aplikacji.
 
