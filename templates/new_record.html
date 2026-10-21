@@ -136,15 +136,17 @@
 
 <div class="card" id="history-panel" style="display:none;">
     <div class="card-title">Historia maszyny <span id="history-count" class="count-badge" style="display:none;"></span></div>
-    <div style="max-height:400px;overflow-y:auto;">
-        <table style="width:100%;border-collapse:collapse;font-size:.78rem;">
-            <thead style="position:sticky;top:0;background:var(--bg-th);">
+    <div class="table-wrap" style="max-height:400px;overflow:auto;">
+        <table>
+            <thead style="position:sticky;top:0;z-index:1;">
                 <tr>
-                    <th style="padding:.4rem .6rem;text-align:left;font-size:.68rem;color:var(--muted);border-bottom:1px solid var(--border);white-space:nowrap;">Data</th>
-                    <th style="padding:.4rem .6rem;text-align:left;font-size:.68rem;color:var(--muted);border-bottom:1px solid var(--border);">Zdarzenie</th>
-                    <th style="padding:.4rem .6rem;text-align:left;font-size:.68rem;color:var(--muted);border-bottom:1px solid var(--border);">Opis</th>
-                    <th style="padding:.4rem .6rem;text-align:left;font-size:.68rem;color:var(--muted);border-bottom:1px solid var(--border);">Przyczyna</th>
-                    <th style="padding:.4rem .6rem;text-align:left;font-size:.68rem;color:var(--muted);border-bottom:1px solid var(--border);">Sposób naprawy</th>
+                    <th>Nr</th>
+                    <th>Data wystąpienia</th>
+                    <th>Typ / Numer</th>
+                    <th>Zdarzenie</th>
+                    <th>Opis</th>
+                    <th>Przyczyna</th>
+                    <th>Sposób naprawy</th>
                 </tr>
             </thead>
             <tbody id="history-body"></tbody>
@@ -256,12 +258,14 @@
             historyCount.textContent = entries.length;
             historyCount.style.display = '';
             historyBody.innerHTML = entries.map(e =>
-                `<tr data-id="${e.id}" style="border-bottom:1px solid rgba(51,65,85,.4);cursor:pointer;" onmouseover="this.style.background='var(--bg-row-hover)'" onmouseout="this.style.background=''">
-                    <td style="padding:.35rem .6rem;white-space:nowrap;color:var(--accent);font-size:.72rem;">${esc(e.occurrence_at)}</td>
-                    <td style="padding:.35rem .6rem;"><span class="badge ${badgeClass(e.event_type)}">${esc(e.event_type)}</span></td>
-                    <td style="padding:.35rem .6rem;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(e.description)}</td>
-                    <td style="padding:.35rem .6rem;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);">${esc(e.cause)}</td>
-                    <td style="padding:.35rem .6rem;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);">${esc(e.repair_method)}</td>
+                `<tr class="record-row" data-id="${e.id}" style="cursor:pointer;">
+                    <td class="td-id">${e.id}</td>
+                    <td style="white-space:pre-line;">${esc(formatDateTime(e.occurrence_at))}</td>
+                    <td class="text-muted">${esc(e.machine_type)}<br>${esc(e.serial_number)}</td>
+                    <td><span class="badge ${badgeClass(e.event_type)}">${esc(e.event_type)}</span></td>
+                    <td><span class="record-summary">${esc(e.description)}</span></td>
+                    <td class="text-muted"><span class="record-summary">${esc(e.cause)}</span></td>
+                    <td class="text-muted"><span class="record-summary">${esc(e.repair_method)}</span></td>
                 </tr>`
             ).join('');
             historyBody.querySelectorAll('tr[data-id]').forEach(row => {
