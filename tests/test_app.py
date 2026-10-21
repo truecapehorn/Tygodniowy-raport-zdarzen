@@ -4,9 +4,12 @@ import unittest
 from pathlib import Path
 
 from openpyxl import Workbook, load_workbook
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate
 from werkzeug.security import generate_password_hash
 
-from app import create_app, get_db
+from app import PageNumberCanvas, create_app, get_db
 
 
 class RepairReportAppTests(unittest.TestCase):
@@ -25,6 +28,27 @@ class RepairReportAppTests(unittest.TestCase):
 
     def tearDown(self):
         self.temp_dir.cleanup()
+
+    def test_pdf_page_numbers_include_total_pages(self):
+        page_numbers = []
+
+        class RecordingPageNumberCanvas(PageNumberCanvas):
+            def drawCentredString(self, x, y, text):
+                page_numbers.append(text)
+                super().drawCentredString(x, y, text)
+
+        output = io.BytesIO()
+        paragraph_style = getSampleStyleSheet()["Normal"]
+        SimpleDocTemplate(output, pagesize=A4).build(
+            [
+                Paragraph("Pierwsza strona", paragraph_style),
+                PageBreak(),
+                Paragraph("Druga strona", paragraph_style),
+            ],
+            canvasmaker=RecordingPageNumberCanvas,
+        )
+
+        self.assertEqual(page_numbers, ["1/2", "2/2"])
 
     def test_create_record_calculates_downtime_and_cost(self):
         response = self.client.post(

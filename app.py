@@ -33,9 +33,30 @@ from reportlab.platypus import Image as PdfImage
 from reportlab.platypus import KeepTogether, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.pdfgen.canvas import Canvas
 from werkzeug.security import check_password_hash, generate_password_hash
 
 UTC = timezone.utc
+
+
+class PageNumberCanvas(Canvas):
+    def __init__(self, *args: Any, **kwargs: Any):
+        super().__init__(*args, **kwargs)
+        self._saved_page_states: list[dict[str, Any]] = []
+
+    def showPage(self) -> None:
+        self._saved_page_states.append(dict(self.__dict__))
+        self._startPage()
+
+    def save(self) -> None:
+        page_count = len(self._saved_page_states)
+        for page_state in self._saved_page_states:
+            self.__dict__.update(page_state)
+            self.setFont("Helvetica", 8)
+            self.drawCentredString(A4[0] / 2, 8 * mm, f"{self._pageNumber}/{page_count}")
+            super().showPage()
+        super().save()
+
 
 EVENT_TYPES = [
     "Awaria",
@@ -1186,7 +1207,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             ("LEFTPADDING", (0, 0), (-1, -1), 5), ("RIGHTPADDING", (0, 0), (-1, -1), 5),
             ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
         ]))
-        story = [Paragraph(f"Rekord #{record_id} — {text(record['name'])}", heading), table]
+        story = [Paragraph(f"Zdarzenie #{record_id} — {text(record['name'])}", heading), table]
         image_files = []
         for attachment in attachments:
             if not attachment["content_type"].startswith("image/"):
@@ -1201,7 +1222,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
                 story += [Paragraph(text(original_name), normal), Spacer(1, 2 * mm), image, Spacer(1, 6 * mm)]
         SimpleDocTemplate(output, pagesize=A4, rightMargin=16 * mm, leftMargin=16 * mm,
                           topMargin=15 * mm, bottomMargin=15 * mm,
-                          title=f"Rekord {record_id}").build(story)
+                          title=f"Rekord {record_id}").build(story, canvasmaker=PageNumberCanvas)
         output.seek(0)
         log_user_activity(
             "export_record_pdf",
