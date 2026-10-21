@@ -1171,13 +1171,13 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             ("Rodzaj zdarzenia", record["event_type"]), ("MTG maszyny", record["machine_mtg"]),
             ("Data wystąpienia", format_datetime(record["occurrence_at"])), ("Data naprawienia", format_datetime(record["repaired_at"])),
             ("Opis", record["description"]), ("Przyczyna", record["cause"]), ("Sposób naprawy", record["repair_method"]),
-            ("Wymienione części", record["replaced_parts"]), ("Osoby biorące udział w interwencji", record["participants"]),
+            ("Wymienione części", record["replaced_parts"]), ("Osoby biorące udział", record["participants"]),
             ("Uwagi", record["notes"]), ("Pracochłonność [h]", record["labor_cost"]), ("Materiał PLN", record["material_cost"]),
             ("Części zamienne PLN", record["spare_parts_cost"]), ("Serwis PLN", record["service_cost"]),
             ("Koszt netto PLN", record["total_cost"]), ("Wykluczenie z produkcji [h]", record["downtime_hours"]),
         ]
         data = [[Paragraph(f"<b>{text(name)}</b>", label), Paragraph(text(value), normal)] for name, value in fields]
-        table = Table(data, colWidths=[48 * mm, 130 * mm], repeatRows=0)
+        table = Table(data, colWidths=[38 * mm, 140 * mm], repeatRows=0)
         table.setStyle(TableStyle([
             ("BOX", (0, 0), (-1, -1), 0.7, colors.black),
             ("INNERGRID", (0, 0), (-1, -1), 0.35, colors.black),
