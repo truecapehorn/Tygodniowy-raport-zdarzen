@@ -1207,7 +1207,14 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             ("LEFTPADDING", (0, 0), (-1, -1), 5), ("RIGHTPADDING", (0, 0), (-1, -1), 5),
             ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
         ]))
-        story = [Paragraph(f"Zdarzenie #{record_id} : {text(record['name'])} - {text(record['machine_type'])}", heading), table]
+
+        if record["name"] and record["machine_type"]== "-":
+            head_text=f"Zdarzenie #{record_id} : {text(record['name'])}"
+        else:
+            head_text=f"Zdarzenie #{record_id} : {text(record['name'])} — {text(record['machine_type'])}"
+
+        story = [Paragraph(head_text, heading), table]
+
         image_files = []
         for attachment in attachments:
             if not attachment["content_type"].startswith("image/"):
@@ -1230,7 +1237,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             target_type="record",
             target_id=record_id,
         )
-        return send_file(output, as_attachment=True, download_name=f"rekord_{record_id}_{record['name']}_{record['machine_type']}.pdf", mimetype="application/pdf")
+        return send_file(output, as_attachment=True, download_name=f"rekord_{record_id}_{record['name']}.pdf", mimetype="application/pdf")
 
     @app.route("/api/record/<int:record_id>", methods=["PATCH"])
     def update_record_api(record_id: int):
