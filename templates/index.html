@@ -171,7 +171,7 @@ function buildView(r) {
                 ? `<a href="${url}" target="_blank"><img src="${url}" alt="${esc(a.original_name)}" title="${esc(a.original_name)}"></a>`
                 : `<a href="${url}" target="_blank" class="btn btn-outline btn-sm">&#128206; ${esc(a.original_name)}</a>`;
         });
-        html += `</div><div style="margin-top:.5rem;"><a href="/record/${r.id}/attachments.zip" class="btn btn-outline btn-sm">&#11015; Pobierz</a></div></div>`;
+        html += `</div><div style="margin-top:.5rem;"><a href="/record/${r.id}/attachments.zip" class="btn btn-success btn-sm">&#11015; Pobierz</a></div></div>`;
     }
     return html;
 }
