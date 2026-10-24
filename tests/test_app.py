@@ -1,6 +1,7 @@
 import io
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 
 from openpyxl import Workbook, load_workbook
@@ -345,6 +346,45 @@ class RepairReportAppTests(unittest.TestCase):
             self.assertIsNone(
                 get_db().execute("SELECT id FROM machines WHERE id = ?", (machine_id,)).fetchone()
             )
+
+    def test_record_attachments_can_be_downloaded_as_one_zip(self):
+        self.client.post(
+            "/",
+            data={
+                "occurrence_at": "2026-08-30T08:00",
+                "machine_name": "Maszyna archiwum",
+                "machine_type": "Testowa",
+                "serial_number": "ZIP-001",
+                "event_type": "Awaria",
+                "description": "Rekord z wieloma załącznikami",
+            },
+        )
+        with self.app.app_context():
+            record_id = get_db().execute(
+                "SELECT id FROM repair_records WHERE description = ?",
+                ("Rekord z wieloma załącznikami",),
+            ).fetchone()["id"]
+
+        upload_response = self.client.post(
+            f"/api/record/{record_id}/attachments",
+            data={
+                "attachments": [
+                    (io.BytesIO(b"first image"), "zdjecie.jpg"),
+                    (io.BytesIO(b"second image"), "zdjecie.jpg"),
+                ]
+            },
+            content_type="multipart/form-data",
+        )
+        self.assertEqual(upload_response.status_code, 200)
+
+        response = self.client.get(f"/record/{record_id}/attachments.zip")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("zalaczniki_rekordu_", response.headers["Content-Disposition"])
+        with zipfile.ZipFile(io.BytesIO(response.data)) as archive:
+            self.assertEqual(archive.namelist(), ["zdjecie.jpg", "zdjecie_1.jpg"])
+            self.assertEqual(archive.read("zdjecie.jpg"), b"first image")
+            self.assertEqual(archive.read("zdjecie_1.jpg"), b"second image")
+        response.close()
 
     def test_machine_management_requires_admin_role(self):
         response = self.client.get("/admin/machines")

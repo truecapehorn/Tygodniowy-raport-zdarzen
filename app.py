@@ -6,6 +6,7 @@ import io
 import json
 import secrets
 import sqlite3
+import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -1324,6 +1325,44 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             return "Not found", 404
         upload_dir = Path(current_app_uploads()) / str(record_id)
         return send_from_directory(str(upload_dir), filename)
+
+    @app.route("/record/<int:record_id>/attachments.zip")
+    def download_record_attachments(record_id: int):
+        attachments = get_db().execute(
+            "SELECT filename, original_name FROM attachments WHERE record_id = ? ORDER BY created_at",
+            (record_id,),
+        ).fetchall()
+        if not attachments:
+            return "Załączniki nie istnieją.", 404
+
+        output = io.BytesIO()
+        upload_dir = Path(current_app_uploads()) / str(record_id)
+        used_names: set[str] = set()
+        with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
+            for attachment in attachments:
+                file_path = upload_dir / attachment["filename"]
+                if not file_path.is_file():
+                    return "Plik załącznika nie istnieje.", 404
+
+                archive_name = Path(attachment["original_name"].replace("\\", "/")).name
+                if not archive_name:
+                    archive_name = attachment["filename"]
+                stem, suffix = Path(archive_name).stem, Path(archive_name).suffix
+                unique_name = archive_name
+                counter = 1
+                while unique_name.casefold() in used_names:
+                    unique_name = f"{stem}_{counter}{suffix}"
+                    counter += 1
+                used_names.add(unique_name.casefold())
+                archive.write(file_path, arcname=unique_name)
+
+        output.seek(0)
+        return send_file(
+            output,
+            as_attachment=True,
+            download_name=f"zalaczniki_rekordu_{record_id}.zip",
+            mimetype="application/zip",
+        )
 
     return app
 
