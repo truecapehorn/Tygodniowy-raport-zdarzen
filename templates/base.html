@@ -97,20 +97,26 @@
         }
         .navbar-links {
             display: flex;
+            align-items: center;
             gap: 0.2rem;
             list-style: none;
             margin-left: auto;
         }
+        .navbar-links li { display: flex; align-items: center; }
         .navbar-links a {
-            display: block;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             padding: 0.4rem 0.9rem;
             color: var(--muted);
             text-decoration: none;
             border-radius: 6px;
             font-size: 0.875rem;
             font-weight: 500;
+            text-align: center;
             transition: color 0.15s, background 0.15s;
         }
+        .navbar-links .logout-link { flex-direction: column; line-height: 1.2; color: var(--red); }
         .navbar-links a:hover { color: var(--text); background: rgba(31,41,51,0.05); }
         .navbar-links a.active { color: var(--text); background: rgba(79,156,249,0.15); border: 1px solid rgba(79,156,249,0.25); }
 
@@ -421,8 +427,8 @@
             {% if user_role != 'guest' %}
             <li><a href="{{ url_for('change_password') }}" {% if request.endpoint == 'change_password' %}class="active"{% endif %}>Zmień hasło</a></li>
             {% endif %}
-            <li style="display: inline-flex; align-items: center; vertical-align: middle;">
-                <a href="{{ url_for('logout') }}" style="color:var(--red); display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; line-height: 1.2;">
+            <li>
+                <a class="logout-link" href="{{ url_for('logout') }}">
                     <span>Wyloguj</span>
                     <strong>{{ current_username }}</strong>
                 </a>
