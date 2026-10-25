@@ -1,4 +1,5 @@
 import io
+import sqlite3
 import tempfile
 import unittest
 import zipfile
@@ -10,7 +11,7 @@ from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate
 from werkzeug.security import generate_password_hash
 
-from app import PageNumberCanvas, create_app, get_db
+from app import PageNumberCanvas, create_app, get_db, log_user_activity
 
 
 class RepairReportAppTests(unittest.TestCase):
@@ -705,10 +706,19 @@ class RepairReportAppTests(unittest.TestCase):
             get_db().execute(
                 """
                 INSERT INTO user_activity_log(
-                    user_id, username, action, target_type, target_id, details, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    user_id, username, action, target_type, target_id, details, ip_address, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (1, "admin", "create_record", "record", 123, "Testowe zdarzenie", "2026-09-21T11:50:00+00:00"),
+                (
+                    1,
+                    "admin",
+                    "create_record",
+                    "record",
+                    123,
+                    "Testowe zdarzenie",
+                    "203.0.113.10",
+                    "2026-09-21T11:50:00+00:00",
+                ),
             )
             get_db().commit()
 
@@ -718,13 +728,73 @@ class RepairReportAppTests(unittest.TestCase):
             session["user_id"] = 1
             session["username"] = "admin"
 
+        page_response = self.client.get("/admin/users")
+        self.assertEqual(page_response.status_code, 200)
+        self.assertIn("203.0.113.10", page_response.get_data(as_text=True))
+
         response = self.client.get("/admin/users/activity/export")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.mimetype, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         workbook = load_workbook(io.BytesIO(response.data))
         rows = list(workbook.active.iter_rows(values_only=True))
-        self.assertEqual(rows[0], ("Data", "Użytkownik", "Akcja", "Typ obiektu", "ID obiektu", "Szczegóły"))
-        self.assertIn(("21-09-2026 13:50", "admin", "create_record", "record", 123, "Testowe zdarzenie"), rows)
+        self.assertEqual(
+            rows[0],
+            ("Data", "Użytkownik", "Akcja", "Typ obiektu", "ID obiektu", "Szczegóły", "Adres IP"),
+        )
+        self.assertIn(
+            ("21-09-2026 13:50", "admin", "create_record", "record", 123, "Testowe zdarzenie", "203.0.113.10"),
+            rows,
+        )
+
+    def test_activity_log_records_request_ip(self):
+        with self.app.test_request_context(
+            "/admin/users",
+            environ_overrides={"REMOTE_ADDR": "203.0.113.25"},
+        ):
+            log_user_activity("test", "Testowe zdarzenie")
+
+        with self.app.app_context():
+            activity = get_db().execute(
+                "SELECT ip_address FROM user_activity_log WHERE action = 'test'"
+            ).fetchone()
+        self.assertEqual(activity["ip_address"], "203.0.113.25")
+
+    def test_existing_activity_log_database_is_migrated_for_ip_address(self):
+        legacy_database = Path(self.temp_dir.name) / "legacy.sqlite3"
+        connection = sqlite3.connect(legacy_database)
+        try:
+            connection.execute(
+                """
+                CREATE TABLE user_activity_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER,
+                    username TEXT,
+                    action TEXT NOT NULL,
+                    target_type TEXT,
+                    target_id INTEGER,
+                    details TEXT,
+                    created_at TEXT NOT NULL
+                )
+                """
+            )
+            connection.commit()
+        finally:
+            connection.close()
+
+        app = create_app(
+            {
+                "TESTING": True,
+                "DATABASE": str(legacy_database),
+                "UPLOAD_DIR": str(Path(self.temp_dir.name) / "legacy_uploads"),
+                "SECRET_KEY": "test",
+            }
+        )
+        with app.app_context():
+            columns = {
+                row["name"]
+                for row in get_db().execute("PRAGMA table_info(user_activity_log)").fetchall()
+            }
+        self.assertIn("ip_address", columns)
 
     def test_editor_can_open_edit_controls_in_filter_and_machine_history(self):
         app = create_app(

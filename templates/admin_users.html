@@ -90,6 +90,7 @@
                     <th>Użytkownik</th>
                     <th>Akcja</th>
                     <th>Szczegóły</th>
+                    <th>Adres IP</th>
                 </tr>
             </thead>
             <tbody>
@@ -99,9 +100,10 @@
                     <td>{{ item.username or '-' }}</td>
                     <td>{{ item.action }}</td>
                     <td>{{ item.details or '-' }}</td>
+                    <td>{{ item.ip_address or '-' }}</td>
                 </tr>
                 {% else %}
-                <tr class="empty-row"><td colspan="4">Brak zdarzeń.</td></tr>
+                <tr class="empty-row"><td colspan="5">Brak zdarzeń.</td></tr>
                 {% endfor %}
             </tbody>
         </table>

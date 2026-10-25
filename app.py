@@ -204,6 +204,7 @@ CREATE TABLE IF NOT EXISTS user_activity_log (
     target_type TEXT,
     target_id INTEGER,
     details TEXT,
+    ip_address TEXT,
     created_at TEXT NOT NULL,
     FOREIGN KEY(user_id) REFERENCES users(id)
 );
@@ -443,8 +444,10 @@ def log_user_activity(
             username = str(session.get("username") or ("admin" if session.get("role") == "admin" else "guest"))
     db.execute(
         """
-        INSERT INTO user_activity_log(user_id, username, action, target_type, target_id, details, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO user_activity_log(
+            user_id, username, action, target_type, target_id, details, ip_address, created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             user_id,
@@ -453,6 +456,7 @@ def log_user_activity(
             target_type,
             target_id,
             details,
+            request.remote_addr,
             datetime.now(UTC).isoformat(timespec="seconds"),
         ),
     )
@@ -895,7 +899,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         workbook = Workbook()
         sheet = workbook.active
         sheet.title = "REJESTR ZDARZEŃ"
-        sheet.append(["Data", "Użytkownik", "Akcja", "Typ obiektu", "ID obiektu", "Szczegóły"])
+        sheet.append(["Data", "Użytkownik", "Akcja", "Typ obiektu", "ID obiektu", "Szczegóły", "Adres IP"])
         for item in activity:
             sheet.append(
                 [
@@ -905,6 +909,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
                     item["target_type"] or "",
                     item["target_id"] or "",
                     item["details"] or "",
+                    item["ip_address"] or "",
                 ]
             )
         output = io.BytesIO()
@@ -1432,6 +1437,11 @@ def save_attachment(record_id: int, file_storage: Any) -> None:
 def init_db() -> None:
     db = get_db()
     db.executescript(SCHEMA)
+    activity_columns = {
+        row["name"] for row in db.execute("PRAGMA table_info(user_activity_log)").fetchall()
+    }
+    if "ip_address" not in activity_columns:
+        db.execute("ALTER TABLE user_activity_log ADD COLUMN ip_address TEXT")
     try:
         db.execute("ALTER TABLE repair_records ADD COLUMN notes TEXT")
     except sqlite3.OperationalError:
