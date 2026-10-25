@@ -634,7 +634,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         return {
             "user_role": session.get("role", "guest"),
             "current_user": current_user,
-            "current_username": username or "gość",
+            "current_username": username or "Gościu",
         }
 
     with app.app_context():

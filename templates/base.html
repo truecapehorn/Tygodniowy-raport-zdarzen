@@ -87,7 +87,7 @@
             max-width: 180px;
         }
         .navbar-user strong { 
-            color: var(--text); 
+            color: var(--muted); 
             font-weight: 600; 
             display: inline-block; 
             max-width: 100%; 
@@ -406,8 +406,6 @@
             </svg>
             Tygodniowy raport napraw&nbsp;<span class="gort">DUR</span>
         </a>
-        <div class="navbar-user" title="Aktualnie zalogowany użytkownik">
-            Zalogowany: <strong>{{ current_username }}</strong>
         </div>
         <ul class="navbar-links">
             <li><a href="{{ url_for('index') }}"           {% if request.endpoint == 'index'           %}class="active"{% endif %}>Strona główna</a></li>
@@ -423,7 +421,15 @@
             {% if user_role != 'guest' %}
             <li><a href="{{ url_for('change_password') }}" {% if request.endpoint == 'change_password' %}class="active"{% endif %}>Zmień hasło</a></li>
             {% endif %}
-            <li><a href="{{ url_for('logout') }}" style="color:var(--red);">Wyloguj</a></li>
+            <li style="display: inline-flex; align-items: center; vertical-align: middle;">
+                <a href="{{ url_for('logout') }}" style="color:var(--red); display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; line-height: 1.2;">
+                    <span>Wyloguj</span>
+                    <strong>{{ current_username }}</strong>
+                </a>
+            </li>
+        
+        
+        
         </ul>
     </nav>
 
