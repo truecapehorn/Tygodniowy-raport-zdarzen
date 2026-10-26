@@ -1,10 +1,10 @@
-# Tygodniowy_raport_napraw
+# Tygodniowy-raport-zdarzen
 
 Przeglądarkowa aplikacja Flask do prowadzenia tygodniowego raportu napraw dla działu utrzymania ruchu.
 
 ## Spis tresci
 
-- [Tygodniowy\_raport\_napraw](#tygodniowy_raport_napraw)
+- [Tygodniowy-raport-zdarzen](#tygodniowy-raport-zdarzen)
   - [Spis tresci](#spis-tresci)
   - [Uruchomienie](#uruchomienie)
   - [Konfiguracja](#konfiguracja)

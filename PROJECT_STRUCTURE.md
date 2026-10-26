@@ -3,7 +3,7 @@
 Po dodaniu obsługi konfiguracji, projekt ma następującą strukturę:
 
 ```
-Tygodniowy_raport_napraw/
+Tygodniowy-raport-zdarzen/
 │
 ├── 📄 app.py                    ← GŁÓWNA APLIKACJA (zaktualizowana)
 ├── 📄 requirements.txt          ← Zależności
