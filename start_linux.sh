@@ -5,7 +5,7 @@ set -e
 
 echo ""
 echo " ============================================="
-echo "  Tygodniowy raport napraw DUR"
+echo "  Tygodniowy raport zdarzen DUR"
 echo " ============================================="
 echo ""
 
