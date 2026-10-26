@@ -24,10 +24,10 @@
             </div>
         </div>
         <div class="form-grid3" style="margin-top: 0.75rem;">
-            <label class="field"><input type="checkbox" name="can_view_records"{% if not edit_user or edit_user.can_view_records %} checked{% endif %}> Przeglądanie rekordów</label>
-            <label class="field"><input type="checkbox" name="can_create_records"{% if edit_user and edit_user.can_create_records %} checked{% endif %}> Tworzenie rekordów</label>
-            <label class="field"><input type="checkbox" name="can_edit_records"{% if edit_user and edit_user.can_edit_records %} checked{% endif %}> Edycja rekordów</label>
-            <label class="field"><input type="checkbox" name="can_delete_records"{% if edit_user and edit_user.can_delete_records %} checked{% endif %}> Kasowanie rekordów</label>
+            <label class="field permission-field"><input type="checkbox" name="can_view_records"{% if not edit_user or edit_user.can_view_records %} checked{% endif %}> Przeglądanie rekordów</label>
+            <label class="field permission-field"><input type="checkbox" name="can_create_records"{% if edit_user and edit_user.can_create_records %} checked{% endif %}> Tworzenie rekordów</label>
+            <label class="field permission-field"><input type="checkbox" name="can_edit_records"{% if edit_user and edit_user.can_edit_records %} checked{% endif %}> Edycja rekordów</label>
+            <label class="field permission-field"><input type="checkbox" name="can_delete_records"{% if edit_user and edit_user.can_delete_records %} checked{% endif %}> Kasowanie rekordów</label>
         </div>
         <div class="actions">
             <button type="submit" class="btn btn-primary btn-sm">{% if edit_user %}Zapisz zmiany{% else %}Zapisz użytkownika{% endif %}</button>
