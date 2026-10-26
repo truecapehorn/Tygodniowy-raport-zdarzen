@@ -13,6 +13,8 @@ Przeglądarkowa aplikacja Flask do prowadzenia tygodniowego raportu napraw dla d
     - [Strona główna](#strona-główna)
     - [Filtrowanie i eksport](#filtrowanie-i-eksport)
     - [Nowy rekord](#nowy-rekord)
+    - [Import / Export](#import--export)
+    - [Logowanie i zmiana hasła](#logowanie-i-zmiana-hasła)
     - [Panel maszyn](#panel-maszyn)
     - [Panel użytkowników](#panel-użytkowników)
   - [Testy](#testy)
@@ -76,8 +78,8 @@ Pełna dokumentacja: [CONFIG.md](CONFIG.md), [CONFIG_EXAMPLES.md](CONFIG_EXAMPLE
 - automatyczne wyliczanie roku, tygodnia, pozycji w tygodniu, czasu wykluczenia z produkcji i kosztu łącznego,
 - filtrowanie rekordów po maszynie, rodzaju zdarzenia, zakresie dat i słowach z opisu,
 - podgląd poprzednich wpisów dla wybranej maszyny,
-- import danych z plików `.xlsx`,
-- eksport przefiltrowanych danych do `.xlsx`,
+- import danych z plików `.xls` i `.xlsx`,
+- eksport przefiltrowanych danych lub całej bazy do `.xlsx`,
 - logowanie użytkowników i administratorów,
 - zarządzanie uprawnieniami do przeglądania, tworzenia, edycji i usuwania rekordów,
 - administracyjne zarządzanie danymi maszyn i ich wpisami.
@@ -91,13 +93,52 @@ rekordów. Zawierają wyłącznie fikcyjne dane demonstracyjne.
 
 ![Strona główna aplikacji z listą ostatnich rekordów](docs/screenshots/strona-glowna.png)
 
+Strona główna (`/`) pokazuje rejestr ostatnich zdarzeń: datę, maszynę, rodzaj
+zdarzenia, opis, przyczynę, sposób naprawy i informację o załącznikach. Można
+zmienić liczbę wyświetlanych wpisów lub pokazać wszystkie. Kliknięcie wiersza
+otwiera szczegóły rekordu; zależnie od uprawnień można go edytować lub usunąć,
+a także pobrać jego raport PDF i załączniki.
+
 ### Filtrowanie i eksport
 
 ![Filtrowanie rekordów i tabela wyników](docs/screenshots/filtrowanie.png)
 
+Na stronie **Filtrowanie** (`/filter`) można zawęzić rejestr według nazwy,
+typu lub numeru seryjnego maszyny, rodzaju zdarzenia, zakresu dat oraz słów
+w opisie, przyczynie, naprawie, wymienionych częściach i uwagach. Wiele słów
+można rozdzielić średnikiem. Użytkownicy inni niż goście mogą pobrać wyniki
+filtrowania do pliku `.xlsx`.
+
 ### Nowy rekord
 
 ![Dodawanie zdarzeń utrzymania ruchu](docs/screenshots/nowy-rekord.PNG)
+
+Formularz **Nowy rekord** (`/new`) służy do zapisania zdarzenia utrzymania ruchu.
+Zawiera daty wystąpienia i naprawy, dane maszyny, rodzaj zdarzenia, opis,
+przyczynę, sposób naprawy, części, uczestników, koszty i uwagi. Można także
+dodać załączniki, między innymi przez przeciągnięcie plików, wybór z dysku lub
+wklejenie ze schowka. Podczas uzupełniania danych maszyny formularz może
+wyświetlić historię jej wcześniejszych wpisów. Rok, tydzień, kolejność wpisu,
+czas przestoju i koszt łączny są wyliczane automatycznie.
+
+### Import / Export
+
+Strona **Import / Export** jest dostępna pod adresem `/data`. Pozwala importować
+dane z plików Excel `.xls` i `.xlsx`. Aplikacja szuka arkusza `ZBIORCZE`; jeśli
+go nie znajdzie, używa pierwszego arkusza. Kolumny są dopasowywane automatycznie,
+a importowane dane nie usuwają istniejących rekordów. Import jest dostępny dla
+administratora oraz użytkownika z uprawnieniem do tworzenia rekordów.
+
+Użytkownicy inni niż gość mogą pobrać eksport całej bazy jako plik `.xlsx`.
+Plik zawiera arkusz `ZBIORCZE` z kolumnami w układzie raportu tygodniowego.
+
+### Logowanie i zmiana hasła
+
+Strona logowania (`/login`) umożliwia wejście na konto użytkownika lub
+administratora. Pozostawienie loginu i hasła pustych otwiera dostęp gościa
+wyłącznie do odczytu. Zalogowany użytkownik może otworzyć **Zmień hasło**
+(`/change-password`), podać obecne hasło i ustawić nowe o długości co najmniej
+4 znaków.
 
 ### Panel maszyn
 
