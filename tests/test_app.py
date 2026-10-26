@@ -80,7 +80,7 @@ class RepairReportAppTests(unittest.TestCase):
         self.assertIn("2.5", page)
         self.assertIn("200.0", page)
 
-    def test_guest_can_view_and_export_but_cannot_create_records(self):
+    def test_guest_can_view_but_cannot_export_or_create_records(self):
         app = create_app(
             {
                 "TESTING": False,
@@ -93,7 +93,22 @@ class RepairReportAppTests(unittest.TestCase):
         client = app.test_client()
 
         self.assertEqual(client.get("/").status_code, 200)
-        self.assertEqual(client.get("/export").status_code, 200)
+        data_page = client.get("/data")
+        self.assertEqual(data_page.status_code, 200)
+        self.assertNotIn("Eksportuj całą bazę", data_page.get_data(as_text=True))
+
+        filter_page = client.get("/filter?description_terms=test")
+        self.assertEqual(filter_page.status_code, 200)
+        self.assertNotIn("Eksportuj wyniki (.xlsx)", filter_page.get_data(as_text=True))
+        self.assertNotIn("eksportuj całą bazę", filter_page.get_data(as_text=True))
+
+        export_response = client.get("/export?description_terms=test")
+        self.assertEqual(export_response.status_code, 302)
+        denied_page = client.get(export_response.headers["Location"], follow_redirects=True)
+        self.assertIn(
+            "Konto gościa nie ma uprawnień do eksportu danych.",
+            denied_page.get_data(as_text=True),
+        )
 
         response = client.post(
             "/",

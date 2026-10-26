@@ -12,10 +12,10 @@
   {%- endif -%}
 {% endmacro %}
 
-<div class="page-title">Filtrowanie rekordów <small>Przeszukaj i wyeksportuj dziennik zdarzeń</small></div>
+<div class="page-title">Filtrowanie rekordów <small>Przeszukaj{% if user_role != 'guest' %} i wyeksportuj{% endif %} dziennik zdarzeń</small></div>
 
 <div class="card">
-    <div class="card-title">Filtrowanie i eksport</div>
+    <div class="card-title">{% if user_role == 'guest' %}Filtrowanie{% else %}Filtrowanie i eksport{% endif %}</div>
     <form method="get" id="filter-form">
         <div class="form-grid">
             <div class="field">
@@ -69,7 +69,9 @@
             <button type="submit" class="btn btn-primary">Filtruj</button>
             {% if filter_active %}
             <a href="{{ url_for('filter_page') }}" class="btn btn-outline btn-sm">Wyczyść</a>
+            {% if user_role != 'guest' %}
             <a href="{{ url_for('export_data', **filters) }}" class="btn btn-success">Eksportuj wyniki (.xlsx)</a>
+            {% endif %}
             {% endif %}
         </div>
     </form>
@@ -117,8 +119,8 @@
     </div>
     {% else %}
     <div class="hint-block">
-        Ustaw filtry i kliknij <strong>Filtruj</strong> aby wyświetlić wyniki,
-        lub <a href="{{ url_for('export_data') }}">eksportuj całą bazę</a>.
+        Ustaw filtry i kliknij <strong>Filtruj</strong> aby wyświetlić wyniki{% if user_role != 'guest' %},
+        lub <a href="{{ url_for('export_data') }}">eksportuj całą bazę</a>{% endif %}.
     </div>
     {% endif %}
 </div>

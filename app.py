@@ -1030,6 +1030,10 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
 
     @app.route("/export")
     def export_data():
+        if not app.config.get("TESTING") and session.get("role") == "guest":
+            flash("Konto gościa nie ma uprawnień do eksportu danych.", "error")
+            return redirect(url_for("filter_page"))
+
         filters = {
             "machine": request.args.get("machine", "").strip(),
             "machine_type": request.args.get("machine_type", "").strip(),

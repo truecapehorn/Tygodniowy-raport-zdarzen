@@ -21,6 +21,7 @@
 </div>
 {% endif %}
 
+{% if user_role != 'guest' %}
 <div class="card">
     <div class="card-title">Eksport całej bazy danych</div>
     <p class="text-muted" style="font-size:.875rem;margin-bottom:1rem;line-height:1.6;">
@@ -31,5 +32,6 @@
         <a href="{{ url_for('export_data') }}" class="btn btn-success">Eksportuj całą bazę (.xlsx)</a>
     </div>
 </div>
+{% endif %}
 
 {% endblock %}
