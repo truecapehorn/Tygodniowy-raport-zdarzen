@@ -1,6 +1,16 @@
 {% extends "base.html" %}
 {% block title %}Planowanie zdarzeń – Tygodniowy raport zdarzeń DUR{% endblock %}
 {% block content %}
+{% macro calendar_event_class(event_type) %}
+    {%- set event_type_lower = event_type | lower -%}
+    {%- if event_type_lower == 'awaria' -%}badge-awaria
+    {%- elif 'przegl' in event_type_lower -%}badge-przeglad
+    {%- elif event_type_lower == 'modernizacja' -%}badge-modernizacja
+    {%- elif event_type_lower == 'interwencja' -%}badge-interwencja
+    {%- else -%}badge-inne
+    {%- endif -%}
+{% endmacro %}
+
 <div class="page-title">Planowanie zdarzeń <small>Harmonogram przeglądów, interwencji i działań utrzymania ruchu</small></div>
 
 <div class="form-grid">
@@ -17,6 +27,92 @@
     {% if user_role == 'admin' or (current_user and current_user.can_create_records) %}
     <a href="{{ url_for('new_scheduled_event') }}" class="btn btn-primary">+ Zaplanuj nowe zdarzenie</a>
     {% endif %}
+</div>
+
+<div class="card">
+    <div class="calendar-toolbar">
+        <div>
+            <div class="card-title">Kalendarz zdarzeń</div>
+            <h2 class="calendar-heading">{{ calendar_heading }}</h2>
+        </div>
+        <div class="calendar-actions">
+            {% if previous_calendar_url %}
+            <a class="btn btn-outline btn-sm" href="{{ previous_calendar_url }}" aria-label="Poprzedni okres">&larr;</a>
+            {% else %}
+            <span class="btn btn-outline btn-sm" aria-hidden="true">&larr;</span>
+            {% endif %}
+            {% if next_calendar_url %}
+            <a class="btn btn-outline btn-sm" href="{{ next_calendar_url }}" aria-label="Następny okres">&rarr;</a>
+            {% else %}
+            <span class="btn btn-outline btn-sm" aria-hidden="true">&rarr;</span>
+            {% endif %}
+            <form method="get" class="calendar-controls">
+                <label for="calendar-view">Widok</label>
+                <select id="calendar-view" name="calendar_view">
+                    <option value="month" {% if calendar_view == 'month' %}selected{% endif %}>Miesięczny</option>
+                    <option value="year" {% if calendar_view == 'year' %}selected{% endif %}>Roczny</option>
+                </select>
+                {% if calendar_view == 'month' %}
+                <label class="sr-only" for="calendar-month">Miesiąc</label>
+                <select id="calendar-month" name="month">
+                    {% for month_name in month_names %}
+                    <option value="{{ loop.index }}" {% if calendar_month == loop.index %}selected{% endif %}>{{ month_name }}</option>
+                    {% endfor %}
+                </select>
+                {% else %}
+                <input type="hidden" name="month" value="{{ calendar_month }}">
+                {% endif %}
+                <label class="sr-only" for="calendar-year">Rok</label>
+                <input id="calendar-year" type="number" name="year" min="1" max="9999" value="{{ calendar_year }}" required>
+                <button type="submit" class="btn btn-primary btn-sm">Pokaż</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="calendar-legend" aria-label="Legenda rodzajów zdarzeń">
+        <span class="badge badge-przeglad">Przegląd</span>
+        <span class="badge badge-interwencja">Interwencja</span>
+        <span class="badge badge-modernizacja">Modernizacja</span>
+        <span class="badge badge-awaria">Awaria</span>
+        <span class="badge badge-inne">Inne</span>
+    </div>
+
+    <div class="calendar-scroll">
+        <div class="calendar-months {% if calendar_view == 'year' %}calendar-year-view{% else %}calendar-month-view{% endif %}"
+             data-calendar-view="{{ calendar_view }}">
+            {% for month in calendar_months %}
+            <section class="calendar-month" aria-label="{{ month.name }}">
+                {% if calendar_view == 'year' %}
+                <h3 class="calendar-month-heading">{{ month.name }}</h3>
+                {% endif %}
+                <div class="calendar-grid calendar-weekdays">
+                    {% for weekday in calendar_weekdays %}
+                    <div>{{ weekday }}</div>
+                    {% endfor %}
+                </div>
+                {% for week in month.weeks %}
+                <div class="calendar-grid">
+                    {% for day in week %}
+                    <div class="calendar-day{% if not day.in_month %} calendar-day-outside{% endif %}{% if day.events %} calendar-day-has-events{% endif %}">
+                        <span class="calendar-day-number">{{ day.date.day }}</span>
+                        <div class="calendar-day-events">
+                            {% for event in day.events %}
+                            {% set event_title = event.planned_at | datetime ~ ' — ' ~ event.name ~ ' — ' ~ event.event_type ~ ' — ' ~ event.description %}
+                            {% if calendar_view == 'month' %}
+                            <span class="calendar-event badge {{ calendar_event_class(event.event_type) }}" title="{{ event_title }}">{{ event.event_type }} · {{ event.name }}</span>
+                            {% else %}
+                            <span class="calendar-dot {{ calendar_event_class(event.event_type) }}" title="{{ event_title }}" aria-label="{{ event_title }}"></span>
+                            {% endif %}
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endfor %}
+            </section>
+            {% endfor %}
+        </div>
+    </div>
 </div>
 
 <div class="card">
@@ -37,7 +133,21 @@
             </thead>
             <tbody>
                 {% for event in scheduled_events %}
-                <tr>
+                <tr class="record-row scheduled-event-row" tabindex="0" aria-label="Otwórz szczegóły zdarzenia"
+                    data-scheduled-id="{{ event.id }}"
+                    data-machine="{{ event.name }}"
+                    data-machine-type="{{ event.machine_type }}"
+                    data-serial="{{ event.serial_number }}"
+                    data-event-type="{{ event.event_type }}"
+                    data-date="{{ event.planned_at }}"
+                    data-date-display="{{ event.planned_at|datetime }}"
+                    data-repeat-interval="{{ event.repeat_interval }}"
+                    data-repeat-unit="{{ event.repeat_unit }}"
+                    data-description="{{ event.description }}"
+                    data-cause="{{ event.cause or '' }}"
+                    data-repair-method="{{ event.repair_method or '' }}"
+                    data-replaced-parts="{{ event.replaced_parts or '' }}"
+                    data-notes="{{ event.notes or '' }}">
                     <td>{{ event.name }}</td>
                     <td class="text-muted">{{ event.machine_type }}<br>{{ event.serial_number }}</td>
                     <td>{{ event.event_type }}</td>
@@ -46,7 +156,11 @@
                     <td>{{ event.description }}</td>
                     <td>
                         <div class="actions">
-                            <button type="button" class="btn btn-outline btn-sm" data-scheduled-id="{{ event.id }}" data-machine="{{ event.name }}" data-machine-type="{{ event.machine_type }}" data-serial="{{ event.serial_number }}" data-event-type="{{ event.event_type }}" data-date="{{ event.planned_at }}" data-date-display="{{ event.planned_at|datetime }}" data-repeat-interval="{{ event.repeat_interval }}" data-repeat-unit="{{ event.repeat_unit }}" data-description="{{ event.description }}" data-cause="{{ event.cause or '' }}" data-repair-method="{{ event.repair_method or '' }}" data-replaced-parts="{{ event.replaced_parts or '' }}" data-notes="{{ event.notes or '' }}">Szczegóły</button>
+                            {% if user_role == 'admin' or (current_user and current_user.can_delete_records) %}
+                            <form method="post" action="{{ url_for('scheduled_event_delete', event_id=event.id) }}" style="display:inline;">
+                                <button type="submit" class="btn btn-danger btn-sm">Usuń</button>
+                            </form>
+                            {% endif %}
                             <form method="post" action="{{ url_for('scheduled_event_done', event_id=event.id) }}" style="display:inline;">
                                 <input type="hidden" name="expected_planned_at" value="{{ event.planned_at }}">
                                 <button type="submit" class="btn btn-success btn-sm">Wykonano</button>
@@ -79,13 +193,31 @@
             </thead>
             <tbody>
                 {% for event in completed_events %}
-                <tr>
+                <tr class="record-row scheduled-event-row" tabindex="0" aria-label="Otwórz szczegóły zdarzenia"
+                    data-scheduled-id="{{ event.id }}"
+                    data-machine="{{ event.name }}"
+                    data-machine-type="{{ event.machine_type }}"
+                    data-serial="{{ event.serial_number }}"
+                    data-event-type="{{ event.event_type }}"
+                    data-date="{{ event.planned_at }}"
+                    data-date-display="{{ event.planned_at|datetime }}"
+                    data-repeat-interval="{{ event.repeat_interval }}"
+                    data-repeat-unit="{{ event.repeat_unit }}"
+                    data-description="{{ event.description }}"
+                    data-cause="{{ event.cause or '' }}"
+                    data-repair-method="{{ event.repair_method or '' }}"
+                    data-replaced-parts="{{ event.replaced_parts or '' }}"
+                    data-notes="{{ event.notes or '' }}">
                     <td>{{ event.name }}</td>
                     <td>{{ event.event_type }}</td>
                     <td>{{ event.planned_at|datetime }}</td>
                     <td>{{ event.description }}</td>
                     <td>
-                        <button type="button" class="btn btn-outline btn-sm" data-scheduled-id="{{ event.id }}" data-machine="{{ event.name }}" data-machine-type="{{ event.machine_type }}" data-serial="{{ event.serial_number }}" data-event-type="{{ event.event_type }}" data-date="{{ event.planned_at }}" data-date-display="{{ event.planned_at|datetime }}" data-repeat-interval="{{ event.repeat_interval }}" data-repeat-unit="{{ event.repeat_unit }}" data-description="{{ event.description }}" data-cause="{{ event.cause or '' }}" data-repair-method="{{ event.repair_method or '' }}" data-replaced-parts="{{ event.replaced_parts or '' }}" data-notes="{{ event.notes or '' }}">Szczegóły</button>
+                        {% if user_role == 'admin' or (current_user and current_user.can_delete_records) %}
+                        <form method="post" action="{{ url_for('scheduled_event_delete', event_id=event.id) }}" style="display:inline;">
+                            <button type="submit" class="btn btn-danger btn-sm">Usuń</button>
+                        </form>
+                        {% endif %}
                     </td>
                 </tr>
                 {% endfor %}
@@ -97,14 +229,108 @@
     {% endif %}
 </div>
 
+<style>
+    .calendar-toolbar,
+    .calendar-actions,
+    .calendar-controls,
+    .calendar-legend { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem; }
+    .calendar-toolbar { justify-content: space-between; gap: 1rem; margin-bottom: .75rem; }
+    .calendar-toolbar .card-title { margin-bottom: .15rem; }
+    .calendar-heading { font-size: 1.25rem; }
+    .calendar-controls { margin-left: .35rem; }
+    .calendar-controls label { color: var(--muted); font-size: .8rem; }
+    .calendar-controls input,
+    .calendar-controls select {
+        min-height: 2rem;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--bg-input);
+        color: var(--text);
+        font: inherit;
+        padding: .25rem .4rem;
+    }
+    .calendar-controls input { width: 5.5rem; }
+    .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+    }
+    .calendar-legend { margin: 0 0 .75rem; }
+    .calendar-scroll { overflow-x: auto; }
+    .calendar-months { display: grid; gap: 1rem; }
+    .calendar-year-view { grid-template-columns: repeat(3, minmax(240px, 1fr)); }
+    .calendar-month { min-width: 0; }
+    .calendar-month-heading { margin: 0 0 .35rem; font-size: .9rem; }
+    .calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+    .calendar-weekdays > div {
+        padding: .35rem .15rem;
+        color: var(--muted);
+        font-size: .7rem;
+        font-weight: 700;
+        text-align: center;
+    }
+    .calendar-day {
+        min-width: 0;
+        min-height: 6.25rem;
+        padding: .25rem;
+        border: 1px solid var(--border);
+        background: var(--bg-card);
+    }
+    .calendar-day-number { display: block; color: var(--text); font-size: .75rem; }
+    .calendar-day-outside { background: var(--bg-card-alt); }
+    .calendar-day-outside .calendar-day-number { color: var(--muted); }
+    .calendar-day-events { display: grid; gap: .2rem; }
+    .calendar-event {
+        display: block;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .calendar-year-view .calendar-dot {
+        display: inline-block;
+        width: .85rem;
+        height: .85rem;
+        margin: .2rem .15rem;
+        padding: 0;
+        border: 1px solid currentColor;
+        border-radius: 50%;
+        vertical-align: middle;
+        box-shadow: 0 0 0 1px var(--bg-card);
+    }
+    .calendar-year-view .calendar-dot.badge-przeglad { background: var(--accent); }
+    .calendar-year-view .calendar-dot.badge-interwencja { background: var(--yellow); }
+    .calendar-year-view .calendar-dot.badge-modernizacja { background: var(--purple); }
+    .calendar-year-view .calendar-dot.badge-awaria { background: var(--red); }
+    .calendar-year-view .calendar-dot.badge-inne { background: var(--muted); }
+    .calendar-year-view .calendar-day { min-height: 2.8rem; padding: .15rem; }
+    .calendar-year-view .calendar-weekdays > div { font-size: .62rem; }
+    @media (max-width: 900px) {
+        .calendar-year-view { grid-template-columns: repeat(2, minmax(240px, 1fr)); }
+    }
+    @media (max-width: 620px) {
+        .calendar-toolbar { align-items: flex-start; flex-direction: column; }
+        .calendar-actions { width: 100%; }
+        .calendar-month-view { min-width: 680px; }
+        .calendar-year-view { grid-template-columns: minmax(240px, 1fr); }
+    }
+</style>
+
 <div class="modal-backdrop" id="scheduled-modal">
     <div class="modal-box">
         <div class="modal-header">
             <strong id="scheduled-modal-title" style="font-size:1rem;color:var(--text);">Szczegóły zdarzenia</strong>
             <div style="display:flex;gap:.4rem;align-items:center;flex-shrink:0;">
+                {% if user_role == 'admin' or (current_user and current_user.can_delete_records) %}
                 <form id="scheduled-modal-delete-form" method="post" style="display:inline;">
                     <button type="submit" class="btn btn-danger btn-sm">Usuń</button>
                 </form>
+                {% endif %}
                 <button id="scheduled-modal-edit-button" type="button" class="btn btn-primary btn-sm">Edytuj</button>
                 <button id="scheduled-modal-save-button" type="submit" form="scheduled-modal-edit-form" class="btn btn-success btn-sm" style="display:none;">Zapisz</button>
                 <button id="scheduled-modal-cancel-button" type="button" class="btn btn-outline btn-sm" style="display:none;">Anuluj</button>
@@ -224,21 +450,21 @@ function escapeScheduledHtml(value) {
         .replace(/'/g, '&#39;');
 }
 
-function openScheduledModal(button) {
-    const id = button.dataset.scheduledId;
-    const machine = button.dataset.machine || '';
-    const machineType = button.dataset.machineType || '';
-    const serial = button.dataset.serial || '';
-    const eventType = button.dataset.eventType || '';
-    const date = button.dataset.date || '';
-    const dateDisplay = button.dataset.dateDisplay || date;
-    const repeatInterval = button.dataset.repeatInterval || '0';
-    const repeatUnit = button.dataset.repeatUnit || 'none';
-    const description = button.dataset.description || '';
-    const cause = button.dataset.cause || '';
-    const repairMethod = button.dataset.repairMethod || '';
-    const replacedParts = button.dataset.replacedParts || '';
-    const notes = button.dataset.notes || '';
+function openScheduledModal(row) {
+    const id = row.dataset.scheduledId;
+    const machine = row.dataset.machine || '';
+    const machineType = row.dataset.machineType || '';
+    const serial = row.dataset.serial || '';
+    const eventType = row.dataset.eventType || '';
+    const date = row.dataset.date || '';
+    const dateDisplay = row.dataset.dateDisplay || date;
+    const repeatInterval = row.dataset.repeatInterval || '0';
+    const repeatUnit = row.dataset.repeatUnit || 'none';
+    const description = row.dataset.description || '';
+    const cause = row.dataset.cause || '';
+    const repairMethod = row.dataset.repairMethod || '';
+    const replacedParts = row.dataset.replacedParts || '';
+    const notes = row.dataset.notes || '';
 
     scheduledModalTitle.textContent = `${machine} – ${eventType}`;
     scheduledModalContent.innerHTML = `
@@ -255,7 +481,9 @@ function openScheduledModal(button) {
         <div class="detail-item full"><div class="dl">Uwagi</div><div class="dv">${escapeScheduledHtml(notes) || '—'}</div></div>
     `;
 
-    scheduledModalDeleteForm.action = `/scheduled/${id}/delete`;
+    if (scheduledModalDeleteForm) {
+        scheduledModalDeleteForm.action = `/scheduled/${id}/delete`;
+    }
     scheduledModalEditForm.action = `/scheduled/${id}/edit`;
     document.getElementById('edit-machine-name').value = machine;
     document.getElementById('edit-machine-type').value = machineType;
@@ -274,8 +502,16 @@ function openScheduledModal(button) {
     scheduledModal.classList.add('open');
 }
 
-document.querySelectorAll('[data-scheduled-id]').forEach((button) => {
-    button.addEventListener('click', () => openScheduledModal(button));
+document.querySelectorAll('.scheduled-event-row').forEach((row) => {
+    row.addEventListener('click', (event) => {
+        if (event.target.closest('button, form, a')) return;
+        openScheduledModal(row);
+    });
+    row.addEventListener('keydown', (event) => {
+        if (event.target !== row || (event.key !== 'Enter' && event.key !== ' ')) return;
+        event.preventDefault();
+        openScheduledModal(row);
+    });
 });
 
 scheduledModalClose.addEventListener('click', () => scheduledModal.classList.remove('open'));

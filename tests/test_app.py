@@ -271,6 +271,61 @@ class RepairReportAppTests(unittest.TestCase):
         self.assertEqual(lookup["types"], ["Hydrauliczna"])
         self.assertEqual(lookup["serial_numbers"], ["H-101"])
 
+    def test_scheduled_event_calendar_month_and_year_views(self):
+        with self.client.session_transaction() as session:
+            session["logged_in"] = True
+            session["role"] = "admin"
+
+        events = (
+            ("Przegląd", "2026-01-05T07:00", "Prasa Blue", "Blue calendar event"),
+            ("Interwencja", "2026-05-14T10:30", "Prasa Yellow", "Yellow calendar event"),
+            ("Modernizacja", "2026-12-01T12:15", "Prasa Purple", "Purple calendar event"),
+        )
+        for event_type, planned_at, machine_name, description in events:
+            response = self.client.post(
+                "/scheduled/new",
+                data={
+                    "machine_name": machine_name,
+                    "machine_type": "Hydrauliczna",
+                    "serial_number": f"{machine_name}-1",
+                    "event_type": event_type,
+                    "planned_at": planned_at,
+                    "repeat_interval": "0",
+                    "repeat_unit": "none",
+                    "description": description,
+                },
+            )
+            self.assertEqual(response.status_code, 302)
+
+        with self.app.app_context():
+            completed_event_id = get_db().execute(
+                "SELECT id FROM scheduled_events WHERE description = ?",
+                ("Blue calendar event",),
+            ).fetchone()["id"]
+        response = self.client.post(f"/scheduled/{completed_event_id}/done")
+        self.assertEqual(response.status_code, 302)
+
+        year_page = self.client.get("/scheduled?calendar_view=year&year=2026")
+        self.assertEqual(year_page.status_code, 200)
+        year_html = year_page.get_data(as_text=True)
+        self.assertIn('data-calendar-view="year"', year_html)
+        self.assertEqual(year_html.count('class="calendar-month-heading"'), 12)
+        self.assertIn('class="calendar-dot badge-przeglad"', year_html)
+        self.assertIn('class="calendar-dot badge-interwencja"', year_html)
+        self.assertIn('class="calendar-dot badge-modernizacja"', year_html)
+        self.assertIn(".calendar-year-view .calendar-dot {", year_html)
+        self.assertIn("width: .85rem;", year_html)
+        self.assertIn(".calendar-year-view .calendar-dot.badge-interwencja { background: var(--yellow); }", year_html)
+        self.assertIn(".calendar-year-view .calendar-dot.badge-modernizacja { background: var(--purple); }", year_html)
+
+        month_page = self.client.get("/scheduled?calendar_view=month&year=2026&month=5")
+        self.assertEqual(month_page.status_code, 200)
+        month_html = month_page.get_data(as_text=True)
+        self.assertIn('data-calendar-view="month"', month_html)
+        self.assertIn("title=\"14-05-2026 10:30 — Prasa Yellow — Interwencja — Yellow calendar event\"", month_html)
+        self.assertNotIn("title=\"05-01-2026 07:00 — Prasa Blue", month_html)
+        self.assertNotIn("title=\"01-12-2026 12:15 — Prasa Purple", month_html)
+
     def test_scheduled_event_form_fields_and_dashboard_counts(self):
         with self.client.session_transaction() as session:
             session["logged_in"] = True
@@ -334,7 +389,14 @@ class RepairReportAppTests(unittest.TestCase):
         self.assertIn("na 15-12-2020 13:45.", home_page)
         self.assertIn("Zaplanowane zdarzenia</div>\n        <strong style=\"display:block;font-size:2rem;color:var(--accent);\">1", html)
         self.assertIn("Zrealizowane zdarzenia</div>\n        <strong style=\"display:block;font-size:2rem;color:var(--green);\">0", html)
-        self.assertLess(html.index('id="scheduled-modal-delete-form"'), html.index('id="scheduled-modal-edit-button"'))
+        self.assertIn('class="record-row scheduled-event-row" tabindex="0"', html)
+        self.assertRegex(html, r'action="/(?:scheduled|planowanie)/\d+/delete"')
+        self.assertIn(">Usuń</button>", html)
+        self.assertNotIn(">Szczegóły</button>", html)
+        self.assertIn('id="scheduled-modal-delete-form"', html)
+        self.assertIn('scheduledModalDeleteForm.action = `/scheduled/${id}/delete`', html)
+        self.assertIn("row.addEventListener('click', (event) =>", html)
+        self.assertIn("event.target.closest('button, form, a')", html)
         self.assertIn('id="scheduled-modal-edit-button" type="button"', html)
         self.assertIn('id="scheduled-modal-edit-form" method="post" style="display:none;"', html)
         self.assertIn('id="edit-repeat-interval-field" hidden', html)
@@ -419,6 +481,9 @@ class RepairReportAppTests(unittest.TestCase):
         completed_page = self.client.get("/scheduled").get_data(as_text=True)
         self.assertIn("Zaplanowane zdarzenia</div>\n        <strong style=\"display:block;font-size:2rem;color:var(--accent);\">0", completed_page)
         self.assertIn("Zrealizowane zdarzenia</div>\n        <strong style=\"display:block;font-size:2rem;color:var(--green);\">1", completed_page)
+        self.assertIn('class="record-row scheduled-event-row" tabindex="0"', completed_page)
+        self.assertRegex(completed_page, r'action="/(?:scheduled|planowanie)/\d+/delete"')
+        self.assertNotIn(">Szczegóły</button>", completed_page)
 
     def test_existing_completed_scheduled_event_is_added_to_register_once(self):
         response = self.client.post(

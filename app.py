@@ -967,6 +967,86 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             return redirect(url_for("index"))
         planned_events = get_scheduled_events("planned")
         completed_events = get_scheduled_events("done")
+        calendar_view = request.args.get("calendar_view", "month")
+        if calendar_view not in {"month", "year"}:
+            calendar_view = "month"
+
+        current_date = datetime.now()
+        try:
+            calendar_year = int(request.args.get("year", current_date.year))
+        except (TypeError, ValueError):
+            calendar_year = current_date.year
+        if not 1 <= calendar_year <= 9999:
+            calendar_year = current_date.year
+
+        try:
+            calendar_month = int(request.args.get("month", current_date.month))
+        except (TypeError, ValueError):
+            calendar_month = current_date.month
+        if not 1 <= calendar_month <= 12:
+            calendar_month = current_date.month
+
+        month_names = (
+            "Styczeń", "Luty", "Marzec", "Kwiecień", "Maj", "Czerwiec",
+            "Lipiec", "Sierpień", "Wrzesień", "Październik", "Listopad", "Grudzień",
+        )
+        events_by_date: dict[str, list[sqlite3.Row]] = {}
+        dated_events = [
+            (parse_datetime(event["planned_at"]), event)
+            for event in (*planned_events, *completed_events)
+        ]
+        dated_events.sort(key=lambda item: item[0] or datetime.max)
+        for planned_at, event in dated_events:
+            if planned_at is not None and planned_at.year == calendar_year:
+                events_by_date.setdefault(planned_at.date().isoformat(), []).append(event)
+
+        calendar_months = []
+        month_numbers = range(1, 13) if calendar_view == "year" else (calendar_month,)
+        calendar_generator = calendar.Calendar(firstweekday=calendar.MONDAY)
+        for month_number in month_numbers:
+            weeks = []
+            for week in calendar_generator.monthdatescalendar(calendar_year, month_number):
+                weeks.append([
+                    {
+                        "date": day,
+                        "in_month": day.month == month_number,
+                        "events": events_by_date.get(day.isoformat(), []) if day.month == month_number else [],
+                    }
+                    for day in week
+                ])
+            calendar_months.append({
+                "number": month_number,
+                "name": month_names[month_number - 1],
+                "weeks": weeks,
+            })
+
+        if calendar_view == "year":
+            previous_url = (
+                url_for("scheduled_events", calendar_view="year", year=calendar_year - 1, month=calendar_month)
+                if calendar_year > 1 else None
+            )
+            next_url = (
+                url_for("scheduled_events", calendar_view="year", year=calendar_year + 1, month=calendar_month)
+                if calendar_year < 9999 else None
+            )
+            calendar_heading = str(calendar_year)
+        else:
+            previous_year, previous_month = (
+                (calendar_year - 1, 12) if calendar_month == 1 else (calendar_year, calendar_month - 1)
+            )
+            next_year, next_month = (
+                (calendar_year + 1, 1) if calendar_month == 12 else (calendar_year, calendar_month + 1)
+            )
+            previous_url = (
+                url_for("scheduled_events", calendar_view="month", year=previous_year, month=previous_month)
+                if previous_year >= 1 else None
+            )
+            next_url = (
+                url_for("scheduled_events", calendar_view="month", year=next_year, month=next_month)
+                if next_year <= 9999 else None
+            )
+            calendar_heading = f"{month_names[calendar_month - 1]} {calendar_year}"
+
         return render_template(
             "scheduled_events.html",
             scheduled_events=planned_events,
@@ -974,6 +1054,15 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             planned_count=len(planned_events),
             completed_count=len(completed_events),
             event_types=EVENT_TYPES,
+            calendar_view=calendar_view,
+            calendar_year=calendar_year,
+            calendar_month=calendar_month,
+            calendar_months=calendar_months,
+            calendar_heading=calendar_heading,
+            calendar_weekdays=("Pon", "Wt", "Śr", "Czw", "Pt", "Sob", "Niedz"),
+            previous_calendar_url=previous_url,
+            next_calendar_url=next_url,
+            month_names=month_names,
         )
 
     @app.route("/scheduled/new", methods=["GET", "POST"])
