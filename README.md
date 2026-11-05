@@ -75,6 +75,8 @@ Pełna dokumentacja: [CONFIG.md](CONFIG.md), [CONFIG_EXAMPLES.md](CONFIG_EXAMPLE
 ## Dostępne funkcje
 
 - wpisywanie rekordów napraw i interwencji,
+- planowanie przeglądów, interwencji i innych zdarzeń z możliwością ustawienia powtarzalności w dniach, tygodniach i miesiącach,
+- dashboard z listą zaplanowanych oraz wykonanych zdarzeń oraz alertami o zbliżających się terminach,
 - automatyczne wyliczanie roku, tygodnia, pozycji w tygodniu, czasu wykluczenia z produkcji i kosztu łącznego,
 - filtrowanie rekordów po maszynie, rodzaju zdarzenia, zakresie dat i słowach z opisu,
 - podgląd poprzednich wpisów dla wybranej maszyny,
@@ -120,6 +122,30 @@ dodać załączniki, między innymi przez przeciągnięcie plików, wybór z dys
 wklejenie ze schowka. Podczas uzupełniania danych maszyny formularz może
 wyświetlić historię jej wcześniejszych wpisów. Rok, tydzień, kolejność wpisu,
 czas przestoju i koszt łączny są wyliczane automatycznie.
+
+### Planowanie zdarzeń
+
+Strona **Planowanie** (`/scheduled` / `/planowanie`) pokazuje liczbę zdarzeń
+zaplanowanych i zrealizowanych oraz oddzielne listy harmonogramu i historii
+wykonania. Formularz tworzenia znajduje się na osobnej stronie dostępnej przez
+przycisk **Zaplanuj nowe zdarzenie** (`/scheduled/new`). Zdarzenie zawiera
+maszynę, typ, numer seryjny, datę, rodzaj i opis, a także pola przyczyny, sposobu
+naprawy lub wykonania prac, części do wymiany i uwag. Można ustawić powtarzanie
+w dniach, tygodniach lub miesiącach. Szczegóły rekordu pokazują wszystkie
+wprowadzone informacje, a dostępne akcje pozwalają go usunąć lub oznaczyć jako
+wykonany. Oznaczenie zdarzenia jako wykonanego tworzy powiązany rekord w
+głównym rejestrze. Maszyna, rodzaj zdarzenia, opis, przyczyna, sposób naprawy,
+części, uwagi i planowana data są kopiowane do odpowiadających im pól rejestru;
+data wykonania trafia do pola daty naprawienia/interwencji. Starsze zdarzenia
+już oznaczone jako wykonane są dodawane do rejestru przy aktualizacji aplikacji.
+Po wykonaniu zdarzenia cyklicznego jego wykonana kopia trafia do historii i
+rejestru, a zaplanowane zdarzenie pozostaje w harmonogramie z następnym terminem
+wyliczonym według ustawionego interwału. Jednorazowe zdarzenia są przenoszone do
+historii po wykonaniu.
+
+Na stronie głównej aplikacja wyświetla alerty o zdarzeniach, które osiągnęły
+termin wykonania, dopóki nie zostaną oznaczone jako wykonane lub przeniesione na
+inną datę.
 
 ### Import / Export
 

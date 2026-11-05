@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import calendar
 import io
 import json
 import secrets
 import sqlite3
 import zipfile
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -207,6 +208,25 @@ CREATE TABLE IF NOT EXISTS user_activity_log (
     ip_address TEXT,
     created_at TEXT NOT NULL,
     FOREIGN KEY(user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS scheduled_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    machine_id INTEGER NOT NULL,
+    repair_record_id INTEGER,
+    event_type TEXT NOT NULL,
+    description TEXT NOT NULL,
+    cause TEXT,
+    repair_method TEXT,
+    replaced_parts TEXT,
+    notes TEXT,
+    planned_at TEXT NOT NULL,
+    repeat_interval INTEGER NOT NULL DEFAULT 0,
+    repeat_unit TEXT NOT NULL DEFAULT 'none',
+    status TEXT NOT NULL DEFAULT 'planned',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY(machine_id) REFERENCES machines(id)
 );
 """
 
@@ -939,6 +959,158 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             flash(str(exc), "error")
         return redirect(url_for("admin_users"))
 
+    @app.route("/scheduled", methods=["GET", "POST"])
+    @app.route("/planowanie", methods=["GET", "POST"])
+    def scheduled_events():
+        if not app.config.get("TESTING") and not user_has_permission("can_view_records"):
+            flash("Brak uprawnień do przeglądania zaplanowanych zdarzeń.", "error")
+            return redirect(url_for("index"))
+        planned_events = get_scheduled_events("planned")
+        completed_events = get_scheduled_events("done")
+        return render_template(
+            "scheduled_events.html",
+            scheduled_events=planned_events,
+            completed_events=completed_events,
+            planned_count=len(planned_events),
+            completed_count=len(completed_events),
+            event_types=EVENT_TYPES,
+        )
+
+    @app.route("/scheduled/new", methods=["GET", "POST"])
+    @app.route("/planowanie/nowe", methods=["GET", "POST"])
+    def new_scheduled_event():
+        if not app.config.get("TESTING") and not user_has_permission("can_create_records"):
+            flash("Brak uprawnień do planowania zdarzeń.", "error")
+            return redirect(url_for("index"))
+        if request.method == "POST":
+            try:
+                save_scheduled_event(request.form)
+                flash("Zdarzenie zostało zaplanowane.", "success")
+                return redirect(url_for("scheduled_events"))
+            except ValueError as exc:
+                flash(str(exc), "error")
+        return render_template(
+            "new_scheduled_event.html",
+            machine_names=list_machine_names(),
+            event_types=EVENT_TYPES,
+        )
+
+    @app.route("/scheduled/<int:event_id>/done", methods=["POST"])
+    @app.route("/planowanie/<int:event_id>/done", methods=["POST"])
+    def scheduled_event_done(event_id: int):
+        if not app.config.get("TESTING") and not user_has_permission("can_edit_records"):
+            flash("Brak uprawnień do aktualizacji zaplanowanych zdarzeń.", "error")
+            return redirect(url_for("scheduled_events"))
+        try:
+            record_id, created, next_planned_at = complete_scheduled_event(
+                event_id,
+                request.form.get("expected_planned_at"),
+            )
+        except ValueError as exc:
+            flash(str(exc), "error")
+            return redirect(url_for("scheduled_events"))
+        if created:
+            if next_planned_at:
+                flash(
+                    f"Wykonano zdarzenie cykliczne i dodano rekord #{record_id} do rejestru. "
+                    f"Następny termin: {format_datetime(next_planned_at)}.",
+                    "success",
+                )
+            else:
+                flash(f"Zdarzenie oznaczono jako wykonane i dodano do rejestru jako rekord #{record_id}.", "success")
+        else:
+            flash("Zdarzenie było już wykonane i powiązane z rejestrem.", "info")
+        return redirect(url_for("scheduled_events"))
+
+    @app.route("/scheduled/<int:event_id>/delete", methods=["POST"])
+    @app.route("/planowanie/<int:event_id>/delete", methods=["POST"])
+    def scheduled_event_delete(event_id: int):
+        if not app.config.get("TESTING") and not user_has_permission("can_delete_records"):
+            flash("Brak uprawnień do usuwania zaplanowanych zdarzeń.", "error")
+            return redirect(url_for("scheduled_events"))
+        delete_scheduled_event(event_id)
+        flash("Zaplanowane zdarzenie zostało usunięte.", "success")
+        return redirect(url_for("scheduled_events"))
+
+    @app.route("/scheduled/<int:event_id>/edit", methods=["POST"])
+    @app.route("/planowanie/<int:event_id>/edit", methods=["POST"])
+    def scheduled_event_edit(event_id: int):
+        if not app.config.get("TESTING") and not user_has_permission("can_edit_records"):
+            flash("Brak uprawnień do edycji zaplanowanych zdarzeń.", "error")
+            return redirect(url_for("scheduled_events"))
+        try:
+            update_scheduled_event(event_id, request.form)
+            flash("Zdarzenie zostało zaktualizowane.", "success")
+        except ValueError as exc:
+            flash(str(exc), "error")
+        return redirect(url_for("scheduled_events"))
+
+    @app.route("/api/scheduled-events", methods=["GET", "POST"])
+    def api_scheduled_events():
+        if request.method == "POST":
+            if not app.config.get("TESTING") and not user_has_permission("can_create_records"):
+                return jsonify({"error": "Brak uprawnień do tworzenia planu."}), 403
+            try:
+                event_id = save_scheduled_event(request.form)
+                return jsonify({"id": event_id, "status": "created"}), 201
+            except ValueError as exc:
+                return jsonify({"error": str(exc)}), 400
+        rows = get_scheduled_events()
+        return jsonify([{
+            "id": row["id"],
+            "event_type": row["event_type"],
+            "description": row["description"],
+            "cause": row["cause"],
+            "repair_method": row["repair_method"],
+            "replaced_parts": row["replaced_parts"],
+            "notes": row["notes"],
+            "planned_at": row["planned_at"],
+            "status": row["status"],
+            "machine": row["name"],
+            "machine_type": row["machine_type"],
+            "serial_number": row["serial_number"],
+            "repeat_interval": row["repeat_interval"],
+            "repeat_unit": row["repeat_unit"],
+        } for row in rows])
+
+    @app.route("/api/scheduled-events/<int:event_id>", methods=["GET", "PATCH", "DELETE"])
+    def api_scheduled_event_detail(event_id: int):
+        event = get_db().execute(
+            "SELECT se.*, m.name, m.machine_type, m.serial_number FROM scheduled_events se JOIN machines m ON m.id = se.machine_id WHERE se.id = ?",
+            (event_id,),
+        ).fetchone()
+        if event is None:
+            return jsonify({"error": "Zdarzenie nie istnieje."}), 404
+        if request.method == "GET":
+            return jsonify({
+                "id": event["id"],
+                "event_type": event["event_type"],
+                "description": event["description"],
+                "cause": event["cause"],
+                "repair_method": event["repair_method"],
+                "replaced_parts": event["replaced_parts"],
+                "notes": event["notes"],
+                "planned_at": event["planned_at"],
+                "status": event["status"],
+                "machine": event["name"],
+                "machine_type": event["machine_type"],
+                "serial_number": event["serial_number"],
+            })
+        if request.method == "PATCH":
+            if not app.config.get("TESTING") and not user_has_permission("can_edit_records"):
+                return jsonify({"error": "Brak uprawnień do aktualizacji."}), 403
+            try:
+                update_scheduled_event(event_id, request.form or request.get_json(silent=True) or {})
+                return jsonify({"status": "updated"})
+            except ValueError as exc:
+                return jsonify({"error": str(exc)}), 400
+        if request.method == "DELETE":
+            if not app.config.get("TESTING") and not user_has_permission("can_delete_records"):
+                return jsonify({"error": "Brak uprawnień do usuwania."}), 403
+            delete_scheduled_event(event_id)
+            return jsonify({"status": "deleted"})
+        return jsonify({"error": "Nieobsługiwane żądanie."}), 405
+
     @app.route("/", methods=["GET", "POST"])
     def index():
         if request.method == "POST":
@@ -960,11 +1132,18 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
                 limit = max(1, min(int(raw_limit or 20), 500))
             except (ValueError, TypeError):
                 limit = 20
+        due_events = get_due_scheduled_events()
+        for event in due_events:
+            flash(
+                f"Maszyna {event['name']} ma zaplanowane {event['event_type'].lower()} na {format_datetime(event['planned_at'])}.",
+                "info",
+            )
         return render_template(
             "index.html",
             latest_records=query_records_latest(None if limit == "all" else limit),
             event_types=EVENT_TYPES,
             limit=limit,
+            due_events=due_events,
         )
 
     @app.route("/new", methods=["GET", "POST"])
@@ -1441,6 +1620,17 @@ def save_attachment(record_id: int, file_storage: Any) -> None:
 def init_db() -> None:
     db = get_db()
     db.executescript(SCHEMA)
+    scheduled_columns = {
+        row["name"] for row in db.execute("PRAGMA table_info(scheduled_events)").fetchall()
+    }
+    for column, column_type in (
+        ("repair_record_id", "INTEGER"),
+        ("cause", "TEXT"),
+        ("repair_method", "TEXT"),
+        ("replaced_parts", "TEXT"),
+    ):
+        if column not in scheduled_columns:
+            db.execute(f"ALTER TABLE scheduled_events ADD COLUMN {column} {column_type}")
     activity_columns = {
         row["name"] for row in db.execute("PRAGMA table_info(user_activity_log)").fetchall()
     }
@@ -1481,6 +1671,10 @@ def init_db() -> None:
                 "UPDATE repair_records SET machine_id = ? WHERE machine_id = ?",
                 (canonical_id, int(machine["id"])),
             )
+            db.execute(
+                "UPDATE scheduled_events SET machine_id = ? WHERE machine_id = ?",
+                (canonical_id, int(machine["id"])),
+            )
             db.execute("DELETE FROM machines WHERE id = ?", (int(machine["id"]),))
     db.execute(
         """
@@ -1489,6 +1683,14 @@ def init_db() -> None:
         WHERE lower(trim(serial_number)) NOT IN ('', 'brak', '-', 'n/a', 'nie dotyczy')
         """
     )
+    db.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_scheduled_events_repair_record_id
+        ON scheduled_events(repair_record_id)
+        WHERE repair_record_id IS NOT NULL
+        """
+    )
+    materialize_completed_scheduled_events()
     db.commit()
 
 
@@ -1537,6 +1739,160 @@ def next_week_sequence(record_year: int, record_week: int) -> int:
         (record_year, record_week),
     ).fetchone()
     return int(row["max_sequence"]) + 1
+
+
+def create_record_from_scheduled_event(
+    event: sqlite3.Row,
+    repaired_at: datetime | None,
+) -> int:
+    occurrence_at = parse_datetime(event["planned_at"])
+    if occurrence_at is None:
+        raise ValueError(f"Zdarzenie planowane #{event['id']} ma nieprawidłową datę.")
+    record_year, record_week, _ = occurrence_at.isocalendar()
+    cursor = get_db().execute(
+        """
+        INSERT INTO repair_records(
+            record_year, record_week, week_sequence, machine_id, event_type,
+            description, cause, repair_method, replaced_parts, participants, occurrence_at,
+            repaired_at, machine_mtg, downtime_hours, labor_cost, material_cost,
+            spare_parts_cost, service_cost, total_cost, notes, created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, '', ?, 0, 0, 0, 0, 0, ?, ?)
+        """,
+        (
+            record_year,
+            record_week,
+            next_week_sequence(record_year, record_week),
+            int(event["machine_id"]),
+            str(event["event_type"]),
+            str(event["description"]),
+            event["cause"],
+            event["repair_method"],
+            event["replaced_parts"],
+            occurrence_at.isoformat(sep=" ", timespec="minutes"),
+            repaired_at.isoformat(sep=" ", timespec="minutes") if repaired_at else None,
+            calculate_downtime_hours(occurrence_at, repaired_at),
+            event["notes"],
+            datetime.now(UTC).isoformat(timespec="seconds"),
+        ),
+    )
+    return int(cursor.lastrowid)
+
+
+def materialize_completed_scheduled_events() -> None:
+    db = get_db()
+    events = db.execute(
+        """
+        SELECT * FROM scheduled_events
+        WHERE status = 'done' AND repair_record_id IS NULL
+        ORDER BY id
+        """
+    ).fetchall()
+    for event in events:
+        record_id = create_record_from_scheduled_event(event, None)
+        db.execute(
+            "UPDATE scheduled_events SET repair_record_id = ? WHERE id = ?",
+            (record_id, int(event["id"])),
+        )
+
+
+def complete_scheduled_event(
+    event_id: int,
+    expected_planned_at: str | None = None,
+) -> tuple[int, bool, str | None]:
+    db = get_db()
+    db.execute("BEGIN IMMEDIATE")
+    event = db.execute(
+        "SELECT * FROM scheduled_events WHERE id = ?",
+        (event_id,),
+    ).fetchone()
+    if event is None:
+        db.rollback()
+        raise ValueError(f"Zaplanowane zdarzenie #{event_id} nie istnieje.")
+    if expected_planned_at:
+        expected = parse_datetime(expected_planned_at)
+        current = parse_datetime(event["planned_at"])
+        if expected is None or current is None or expected != current:
+            db.rollback()
+            raise ValueError("Termin tego zdarzenia został już zaktualizowany. Odśwież harmonogram.")
+    if event["repair_record_id"] is not None:
+        record_id = int(event["repair_record_id"])
+        db.commit()
+        return record_id, False, None
+
+    completed_at = datetime.now().replace(second=0, microsecond=0)
+    record_id = create_record_from_scheduled_event(event, completed_at)
+    next_planned_at = next_scheduled_occurrence(
+        parse_datetime(event["planned_at"]),
+        int(event["repeat_interval"]),
+        str(event["repeat_unit"]),
+    )
+    updated_at = datetime.now(UTC).isoformat(timespec="seconds")
+    if next_planned_at:
+        db.execute(
+            """
+            INSERT INTO scheduled_events(
+                machine_id, repair_record_id, event_type, description, cause,
+                repair_method, replaced_parts, notes, planned_at, repeat_interval,
+                repeat_unit, status, created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'done', ?, ?)
+            """,
+            (
+                int(event["machine_id"]),
+                record_id,
+                event["event_type"],
+                event["description"],
+                event["cause"],
+                event["repair_method"],
+                event["replaced_parts"],
+                event["notes"],
+                event["planned_at"],
+                int(event["repeat_interval"]),
+                event["repeat_unit"],
+                updated_at,
+                updated_at,
+            ),
+        )
+        db.execute(
+            """
+            UPDATE scheduled_events
+            SET planned_at = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (
+                next_planned_at.isoformat(sep=" ", timespec="minutes"),
+                updated_at,
+                event_id,
+            ),
+        )
+    else:
+        db.execute(
+            """
+            UPDATE scheduled_events
+            SET status = 'done', repair_record_id = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (record_id, updated_at, event_id),
+        )
+    db.commit()
+    log_user_activity(
+        "create_record",
+        f"Utworzono rekord #{record_id} z zaplanowanego zdarzenia #{event_id}.",
+        target_type="record",
+        target_id=record_id,
+    )
+    log_user_activity(
+        "complete_scheduled_event",
+        f"Zrealizowano zdarzenie #{event_id} jako rekord rejestru #{record_id}.",
+        target_type="scheduled_event",
+        target_id=event_id,
+    )
+    return (
+        record_id,
+        True,
+        next_planned_at.isoformat(sep=" ", timespec="minutes") if next_planned_at else None,
+    )
 
 
 def save_record(form: dict[str, Any]) -> int:
@@ -1595,6 +1951,186 @@ def save_record(form: dict[str, Any]) -> int:
         target_id=int(cursor.lastrowid),
     )
     return int(cursor.lastrowid)
+
+
+def next_scheduled_occurrence(
+    planned_at: datetime | None,
+    interval: int,
+    unit: str,
+) -> datetime | None:
+    if planned_at is None:
+        return None
+    if interval <= 0 or not unit or unit == "none":
+        return None
+    if unit == "days":
+        return planned_at + timedelta(days=interval)
+    if unit == "weeks":
+        return planned_at + timedelta(weeks=interval)
+    if unit != "months":
+        return None
+    month_index = planned_at.year * 12 + planned_at.month - 1 + interval
+    year, month = divmod(month_index, 12)
+    month += 1
+    day = min(planned_at.day, calendar.monthrange(year, month)[1])
+    return planned_at.replace(year=year, month=month, day=day)
+
+
+def get_scheduled_events(status: str | None = None) -> list[sqlite3.Row]:
+    db = get_db()
+    query = """
+        SELECT se.*, m.name, m.machine_type, m.serial_number
+        FROM scheduled_events se
+        JOIN machines m ON m.id = se.machine_id
+        WHERE 1 = 1
+    """
+    params: list[Any] = []
+    if status is not None:
+        query += " AND se.status = ?"
+        params.append(status)
+    query += " ORDER BY se.planned_at ASC, se.id DESC"
+    return list(db.execute(query, params).fetchall())
+
+
+def get_due_scheduled_events() -> list[sqlite3.Row]:
+    now = datetime.now(UTC)
+    db = get_db()
+    rows = db.execute(
+        """
+        SELECT se.*, m.name, m.machine_type, m.serial_number
+        FROM scheduled_events se
+        JOIN machines m ON m.id = se.machine_id
+        WHERE se.status = 'planned' AND date(se.planned_at) <= date(?)
+        ORDER BY se.planned_at ASC, se.id DESC
+        """,
+        (now.date().isoformat(),),
+    ).fetchall()
+    return list(rows)
+
+
+def save_scheduled_event(form: dict[str, Any]) -> int:
+    planned_at = parse_datetime(form.get("planned_at")) or parse_datetime(form.get("date"))
+    if not planned_at:
+        raise ValueError("Data planowanego zdarzenia jest wymagana.")
+    machine_name = str(form.get("machine_name", "")).strip()
+    machine_type = str(form.get("machine_type", "")).strip()
+    serial_number = str(form.get("serial_number", "")).strip()
+    if not all([machine_name, machine_type, serial_number]):
+        raise ValueError("Maszyna, typ i numer seryjny są wymagane.")
+    repeat_interval = int(form.get("repeat_interval") or 0)
+    repeat_unit = str(form.get("repeat_unit") or "none").strip().lower()
+    if repeat_interval < 0:
+        raise ValueError("Interwał powtarzania musi być nieujemny.")
+    if repeat_unit not in {"none", "days", "weeks", "months"}:
+        repeat_unit = "none"
+    db = get_db()
+    machine_id = get_or_create_machine(machine_name, machine_type, serial_number)
+    cursor = db.execute(
+        """
+        INSERT INTO scheduled_events(
+            machine_id, event_type, description, cause, repair_method, replaced_parts, notes, planned_at,
+            repeat_interval, repeat_unit, status, created_at, updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            machine_id,
+            str(form.get("event_type", "")).strip() or "Interwencja",
+            str(form.get("description", "")).strip(),
+            str(form.get("cause", "")).strip() or None,
+            str(form.get("repair_method", "")).strip() or None,
+            str(form.get("replaced_parts", "")).strip() or None,
+            str(form.get("notes", "")).strip() or None,
+            planned_at.isoformat(sep=" ", timespec="minutes"),
+            repeat_interval,
+            repeat_unit,
+            str(form.get("status") or "planned").strip() or "planned",
+            datetime.now(UTC).isoformat(timespec="seconds"),
+            datetime.now(UTC).isoformat(timespec="seconds"),
+        ),
+    )
+    db.commit()
+    log_user_activity(
+        "create_scheduled_event",
+        f"Zaplanowano zdarzenie #{cursor.lastrowid} dla maszyny {machine_name}.",
+        target_type="scheduled_event",
+        target_id=int(cursor.lastrowid),
+    )
+    return int(cursor.lastrowid)
+
+
+def update_scheduled_event(event_id: int, form: dict[str, Any]) -> None:
+    description_value = str(form.get("description", "")).strip()
+    if not description_value:
+        raise ValueError("Opis zdarzenia jest wymagany.")
+    planned_at = parse_datetime(form.get("planned_at")) or parse_datetime(form.get("date"))
+    if not planned_at:
+        raise ValueError("Data planowanego zdarzenia jest wymagana.")
+    repeat_interval = max(0, int(form.get("repeat_interval") or 0))
+    repeat_unit = str(form.get("repeat_unit") or "none").strip().lower()
+    if repeat_unit not in {"none", "days", "weeks", "months"}:
+        repeat_unit = "none"
+    machine_name = str(form.get("machine_name", "")).strip()
+    if machine_name:
+        machine_type = str(form.get("machine_type", "")).strip()
+        serial_number = str(form.get("serial_number", "")).strip()
+        if not all([machine_type, serial_number]):
+            raise ValueError("Typ i numer seryjny są wymagane, jeśli zmieniasz maszynę.")
+        machine_id = get_or_create_machine(machine_name, machine_type, serial_number)
+        db = get_db()
+        db.execute(
+            "UPDATE scheduled_events SET machine_id = ?, event_type = ?, description = ?, cause = ?, repair_method = ?, replaced_parts = ?, notes = ?, planned_at = ?, repeat_interval = ?, repeat_unit = ?, updated_at = ? WHERE id = ?",
+            (
+                machine_id,
+                str(form.get("event_type", "")).strip() or "Interwencja",
+                str(form.get("description", "")).strip(),
+                str(form.get("cause", "")).strip() or None,
+                str(form.get("repair_method", "")).strip() or None,
+                str(form.get("replaced_parts", "")).strip() or None,
+                str(form.get("notes", "")).strip() or None,
+                planned_at.isoformat(sep=" ", timespec="minutes"),
+                repeat_interval,
+                repeat_unit,
+                datetime.now(UTC).isoformat(timespec="seconds"),
+                event_id,
+            ),
+        )
+    else:
+        db = get_db()
+        db.execute(
+            "UPDATE scheduled_events SET event_type = ?, description = ?, cause = ?, repair_method = ?, replaced_parts = ?, notes = ?, planned_at = ?, repeat_interval = ?, repeat_unit = ?, updated_at = ? WHERE id = ?",
+            (
+                str(form.get("event_type", "")).strip() or "Interwencja",
+                str(form.get("description", "")).strip(),
+                str(form.get("cause", "")).strip() or None,
+                str(form.get("repair_method", "")).strip() or None,
+                str(form.get("replaced_parts", "")).strip() or None,
+                str(form.get("notes", "")).strip() or None,
+                planned_at.isoformat(sep=" ", timespec="minutes"),
+                repeat_interval,
+                repeat_unit,
+                datetime.now(UTC).isoformat(timespec="seconds"),
+                event_id,
+            ),
+        )
+    db.commit()
+    log_user_activity(
+        "update_scheduled_event",
+        f"Zaktualizowano zaplanowane zdarzenie #{event_id}.",
+        target_type="scheduled_event",
+        target_id=event_id,
+    )
+
+
+def delete_scheduled_event(event_id: int) -> None:
+    db = get_db()
+    db.execute("DELETE FROM scheduled_events WHERE id = ?", (event_id,))
+    db.commit()
+    log_user_activity(
+        "delete_scheduled_event",
+        f"Usunięto zaplanowane zdarzenie #{event_id}.",
+        target_type="scheduled_event",
+        target_id=event_id,
+    )
 
 
 def query_records_latest(limit: int | str | None = 20) -> list[sqlite3.Row]:

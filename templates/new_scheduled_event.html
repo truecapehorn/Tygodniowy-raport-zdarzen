@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+{% block title %}Nowe zdarzenie planowane – Tygodniowy raport zdarzeń DUR{% endblock %}
+{% block content %}
+<style>
+    .scheduled-form-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 0.75rem;
+    }
+    .scheduled-form-grid textarea { min-height: 120px; }
+    .scheduled-third-row-start { grid-column: 1; }
+    .scheduled-notes-field { grid-column: 1 / -1; }
+    @media (max-width: 900px) {
+        .scheduled-form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 560px) {
+        .scheduled-form-grid { grid-template-columns: minmax(0, 1fr); }
+        .scheduled-notes-field { grid-column: auto; }
+    }
+</style>
+<div class="page-title">Nowe zdarzenie planowane <small>Wprowadź dane zaplanowanego przeglądu lub interwencji</small></div>
+
+<div class="card">
+    <div class="card-title">Dane zdarzenia</div>
+    <form method="post" action="{{ url_for('new_scheduled_event') }}">
+        <div class="scheduled-form-grid">
+            <div class="field">
+                <label for="scheduled-machine-name">Maszyna *</label>
+                <input id="scheduled-machine-name" name="machine_name" list="scheduled-machine-list" autocomplete="off" placeholder="Nazwa maszyny" required>
+                <datalist id="scheduled-machine-list">
+                    {% for machine in machine_names %}
+                    <option value="{{ machine }}"></option>
+                    {% endfor %}
+                </datalist>
+            </div>
+            <div class="field">
+                <label for="scheduled-machine-type">Typ *</label>
+                <input id="scheduled-machine-type" name="machine_type" list="scheduled-machine-type-list" autocomplete="off" placeholder="Typ maszyny" required>
+                <datalist id="scheduled-machine-type-list"></datalist>
+            </div>
+            <div class="field">
+                <label for="scheduled-serial-number">Numer *</label>
+                <input id="scheduled-serial-number" name="serial_number" list="scheduled-serial-number-list" autocomplete="off" placeholder="Nr seryjny / fabryczny" required>
+                <datalist id="scheduled-serial-number-list"></datalist>
+            </div>
+            <div class="field">
+                <label for="event_type">Rodzaj zdarzenia *</label>
+                <select id="event_type" name="event_type" required>
+                    {% for kind in event_types %}
+                    <option value="{{ kind }}">{{ kind }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="field">
+                <label for="planned_at">Data planowania *</label>
+                <div class="datetime-input">
+                    <input id="planned_at" name="planned_at" type="text" placeholder="dd-mm-rrrr gg:mm" pattern="[0-9]{2}-[0-9]{2}-[0-9]{4} [0-9]{2}:[0-9]{2}" maxlength="16" required title="Wpisz datę i godzinę w formacie dd-mm-rrrr gg:mm">
+                    <button type="button" class="datetime-picker" onclick="openScheduledDateTimePicker(this)" aria-label="Wybierz datę i godzinę planowania">
+                        <svg class="datetime-picker-icon" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M4 1a1 1 0 0 1 1 1v1h6V2a1 1 0 0 1 2 0v1h1a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h1V2a1 1 0 0 1 1-1ZM3 6v7h10V6H3Zm2 2h2v2H5V8Z"/></svg>
+                    </button>
+                    <input type="datetime-local" class="datetime-picker-input" oninput="syncScheduledDisplayDateTime(this)" onchange="syncScheduledDisplayDateTime(this)" tabindex="-1" aria-hidden="true">
+                </div>
+            </div>
+            <div class="field">
+                <label for="repeat_unit">Powtarzanie</label>
+                <select id="repeat_unit" name="repeat_unit">
+                    <option value="none">Brak</option>
+                    <option value="days">Dni</option>
+                    <option value="weeks">Tygodnie</option>
+                    <option value="months">Miesiące</option>
+                </select>
+            </div>
+            <div class="field">
+                <label for="repeat_interval">Interwał powtarzania</label>
+                <input id="repeat_interval" name="repeat_interval" type="number" min="0" value="0">
+            </div>
+            <div class="field scheduled-third-row-start">
+                <label for="description">Opis zdarzenia *</label>
+                <textarea id="description" name="description" placeholder="Opisz planowany przegląd lub interwencję." required></textarea>
+            </div>
+            <div class="field">
+                <label for="cause">Przyczyna</label>
+                <textarea id="cause" name="cause" placeholder="Przyczyna lub powód zaplanowania zdarzenia"></textarea>
+            </div>
+            <div class="field">
+                <label for="repair_method">Sposób naprawy / wykonania</label>
+                <textarea id="repair_method" name="repair_method" placeholder="Planowany sposób wykonania prac"></textarea>
+            </div>
+            <div class="field">
+                <label for="replaced_parts">Części do wymiany</label>
+                <textarea id="replaced_parts" name="replaced_parts" placeholder="Wymieniane lub potrzebne części"></textarea>
+            </div>
+            <div class="field scheduled-notes-field">
+                <label for="notes">Uwagi</label>
+                <textarea id="notes" name="notes" placeholder="Dodatkowe informacje"></textarea>
+            </div>
+        </div>
+        <div id="scheduled-machine-lookup-error" class="text-muted" role="status" aria-live="polite"></div>
+        <div class="actions">
+            <button type="submit" class="btn btn-primary">Zapisz plan</button>
+            <a href="{{ url_for('scheduled_events') }}" class="btn btn-outline">Anuluj</a>
+        </div>
+    </form>
+</div>
+
+<script>
+const scheduledMachineInput = document.getElementById('scheduled-machine-name');
+const scheduledMachineTypeInput = document.getElementById('scheduled-machine-type');
+const scheduledSerialInput = document.getElementById('scheduled-serial-number');
+const scheduledMachineTypeList = document.getElementById('scheduled-machine-type-list');
+const scheduledSerialList = document.getElementById('scheduled-serial-number-list');
+const scheduledMachineLookupError = document.getElementById('scheduled-machine-lookup-error');
+let scheduledMachineLookupId = 0;
+
+function scheduledNativeDateTime(value) {
+    const text = String(value ?? '').trim();
+    const local = text.match(/^(\d{2})-(\d{2})-(\d{4}) (\d{2}):(\d{2})$/);
+    if (local) return `${local[3]}-${local[2]}-${local[1]}T${local[4]}:${local[5]}`;
+    const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
+    return iso ? `${iso[1]}-${iso[2]}-${iso[3]}T${iso[4]}:${iso[5]}` : '';
+}
+
+function openScheduledDateTimePicker(button) {
+    const wrapper = button.closest('.datetime-input');
+    const display = wrapper.querySelector('input[type="text"]');
+    const picker = wrapper.querySelector('.datetime-picker-input');
+    picker.value = scheduledNativeDateTime(display.value);
+    if (typeof picker.showPicker === 'function') {
+        picker.showPicker();
+    } else {
+        picker.focus();
+        picker.click();
+    }
+}
+
+function syncScheduledDisplayDateTime(picker) {
+    const match = picker.value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
+    if (match) {
+        picker.closest('.datetime-input').querySelector('input[type="text"]').value =
+            `${match[3]}-${match[2]}-${match[1]} ${match[4]}:${match[5]}`;
+    }
+}
+
+document.getElementById('planned_at').addEventListener('input', (inputEvent) => {
+    const picker = inputEvent.currentTarget.closest('.datetime-input').querySelector('.datetime-picker-input');
+    picker.value = scheduledNativeDateTime(inputEvent.currentTarget.value);
+});
+
+function fillScheduledDatalist(list, values) {
+    list.replaceChildren(...values.map((value) => {
+        const option = document.createElement('option');
+        option.value = value;
+        return option;
+    }));
+}
+
+async function refreshScheduledMachineOptions({ resetDependentFields = false } = {}) {
+    const lookupId = ++scheduledMachineLookupId;
+    scheduledMachineLookupError.textContent = '';
+    if (resetDependentFields) {
+        scheduledMachineTypeInput.value = '';
+        scheduledSerialInput.value = '';
+        fillScheduledDatalist(scheduledMachineTypeList, []);
+        fillScheduledDatalist(scheduledSerialList, []);
+    }
+
+    const params = new URLSearchParams({
+        machine: scheduledMachineInput.value.trim(),
+        machine_type: scheduledMachineTypeInput.value.trim(),
+    });
+    if (!params.get('machine')) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/machines?${params}`);
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        const data = await response.json();
+        if (lookupId !== scheduledMachineLookupId) {
+            return;
+        }
+        fillScheduledDatalist(scheduledMachineTypeList, data.types || []);
+        fillScheduledDatalist(scheduledSerialList, data.serial_numbers || []);
+    } catch (error) {
+        if (lookupId === scheduledMachineLookupId) {
+            scheduledMachineLookupError.textContent = 'Nie udało się pobrać typów i numerów maszyny. Spróbuj ponownie.';
+            console.error('Błąd pobierania danych maszyny:', error);
+        }
+    }
+}
+
+scheduledMachineInput.addEventListener('change', () => {
+    refreshScheduledMachineOptions({ resetDependentFields: true });
+});
+scheduledMachineTypeInput.addEventListener('focus', () => refreshScheduledMachineOptions());
+scheduledMachineTypeInput.addEventListener('change', () => {
+    scheduledSerialInput.value = '';
+    fillScheduledDatalist(scheduledSerialList, []);
+    refreshScheduledMachineOptions();
+});
+scheduledSerialInput.addEventListener('focus', () => refreshScheduledMachineOptions());
+</script>
+{% endblock %}

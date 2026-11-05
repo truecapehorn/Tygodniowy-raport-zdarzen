@@ -11,7 +11,7 @@ from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate
 from werkzeug.security import generate_password_hash
 
-from app import PageNumberCanvas, create_app, get_db, log_user_activity
+from app import PageNumberCanvas, create_app, get_db, init_db, log_user_activity
 
 
 class RepairReportAppTests(unittest.TestCase):
@@ -233,6 +233,310 @@ class RepairReportAppTests(unittest.TestCase):
         notes_rows = list(notes_workbook.active.iter_rows(values_only=True))
         self.assertEqual(len(notes_rows), 2)
         self.assertEqual(notes_rows[1][4], "Linia B")
+
+    def test_scheduled_event_form_uses_existing_machine_lookup(self):
+        self.client.post(
+            "/",
+            data={
+                "occurrence_at": "2026-08-30T08:00",
+                "machine_name": "Prasa A",
+                "machine_type": "Hydrauliczna",
+                "serial_number": "H-101",
+                "event_type": "Awaria",
+                "description": "Testowa naprawa",
+            },
+        )
+
+        page = self.client.get("/scheduled/new")
+        self.assertEqual(page.status_code, 200)
+        html = page.get_data(as_text=True)
+        self.assertIn('id="scheduled-machine-list"', html)
+        self.assertIn('id="scheduled-machine-type-list"', html)
+        self.assertIn('id="scheduled-serial-number-list"', html)
+        self.assertIn('value="Prasa A"', html)
+        self.assertIn("fetch(`/api/machines?${params}`)", html)
+        self.assertIn('id="planned_at" name="planned_at" type="text"', html)
+        self.assertIn('placeholder="dd-mm-rrrr gg:mm"', html)
+        self.assertIn('type="datetime-local" class="datetime-picker-input"', html)
+        self.assertIn("grid-template-columns: repeat(4, minmax(0, 1fr))", html)
+        self.assertIn('class="field scheduled-third-row-start"', html)
+        self.assertIn('class="field scheduled-notes-field"', html)
+
+        lookup = self.client.get(
+            "/api/machines?machine=Prasa%20A&machine_type=Hydrauliczna"
+        ).get_json()
+        self.assertEqual(lookup["types"], ["Hydrauliczna"])
+        self.assertEqual(lookup["serial_numbers"], ["H-101"])
+
+    def test_scheduled_event_form_fields_and_dashboard_counts(self):
+        with self.client.session_transaction() as session:
+            session["logged_in"] = True
+            session["role"] = "admin"
+
+        response = self.client.post(
+            "/scheduled/new",
+            data={
+                "machine_name": "Prasa B",
+                "machine_type": "Hydrauliczna",
+                "serial_number": "H-202",
+                "event_type": "Przegląd",
+                "planned_at": "2020-12-15T13:45",
+                "repeat_interval": "0",
+                "repeat_unit": "none",
+                "description": "Coroczny przegląd",
+                "cause": "Termin okresowej kontroli",
+                "repair_method": "Sprawdzenie układu hydraulicznego",
+                "replaced_parts": "Filtr oleju",
+                "notes": "Przygotować części",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(response.location, {"/scheduled", "/planowanie"})
+
+        with self.app.app_context():
+            event = get_db().execute(
+                """
+                SELECT description, cause, repair_method, replaced_parts
+                FROM scheduled_events
+                WHERE description = ?
+                """,
+                ("Coroczny przegląd",),
+            ).fetchone()
+        self.assertEqual(
+            tuple(event),
+            (
+                "Coroczny przegląd",
+                "Termin okresowej kontroli",
+                "Sprawdzenie układu hydraulicznego",
+                "Filtr oleju",
+            ),
+        )
+        with self.app.app_context():
+            planned_at = get_db().execute(
+                "SELECT planned_at FROM scheduled_events WHERE description = ?",
+                ("Coroczny przegląd",),
+            ).fetchone()["planned_at"]
+        self.assertEqual(planned_at, "2020-12-15 13:45")
+
+        page = self.client.get("/scheduled")
+        html = page.get_data(as_text=True)
+        self.assertIn("Zaplanuj nowe zdarzenie", html)
+        self.assertIn("15-12-2020 13:45", html)
+        form_page = self.client.get("/scheduled/new").get_data(as_text=True)
+        self.assertIn('id="scheduled-machine-name"', form_page)
+        self.assertIn('placeholder="dd-mm-rrrr gg:mm"', form_page)
+        home_page = self.client.get("/").get_data(as_text=True)
+        self.assertIn("na 15-12-2020 13:45.", home_page)
+        self.assertIn("Zaplanowane zdarzenia</div>\n        <strong style=\"display:block;font-size:2rem;color:var(--accent);\">1", html)
+        self.assertIn("Zrealizowane zdarzenia</div>\n        <strong style=\"display:block;font-size:2rem;color:var(--green);\">0", html)
+        self.assertLess(html.index('id="scheduled-modal-delete-form"'), html.index('id="scheduled-modal-edit-button"'))
+        self.assertIn('id="scheduled-modal-edit-button" type="button"', html)
+        self.assertIn('id="scheduled-modal-edit-form" method="post" style="display:none;"', html)
+        self.assertIn('name="cause"', html)
+        self.assertIn("scheduled-edit-description,\n    .scheduled-edit-notes { grid-column: 1 / -1; }", html)
+        self.assertIn(".scheduled-edit-third { grid-column: span 4; }", html)
+        self.assertIn('class="field scheduled-edit-description"', html)
+        self.assertIn('class="field scheduled-edit-notes"', html)
+
+        with self.app.app_context():
+            event_id = get_db().execute(
+                "SELECT id FROM scheduled_events WHERE description = ?",
+                ("Coroczny przegląd",),
+            ).fetchone()["id"]
+        edit_response = self.client.post(
+            f"/scheduled/{event_id}/edit",
+            data={
+                "machine_name": "Prasa B",
+                "machine_type": "Hydrauliczna",
+                "serial_number": "H-202",
+                "event_type": "Przegląd",
+                "planned_at": "2020-12-16T14:30",
+                "repeat_interval": "0",
+                "repeat_unit": "none",
+                "description": "Przegląd zaktualizowany",
+                "cause": "Nowa przyczyna",
+                "repair_method": "Nowy sposób",
+                "replaced_parts": "Nowy filtr",
+                "notes": "Nowe uwagi",
+            },
+        )
+        self.assertEqual(edit_response.status_code, 302)
+        with self.app.app_context():
+            edited_event = get_db().execute(
+                "SELECT description, cause, planned_at FROM scheduled_events WHERE id = ?",
+                (event_id,),
+            ).fetchone()
+        self.assertEqual(tuple(edited_event), ("Przegląd zaktualizowany", "Nowa przyczyna", "2020-12-16 14:30"))
+        completed_response = self.client.post(f"/scheduled/{event_id}/done")
+        self.assertEqual(completed_response.status_code, 302)
+        main_page = self.client.get("/").get_data(as_text=True)
+        self.assertIn("Przegląd zaktualizowany", main_page)
+        with self.app.app_context():
+            linked_record = get_db().execute(
+                """
+                SELECT r.event_type, r.description, r.cause, r.repair_method,
+                       r.replaced_parts, r.occurrence_at, r.repaired_at,
+                       r.machine_id, se.machine_id AS scheduled_machine_id,
+                       se.repair_record_id, r.id AS record_id
+                FROM scheduled_events se
+                JOIN repair_records r ON r.id = se.repair_record_id
+                WHERE se.id = ?
+                """,
+                (event_id,),
+            ).fetchone()
+            record_count = get_db().execute(
+                "SELECT COUNT(*) FROM repair_records WHERE description = ?",
+                ("Przegląd zaktualizowany",),
+            ).fetchone()[0]
+        self.assertEqual(linked_record["event_type"], "Przegląd")
+        self.assertEqual(linked_record["description"], "Przegląd zaktualizowany")
+        self.assertEqual(linked_record["cause"], "Nowa przyczyna")
+        self.assertEqual(linked_record["repair_method"], "Nowy sposób")
+        self.assertEqual(linked_record["replaced_parts"], "Nowy filtr")
+        self.assertEqual(linked_record["occurrence_at"], "2020-12-16 14:30")
+        self.assertIsNotNone(linked_record["repaired_at"])
+        self.assertEqual(linked_record["machine_id"], linked_record["scheduled_machine_id"])
+        self.assertEqual(linked_record["repair_record_id"], linked_record["record_id"])
+        self.assertEqual(record_count, 1)
+
+        self.client.post(f"/scheduled/{event_id}/done")
+        with self.app.app_context():
+            self.assertEqual(
+                get_db().execute(
+                    "SELECT COUNT(*) FROM repair_records WHERE description = ?",
+                    ("Przegląd zaktualizowany",),
+                ).fetchone()[0],
+                1,
+            )
+        completed_page = self.client.get("/scheduled").get_data(as_text=True)
+        self.assertIn("Zaplanowane zdarzenia</div>\n        <strong style=\"display:block;font-size:2rem;color:var(--accent);\">0", completed_page)
+        self.assertIn("Zrealizowane zdarzenia</div>\n        <strong style=\"display:block;font-size:2rem;color:var(--green);\">1", completed_page)
+
+    def test_existing_completed_scheduled_event_is_added_to_register_once(self):
+        response = self.client.post(
+            "/scheduled/new",
+            data={
+                "machine_name": "Tokarka",
+                "machine_type": "CNC",
+                "serial_number": "T-303",
+                "event_type": "Przegląd",
+                "planned_at": "2020-11-05T09:00",
+                "description": "Stary wykonany przegląd",
+                "cause": "Przegląd okresowy",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+
+        with self.app.app_context():
+            db = get_db()
+            db.execute(
+                "UPDATE scheduled_events SET status = 'done' WHERE description = ?",
+                ("Stary wykonany przegląd",),
+            )
+            db.commit()
+            init_db()
+            init_db()
+            linked = db.execute(
+                """
+                SELECT se.repair_record_id, r.description, r.cause
+                FROM scheduled_events se
+                JOIN repair_records r ON r.id = se.repair_record_id
+                WHERE se.description = ?
+                """,
+                ("Stary wykonany przegląd",),
+            ).fetchone()
+            count = db.execute(
+                "SELECT COUNT(*) FROM repair_records WHERE description = ?",
+                ("Stary wykonany przegląd",),
+            ).fetchone()[0]
+
+        self.assertIsNotNone(linked["repair_record_id"])
+        self.assertEqual(linked["description"], "Stary wykonany przegląd")
+        self.assertEqual(linked["cause"], "Przegląd okresowy")
+        self.assertEqual(count, 1)
+        self.assertIn("Stary wykonany przegląd", self.client.get("/").get_data(as_text=True))
+
+    def test_completing_recurring_event_keeps_next_occurrence_planned(self):
+        create_response = self.client.post(
+            "/scheduled/new",
+            data={
+                "machine_name": "Prasa cykliczna",
+                "machine_type": "Hydrauliczna",
+                "serial_number": "CYK-1",
+                "event_type": "Przegląd",
+                "planned_at": "2020-11-05T09:30",
+                "repeat_interval": "2",
+                "repeat_unit": "weeks",
+                "description": "Dwutygodniowy przegląd",
+                "cause": "Kontrola cykliczna",
+                "repair_method": "Sprawdzenie układu",
+                "replaced_parts": "Filtr",
+                "notes": "Uwagi cykliczne",
+            },
+        )
+        self.assertEqual(create_response.status_code, 302)
+        with self.app.app_context():
+            event = get_db().execute(
+                "SELECT id, planned_at FROM scheduled_events WHERE description = ?",
+                ("Dwutygodniowy przegląd",),
+            ).fetchone()
+        event_id = int(event["id"])
+        original_planned_at = str(event["planned_at"])
+
+        response = self.client.post(
+            f"/scheduled/{event_id}/done",
+            data={"expected_planned_at": original_planned_at},
+        )
+        self.assertEqual(response.status_code, 302)
+
+        with self.app.app_context():
+            db = get_db()
+            next_event = db.execute(
+                "SELECT status, planned_at, repair_record_id FROM scheduled_events WHERE id = ?",
+                (event_id,),
+            ).fetchone()
+            completed_occurrences = db.execute(
+                """
+                SELECT se.status, se.planned_at, se.repair_record_id, r.description,
+                       r.cause, r.repair_method, r.replaced_parts, r.notes
+                FROM scheduled_events se
+                JOIN repair_records r ON r.id = se.repair_record_id
+                WHERE se.status = 'done' AND se.description = ?
+                """,
+                ("Dwutygodniowy przegląd",),
+            ).fetchall()
+            record_count = db.execute(
+                "SELECT COUNT(*) FROM repair_records WHERE description = ?",
+                ("Dwutygodniowy przegląd",),
+            ).fetchone()[0]
+
+        self.assertEqual(next_event["status"], "planned")
+        self.assertEqual(next_event["planned_at"], "2020-11-19 09:30")
+        self.assertIsNone(next_event["repair_record_id"])
+        self.assertEqual(len(completed_occurrences), 1)
+        completed = completed_occurrences[0]
+        self.assertEqual(completed["status"], "done")
+        self.assertEqual(completed["planned_at"], original_planned_at)
+        self.assertEqual(completed["description"], "Dwutygodniowy przegląd")
+        self.assertEqual(completed["cause"], "Kontrola cykliczna")
+        self.assertEqual(completed["repair_method"], "Sprawdzenie układu")
+        self.assertEqual(completed["replaced_parts"], "Filtr")
+        self.assertEqual(completed["notes"], "Uwagi cykliczne")
+        self.assertEqual(record_count, 1)
+
+        stale_response = self.client.post(
+            f"/scheduled/{event_id}/done",
+            data={"expected_planned_at": original_planned_at},
+        )
+        self.assertEqual(stale_response.status_code, 302)
+        with self.app.app_context():
+            self.assertEqual(
+                get_db().execute(
+                    "SELECT COUNT(*) FROM repair_records WHERE description = ?",
+                    ("Dwutygodniowy przegląd",),
+                ).fetchone()[0],
+                1,
+            )
 
     def test_admin_can_edit_machine_details_for_all_linked_records(self):
         for day in ("30", "31"):

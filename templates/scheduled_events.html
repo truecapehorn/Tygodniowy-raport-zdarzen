@@ -1,0 +1,280 @@
+{% extends "base.html" %}
+{% block title %}Planowanie zdarzeń – Tygodniowy raport zdarzeń DUR{% endblock %}
+{% block content %}
+<div class="page-title">Planowanie zdarzeń <small>Harmonogram przeglądów, interwencji i działań utrzymania ruchu</small></div>
+
+<div class="form-grid">
+    <div class="card" style="text-align:center;">
+        <div class="text-muted">Zaplanowane zdarzenia</div>
+        <strong style="display:block;font-size:2rem;color:var(--accent);">{{ planned_count }}</strong>
+    </div>
+    <div class="card" style="text-align:center;">
+        <div class="text-muted">Zrealizowane zdarzenia</div>
+        <strong style="display:block;font-size:2rem;color:var(--green);">{{ completed_count }}</strong>
+    </div>
+</div>
+<div class="actions" style="margin:0 0 1.25rem;">
+    {% if user_role == 'admin' or (current_user and current_user.can_create_records) %}
+    <a href="{{ url_for('new_scheduled_event') }}" class="btn btn-primary">+ Zaplanuj nowe zdarzenie</a>
+    {% endif %}
+</div>
+
+<div class="card">
+    <div class="card-title">Zaplanowane zdarzenia</div>
+    {% if scheduled_events %}
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Maszyna</th>
+                    <th>Typ / numer</th>
+                    <th>Rodzaj</th>
+                    <th>Planowana data</th>
+                    <th>Powtarzanie</th>
+                    <th>Opis</th>
+                    <th>Akcje</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for event in scheduled_events %}
+                <tr>
+                    <td>{{ event.name }}</td>
+                    <td class="text-muted">{{ event.machine_type }}<br>{{ event.serial_number }}</td>
+                    <td>{{ event.event_type }}</td>
+                    <td>{{ event.planned_at|datetime }}</td>
+                    <td class="text-muted">{% if event.repeat_interval and event.repeat_unit and event.repeat_unit != 'none' %}{{ event.repeat_interval }} {{ event.repeat_unit }}{% else %}Brak{% endif %}</td>
+                    <td>{{ event.description }}</td>
+                    <td>
+                        <div class="actions">
+                            <button type="button" class="btn btn-outline btn-sm" data-scheduled-id="{{ event.id }}" data-machine="{{ event.name }}" data-machine-type="{{ event.machine_type }}" data-serial="{{ event.serial_number }}" data-event-type="{{ event.event_type }}" data-date="{{ event.planned_at }}" data-date-display="{{ event.planned_at|datetime }}" data-repeat-interval="{{ event.repeat_interval }}" data-repeat-unit="{{ event.repeat_unit }}" data-description="{{ event.description }}" data-cause="{{ event.cause or '' }}" data-repair-method="{{ event.repair_method or '' }}" data-replaced-parts="{{ event.replaced_parts or '' }}" data-notes="{{ event.notes or '' }}">Szczegóły</button>
+                            <form method="post" action="{{ url_for('scheduled_event_done', event_id=event.id) }}" style="display:inline;">
+                                <input type="hidden" name="expected_planned_at" value="{{ event.planned_at }}">
+                                <button type="submit" class="btn btn-success btn-sm">Wykonano</button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="hint-block">Brak zaplanowanych zdarzeń.</div>
+    {% endif %}
+</div>
+
+<div class="card">
+    <div class="card-title">Wykonane zdarzenia</div>
+    {% if completed_events %}
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Maszyna</th>
+                    <th>Rodzaj</th>
+                    <th>Planowana data</th>
+                    <th>Opis</th>
+                    <th>Akcje</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for event in completed_events %}
+                <tr>
+                    <td>{{ event.name }}</td>
+                    <td>{{ event.event_type }}</td>
+                    <td>{{ event.planned_at|datetime }}</td>
+                    <td>{{ event.description }}</td>
+                    <td>
+                        <button type="button" class="btn btn-outline btn-sm" data-scheduled-id="{{ event.id }}" data-machine="{{ event.name }}" data-machine-type="{{ event.machine_type }}" data-serial="{{ event.serial_number }}" data-event-type="{{ event.event_type }}" data-date="{{ event.planned_at }}" data-date-display="{{ event.planned_at|datetime }}" data-repeat-interval="{{ event.repeat_interval }}" data-repeat-unit="{{ event.repeat_unit }}" data-description="{{ event.description }}" data-cause="{{ event.cause or '' }}" data-repair-method="{{ event.repair_method or '' }}" data-replaced-parts="{{ event.replaced_parts or '' }}" data-notes="{{ event.notes or '' }}">Szczegóły</button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="hint-block">Brak wykonanych zdarzeń.</div>
+    {% endif %}
+</div>
+
+<div class="modal-backdrop" id="scheduled-modal">
+    <div class="modal-box">
+        <div class="modal-header">
+            <strong id="scheduled-modal-title" style="font-size:1rem;color:var(--text);">Szczegóły zdarzenia</strong>
+            <div style="display:flex;gap:.4rem;align-items:center;flex-shrink:0;">
+                <form id="scheduled-modal-delete-form" method="post" style="display:inline;">
+                    <button type="submit" class="btn btn-danger btn-sm">Usuń</button>
+                </form>
+                <button id="scheduled-modal-edit-button" type="button" class="btn btn-primary btn-sm">Edytuj</button>
+                <button id="scheduled-modal-save-button" type="submit" form="scheduled-modal-edit-form" class="btn btn-success btn-sm" style="display:none;">Zapisz</button>
+                <button id="scheduled-modal-cancel-button" type="button" class="btn btn-outline btn-sm" style="display:none;">Anuluj</button>
+                <button id="scheduled-modal-close" class="modal-close" title="Zamknij">&#10005;</button>
+            </div>
+        </div>
+        <div id="scheduled-modal-content" class="detail-grid"></div>
+        <form id="scheduled-modal-edit-form" method="post" style="display:none;">
+            <div class="scheduled-edit-grid">
+                <div class="field"><label for="edit-machine-name">Maszyna</label><input id="edit-machine-name" name="machine_name" required></div>
+                <div class="field"><label for="edit-machine-type">Typ</label><input id="edit-machine-type" name="machine_type" required></div>
+                <div class="field"><label for="edit-serial-number">Numer seryjny</label><input id="edit-serial-number" name="serial_number" required></div>
+                <div class="field">
+                    <label for="edit-event-type">Rodzaj zdarzenia</label>
+                    <select id="edit-event-type" name="event_type">
+                        {% for kind in event_types %}
+                        <option value="{{ kind }}">{{ kind }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="field"><label for="edit-planned-at">Planowana data i godzina</label><input type="datetime-local" id="edit-planned-at" name="planned_at" required></div>
+                <div class="field">
+                    <label for="edit-repeat-unit">Powtarzanie</label>
+                    <select id="edit-repeat-unit" name="repeat_unit">
+                        <option value="none">Brak</option>
+                        <option value="days">Dni</option>
+                        <option value="weeks">Tygodnie</option>
+                        <option value="months">Miesiące</option>
+                    </select>
+                </div>
+                <div class="field"><label for="edit-repeat-interval">Interwał powtarzania</label><input type="number" min="0" id="edit-repeat-interval" name="repeat_interval"></div>
+                <div class="field scheduled-edit-description">
+                    <label for="edit-description">Opis zdarzenia</label>
+                    <textarea id="edit-description" name="description" required></textarea>
+                </div>
+                <div class="field scheduled-edit-third">
+                    <label for="edit-cause">Przyczyna</label>
+                    <textarea id="edit-cause" name="cause"></textarea>
+                </div>
+                <div class="field scheduled-edit-third">
+                    <label for="edit-repair-method">Sposób naprawy / wykonania</label>
+                    <textarea id="edit-repair-method" name="repair_method"></textarea>
+                </div>
+                <div class="field scheduled-edit-third">
+                    <label for="edit-replaced-parts">Części do wymiany</label>
+                    <textarea id="edit-replaced-parts" name="replaced_parts"></textarea>
+                </div>
+                <div class="field scheduled-edit-notes">
+                    <label for="edit-notes">Uwagi</label>
+                    <textarea id="edit-notes" name="notes"></textarea>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+    .scheduled-edit-grid {
+        display: grid;
+        grid-template-columns: repeat(12, minmax(0, 1fr));
+        gap: 0.75rem;
+    }
+    .scheduled-edit-grid textarea { min-height: 120px; }
+    .scheduled-edit-description,
+    .scheduled-edit-notes { grid-column: 1 / -1; }
+    .scheduled-edit-third { grid-column: span 4; }
+    .scheduled-edit-grid > .field:not(.scheduled-edit-description):not(.scheduled-edit-notes):not(.scheduled-edit-third) {
+        grid-column: span 3;
+    }
+    @media (max-width: 760px) {
+        .scheduled-edit-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+        .scheduled-edit-grid > .field:not(.scheduled-edit-description):not(.scheduled-edit-notes):not(.scheduled-edit-third) {
+            grid-column: span 3;
+        }
+        .scheduled-edit-third { grid-column: span 2; }
+    }
+    @media (max-width: 520px) {
+        .scheduled-edit-grid { grid-template-columns: minmax(0, 1fr); }
+        .scheduled-edit-grid > .field { grid-column: 1 / -1 !important; }
+    }
+</style>
+
+<script>
+const scheduledModal = document.getElementById('scheduled-modal');
+const scheduledModalTitle = document.getElementById('scheduled-modal-title');
+const scheduledModalContent = document.getElementById('scheduled-modal-content');
+const scheduledModalDeleteForm = document.getElementById('scheduled-modal-delete-form');
+const scheduledModalEditForm = document.getElementById('scheduled-modal-edit-form');
+const scheduledModalClose = document.getElementById('scheduled-modal-close');
+const scheduledModalEditButton = document.getElementById('scheduled-modal-edit-button');
+const scheduledModalSaveButton = document.getElementById('scheduled-modal-save-button');
+const scheduledModalCancelButton = document.getElementById('scheduled-modal-cancel-button');
+
+function setScheduledEditMode(editing) {
+    scheduledModalContent.style.display = editing ? 'none' : '';
+    scheduledModalEditForm.style.display = editing ? '' : 'none';
+    scheduledModalEditButton.style.display = editing ? 'none' : '';
+    scheduledModalSaveButton.style.display = editing ? '' : 'none';
+    scheduledModalCancelButton.style.display = editing ? '' : 'none';
+}
+
+function escapeScheduledHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function openScheduledModal(button) {
+    const id = button.dataset.scheduledId;
+    const machine = button.dataset.machine || '';
+    const machineType = button.dataset.machineType || '';
+    const serial = button.dataset.serial || '';
+    const eventType = button.dataset.eventType || '';
+    const date = button.dataset.date || '';
+    const dateDisplay = button.dataset.dateDisplay || date;
+    const repeatInterval = button.dataset.repeatInterval || '0';
+    const repeatUnit = button.dataset.repeatUnit || 'none';
+    const description = button.dataset.description || '';
+    const cause = button.dataset.cause || '';
+    const repairMethod = button.dataset.repairMethod || '';
+    const replacedParts = button.dataset.replacedParts || '';
+    const notes = button.dataset.notes || '';
+
+    scheduledModalTitle.textContent = `${machine} – ${eventType}`;
+    scheduledModalContent.innerHTML = `
+        <div class="detail-item"><div class="dl">Maszyna</div><div class="dv">${escapeScheduledHtml(machine)}</div></div>
+        <div class="detail-item"><div class="dl">Typ</div><div class="dv">${escapeScheduledHtml(machineType)}</div></div>
+        <div class="detail-item"><div class="dl">Numer seryjny</div><div class="dv">${escapeScheduledHtml(serial)}</div></div>
+        <div class="detail-item"><div class="dl">Rodzaj zdarzenia</div><div class="dv">${escapeScheduledHtml(eventType)}</div></div>
+        <div class="detail-item"><div class="dl">Planowana data</div><div class="dv">${escapeScheduledHtml(dateDisplay)}</div></div>
+        <div class="detail-item"><div class="dl">Powtarzanie</div><div class="dv">${repeatInterval && repeatUnit !== 'none' ? `${escapeScheduledHtml(repeatInterval)} ${escapeScheduledHtml(repeatUnit)}` : 'Brak'}</div></div>
+        <div class="detail-item full"><div class="dl">Opis</div><div class="dv">${escapeScheduledHtml(description)}</div></div>
+        <div class="detail-item full"><div class="dl">Przyczyna</div><div class="dv">${escapeScheduledHtml(cause)}</div></div>
+        <div class="detail-item full"><div class="dl">Sposób naprawy / wykonania</div><div class="dv">${escapeScheduledHtml(repairMethod)}</div></div>
+        <div class="detail-item full"><div class="dl">Części do wymiany</div><div class="dv">${escapeScheduledHtml(replacedParts)}</div></div>
+        <div class="detail-item full"><div class="dl">Uwagi</div><div class="dv">${escapeScheduledHtml(notes) || '—'}</div></div>
+    `;
+
+    scheduledModalDeleteForm.action = `/scheduled/${id}/delete`;
+    scheduledModalEditForm.action = `/scheduled/${id}/edit`;
+    document.getElementById('edit-machine-name').value = machine;
+    document.getElementById('edit-machine-type').value = machineType;
+    document.getElementById('edit-serial-number').value = serial;
+    document.getElementById('edit-event-type').value = eventType;
+    document.getElementById('edit-planned-at').value = date.replace(' ', 'T').slice(0, 16);
+    document.getElementById('edit-repeat-interval').value = repeatInterval;
+    document.getElementById('edit-repeat-unit').value = repeatUnit;
+    document.getElementById('edit-description').value = description;
+    document.getElementById('edit-cause').value = cause;
+    document.getElementById('edit-repair-method').value = repairMethod;
+    document.getElementById('edit-replaced-parts').value = replacedParts;
+    document.getElementById('edit-notes').value = notes;
+    setScheduledEditMode(false);
+    scheduledModal.classList.add('open');
+}
+
+document.querySelectorAll('[data-scheduled-id]').forEach((button) => {
+    button.addEventListener('click', () => openScheduledModal(button));
+});
+
+scheduledModalClose.addEventListener('click', () => scheduledModal.classList.remove('open'));
+scheduledModalEditButton.addEventListener('click', () => setScheduledEditMode(true));
+scheduledModalCancelButton.addEventListener('click', () => setScheduledEditMode(false));
+scheduledModal.addEventListener('click', (event) => {
+    if (event.target === scheduledModal) {
+        scheduledModal.classList.remove('open');
+    }
+});
+</script>
+{% endblock %}
