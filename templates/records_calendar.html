@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+{% block title %}Kalendarz zdarzeń – Tygodniowy raport zdarzeń DUR{% endblock %}
+{% block content %}
+{% macro calendar_event_class(event_type) %}
+    {%- set event_type_lower = event_type | lower -%}
+    {%- if event_type_lower == 'awaria' -%}badge-awaria
+    {%- elif 'przegl' in event_type_lower -%}badge-przeglad
+    {%- elif event_type_lower == 'modernizacja' -%}badge-modernizacja
+    {%- elif event_type_lower == 'interwencja' -%}badge-interwencja
+    {%- else -%}badge-inne
+    {%- endif -%}
+{% endmacro %}
+
+<div class="page-title">Kalendarz zdarzeń <small>Wszystkie zdarzenia z rejestru</small></div>
+<div class="card">
+    <div class="calendar-toolbar">
+        <div>
+            <div class="card-title">Zdarzenia z tabeli na stronie głównej</div>
+            <h2 class="calendar-heading">{{ calendar_heading }}</h2>
+        </div>
+        <div class="calendar-actions">
+            {% if previous_calendar_url %}
+            <a class="btn btn-outline btn-sm" href="{{ previous_calendar_url }}" aria-label="Poprzedni okres">&larr;</a>
+            {% else %}
+            <span class="btn btn-outline btn-sm" aria-hidden="true">&larr;</span>
+            {% endif %}
+            {% if next_calendar_url %}
+            <a class="btn btn-outline btn-sm" href="{{ next_calendar_url }}" aria-label="Następny okres">&rarr;</a>
+            {% else %}
+            <span class="btn btn-outline btn-sm" aria-hidden="true">&rarr;</span>
+            {% endif %}
+            <form method="get" class="calendar-controls">
+                <label for="calendar-view">Widok</label>
+                <select id="calendar-view" name="calendar_view">
+                    <option value="week" {% if calendar_view == 'week' %}selected{% endif %}>Tygodniowy</option>
+                    <option value="month" {% if calendar_view == 'month' %}selected{% endif %}>Miesięczny</option>
+                    <option value="year" {% if calendar_view == 'year' %}selected{% endif %}>Roczny</option>
+                </select>
+                {% if calendar_view == 'week' %}
+                <label class="sr-only" for="calendar-iso-week">Tydzień</label>
+                <input id="calendar-iso-week" type="week" name="iso_week" value="{{ calendar_week_value }}" required>
+                {% elif calendar_view == 'month' %}
+                <label class="sr-only" for="calendar-month">Miesiąc</label>
+                <select id="calendar-month" name="month">
+                    {% for month_name in month_names %}
+                    <option value="{{ loop.index }}" {% if calendar_month == loop.index %}selected{% endif %}>{{ month_name }}</option>
+                    {% endfor %}
+                </select>
+                {% else %}
+                <input type="hidden" name="month" value="{{ calendar_month }}">
+                {% endif %}
+                <label class="sr-only" for="calendar-year">Rok</label>
+                <input id="calendar-year" type="number" name="year" min="1" max="9999" value="{{ calendar_year }}" required>
+                <button type="submit" class="btn btn-primary btn-sm">Pokaż</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="calendar-legend" aria-label="Legenda rodzajów zdarzeń">
+        <span class="badge badge-awaria">Awaria</span>
+        <span class="badge badge-przeglad">Przegląd</span>
+        <span class="badge badge-interwencja">Interwencja</span>
+        <span class="badge badge-modernizacja">Modernizacja</span>
+        <span class="badge badge-inne">Inne</span>
+    </div>
+
+    <div class="calendar-scroll">
+        {% if calendar_view == 'week' %}
+        <div class="calendar-week-view" data-calendar-view="week">
+            <div class="calendar-week-grid calendar-week-header">
+                <div class="calendar-hour-label">Godzina</div>
+                {% for day in weekly_days %}
+                <div class="calendar-weekday{% if day.is_today %} calendar-day-today{% endif %}"{% if day.is_today %} aria-current="date"{% endif %}>
+                    <span>{{ calendar_weekdays[loop.index0] }}</span>
+                    <strong>{% if day.date %}{{ day.date.strftime("%d.%m") }}{% endif %}</strong>
+                </div>
+                {% endfor %}
+            </div>
+            {% for hour in calendar_hours %}
+            <div class="calendar-week-grid calendar-hour-row">
+                <div class="calendar-hour-label">{{ "%02d:00"|format(hour) }}</div>
+                {% for day in weekly_days %}
+                {% if day.date and can_create_records %}
+                <a class="calendar-hour-cell calendar-slot-link{% if day.is_today %} calendar-day-today{% endif %}"
+                   href="{{ url_for('new_record', occurrence_at=day.date.isoformat() ~ 'T' ~ ('%02d:00'|format(hour))) }}"
+                   aria-label="Dodaj zdarzenie: {{ day.date.strftime('%d-%m-%Y') }} {{ '%02d:00'|format(hour) }}">
+                {% else %}
+                <div class="calendar-hour-cell{% if day.is_today %} calendar-day-today{% endif %}">
+                {% endif %}
+                    {% for item in day.hours[hour] %}
+                    {% set event = item.event %}
+                    {% set event_title = event.occurrence_at | datetime ~ ' — ' ~ event.name ~ ' — ' ~ event.event_type ~ ' — ' ~ event.description %}
+                    <span class="calendar-event badge {{ calendar_event_class(event.event_type) }}" title="{{ event_title }}">
+                        {{ item.time }} · {{ event.event_type }} · {{ event.name }}
+                    </span>
+                    {% endfor %}
+                {% if day.date and can_create_records %}
+                </a>
+                {% else %}
+                </div>
+                {% endif %}
+                {% endfor %}
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="calendar-months {% if calendar_view == 'year' %}calendar-year-view{% else %}calendar-month-view{% endif %}"
+             data-calendar-view="{{ calendar_view }}">
+            {% for month in calendar_months %}
+            <section class="calendar-month" aria-label="{{ month.name }}">
+                {% if calendar_view == 'year' %}
+                <h3 class="calendar-month-heading">{{ month.name }}</h3>
+                {% endif %}
+                <div class="calendar-grid calendar-weekdays">
+                    <div class="calendar-week-label">Tydz.</div>
+                    {% for weekday in calendar_weekdays %}<div>{{ weekday }}</div>{% endfor %}
+                </div>
+                {% for week in month.weeks %}
+                <div class="calendar-grid">
+                    <div class="calendar-week-number">{{ week.number }}</div>
+                    {% for day in week.days %}
+                    {% if can_create_records %}
+                    <a class="calendar-day calendar-slot-link{% if not day.in_month %} calendar-day-outside{% endif %}{% if day.events %} calendar-day-has-events{% endif %}{% if day.is_today %} calendar-day-today{% endif %}"
+                       href="{{ url_for('new_record', occurrence_at=day.date.isoformat() ~ 'T08:00') }}"
+                       aria-label="Dodaj zdarzenie: {{ day.date.strftime('%d-%m-%Y') }}"{% if day.is_today %} aria-current="date"{% endif %}>
+                    {% else %}
+                    <div class="calendar-day{% if not day.in_month %} calendar-day-outside{% endif %}{% if day.events %} calendar-day-has-events{% endif %}{% if day.is_today %} calendar-day-today{% endif %}"{% if day.is_today %} aria-current="date"{% endif %}>
+                    {% endif %}
+                        <span class="calendar-day-number">{{ day.date.day }}</span>
+                        <div class="calendar-day-events">
+                            {% for event in day.events %}
+                            {% set event_title = event.occurrence_at | datetime ~ ' — ' ~ event.name ~ ' — ' ~ event.event_type ~ ' — ' ~ event.description %}
+                            {% if calendar_view == 'month' %}
+                            <span class="calendar-event badge {{ calendar_event_class(event.event_type) }}" title="{{ event_title }}">{{ event.event_type }} · {{ event.name }}</span>
+                            {% else %}
+                            <span class="calendar-dot {{ calendar_event_class(event.event_type) }}" title="{{ event_title }}" aria-label="{{ event_title }}"></span>
+                            {% endif %}
+                            {% endfor %}
+                        </div>
+                    {% if can_create_records %}</a>{% else %}</div>{% endif %}
+                    {% endfor %}
+                </div>
+                {% endfor %}
+            </section>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+    {% if can_create_records %}
+    <p class="calendar-hint">Kliknij godzinę w widoku tygodniowym albo dzień w widoku miesięcznym lub rocznym, aby dodać zdarzenie.</p>
+    {% endif %}
+</div>
+
+<style>
+    .calendar-toolbar, .calendar-actions, .calendar-controls, .calendar-legend { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem; }
+    .calendar-toolbar { justify-content: space-between; gap: 1rem; margin-bottom: .75rem; }
+    .calendar-toolbar .card-title { margin-bottom: .15rem; }
+    .calendar-heading { font-size: 1.25rem; }
+    .calendar-controls { margin-left: .35rem; }
+    .calendar-controls label { color: var(--muted); font-size: .8rem; }
+    .calendar-controls input, .calendar-controls select {
+        min-height: 2rem; border: 1px solid var(--border); border-radius: 6px;
+        background: var(--bg-input); color: var(--text); font: inherit; padding: .25rem .4rem;
+    }
+    .calendar-controls input { width: 5.5rem; }
+    .calendar-controls input[type="week"] { width: 9.5rem; }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+    .calendar-legend { margin: 0 0 .75rem; }
+    .calendar-scroll { overflow-x: auto; }
+    .calendar-months { display: grid; gap: 1rem; }
+    .calendar-year-view { grid-template-columns: repeat(3, minmax(240px, 1fr)); }
+    .calendar-month { min-width: 0; }
+    .calendar-month-heading { margin: 0 0 .35rem; font-size: .9rem; }
+    .calendar-grid { display: grid; grid-template-columns: 1.8rem repeat(7, minmax(0, 1fr)); }
+    .calendar-weekdays > div { padding: .35rem .15rem; color: var(--muted); font-size: .7rem; font-weight: 700; text-align: center; }
+    .calendar-weekdays .calendar-week-label { font-size: .58rem; }
+    .calendar-week-number { display: flex; align-items: flex-start; justify-content: center; padding: .3rem .1rem; border: 1px solid var(--border); background: var(--bg-card-alt); color: var(--muted); font-size: .68rem; font-weight: 700; }
+    .calendar-day { min-width: 0; min-height: 6.25rem; padding: .25rem; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); text-decoration: none; }
+    .calendar-slot-link:hover { background: var(--accent-dim); }
+    .calendar-day-outside { background: var(--bg-card-alt); color: var(--muted); }
+    .calendar-day-today { outline: 2px solid var(--accent); outline-offset: -2px; }
+    .calendar-day-has-events { background: var(--bg-row-alt); }
+    .calendar-day-number { display: block; font-size: .72rem; font-weight: 700; text-align: right; }
+    .calendar-day-events { display: flex; flex-direction: column; gap: .15rem; }
+    .calendar-event { display: block; overflow: hidden; text-overflow: ellipsis; }
+    .calendar-dot { display: inline-block; width: .55rem; height: .55rem; margin: .15rem; border-radius: 50%; }
+    .calendar-dot.badge-awaria { background: var(--red); }
+    .calendar-dot.badge-przeglad { background: var(--accent); }
+    .calendar-dot.badge-modernizacja { background: var(--purple); }
+    .calendar-dot.badge-interwencja { background: var(--yellow); }
+    .calendar-dot.badge-inne { background: var(--muted); }
+    .calendar-week-view { min-width: 760px; }
+    .calendar-week-grid { display: grid; grid-template-columns: 4rem repeat(7, minmax(0, 1fr)); }
+    .calendar-week-header { position: sticky; top: 0; z-index: 1; background: var(--bg-card); }
+    .calendar-hour-label, .calendar-weekday { padding: .35rem; border: 1px solid var(--border); color: var(--muted); font-size: .72rem; text-align: center; }
+    .calendar-weekday { display: flex; justify-content: space-between; gap: .25rem; font-weight: 600; }
+    .calendar-hour-cell { min-width: 0; min-height: 2.5rem; padding: .15rem; border: 1px solid var(--border); background: var(--bg-card); color: inherit; text-decoration: none; }
+    .calendar-hour-row:nth-child(even) .calendar-hour-cell { background: var(--bg-row-alt); }
+    .calendar-weekday.calendar-day-today { outline: none; border-color: var(--accent); background: var(--accent-dim); }
+    .calendar-hour-cell.calendar-day-today { outline: none; background: var(--bg-row-hover); }
+    .calendar-hint { margin-top: .75rem; color: var(--muted); font-size: .8rem; }
+    @media (max-width: 900px) { .calendar-year-view { grid-template-columns: repeat(2, minmax(240px, 1fr)); } }
+    @media (max-width: 600px) { .calendar-year-view { grid-template-columns: 1fr; } }
+</style>
+{% endblock %}

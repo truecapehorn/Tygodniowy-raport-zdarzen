@@ -378,6 +378,56 @@ class RepairReportAppTests(unittest.TestCase):
             r'href="/(?:scheduled|planowanie)\?calendar_view=week&amp;iso_week=2026-W19"',
         )
 
+    def test_records_calendar_shows_all_records_and_prefills_new_record_date(self):
+        with self.client.session_transaction() as session:
+            session["logged_in"] = True
+            session["role"] = "admin"
+
+        for occurrence_at, description in (
+            ("2026-03-02T09:30", "Calendar record one"),
+            ("2026-04-15T12:15", "Calendar record two"),
+        ):
+            response = self.client.post(
+                "/",
+                data={
+                    "occurrence_at": occurrence_at,
+                    "machine_name": "Prasa calendar",
+                    "machine_type": "Hydrauliczna",
+                    "serial_number": "CAL-001",
+                    "event_type": "Awaria",
+                    "description": description,
+                },
+            )
+            self.assertEqual(response.status_code, 302)
+
+        home_page = self.client.get("/")
+        self.assertIn('href="/records-calendar"', home_page.get_data(as_text=True))
+
+        year_html = self.client.get(
+            "/records-calendar?calendar_view=year&year=2026"
+        ).get_data(as_text=True)
+        self.assertIn("Calendar record one", year_html)
+        self.assertIn("Calendar record two", year_html)
+        self.assertIn('data-calendar-view="year"', year_html)
+
+        month_html = self.client.get(
+            "/records-calendar?calendar_view=month&year=2026&month=3"
+        ).get_data(as_text=True)
+        self.assertIn("02-03-2026 09:30 — Prasa calendar — Awaria — Calendar record one", month_html)
+        self.assertNotIn("Calendar record two", month_html)
+        self.assertIn('href="/new?occurrence_at=2026-03-02T08:00"', month_html)
+
+        week_html = self.client.get(
+            "/records-calendar?calendar_view=week&iso_week=2026-W10"
+        ).get_data(as_text=True)
+        self.assertIn("09:30 · Awaria · Prasa calendar", week_html)
+        self.assertIn('href="/new?occurrence_at=2026-03-02T09:00"', week_html)
+
+        new_record_html = self.client.get(
+            "/new?occurrence_at=2026-03-02T09:00"
+        ).get_data(as_text=True)
+        self.assertIn('name="occurrence_at" value="02-03-2026 09:00"', new_record_html)
+
     def test_scheduled_event_form_fields_and_dashboard_counts(self):
         with self.client.session_transaction() as session:
             session["logged_in"] = True

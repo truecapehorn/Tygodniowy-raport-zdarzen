@@ -1279,6 +1279,180 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             return jsonify({"status": "deleted"})
         return jsonify({"error": "Nieobsługiwane żądanie."}), 405
 
+    @app.route("/records-calendar")
+    def records_calendar():
+        if not app.config.get("TESTING") and not user_has_permission("can_view_records"):
+            flash("Brak uprawnień do przeglądania zdarzeń.", "error")
+            return redirect(url_for("index"))
+
+        records = query_records_latest(None)
+        calendar_view = request.args.get("calendar_view", "month")
+        if calendar_view not in {"month", "year", "week"}:
+            calendar_view = "month"
+
+        current_date = datetime.now()
+        current_iso_year, current_iso_week, _ = current_date.isocalendar()
+        try:
+            calendar_year = int(request.args.get(
+                "year",
+                current_iso_year if calendar_view == "week" else current_date.year,
+            ))
+        except (TypeError, ValueError):
+            calendar_year = current_iso_year if calendar_view == "week" else current_date.year
+        if not 1 <= calendar_year <= 9999:
+            calendar_year = current_iso_year if calendar_view == "week" else current_date.year
+
+        try:
+            calendar_month = int(request.args.get("month", current_date.month))
+        except (TypeError, ValueError):
+            calendar_month = current_date.month
+        if not 1 <= calendar_month <= 12:
+            calendar_month = current_date.month
+
+        month_names = (
+            "Styczeń", "Luty", "Marzec", "Kwiecień", "Maj", "Czerwiec",
+            "Lipiec", "Sierpień", "Wrzesień", "Październik", "Listopad", "Grudzień",
+        )
+        events_by_date: dict[str, list[sqlite3.Row]] = {}
+        dated_records = [
+            (parse_datetime(record["occurrence_at"]), record)
+            for record in records
+        ]
+        dated_records.sort(key=lambda item: item[0] or datetime.max)
+        for occurrence_at, record in dated_records:
+            if occurrence_at is not None:
+                events_by_date.setdefault(occurrence_at.date().isoformat(), []).append(record)
+
+        calendar_months = []
+        calendar_week = current_iso_week
+        calendar_week_value = ""
+        weekly_days = []
+        if calendar_view == "week":
+            requested_iso_week = request.args.get("iso_week", "")
+            try:
+                iso_year_text, iso_week_text = requested_iso_week.split("-W")
+                calendar_year = int(iso_year_text)
+                calendar_week = int(iso_week_text)
+                week_start = datetime.fromisocalendar(calendar_year, calendar_week, 1).date()
+            except (TypeError, ValueError):
+                calendar_year = current_iso_year
+                calendar_week = current_iso_week
+                week_start = current_date.date() - timedelta(days=current_date.weekday())
+            calendar_week_value = f"{calendar_year:04d}-W{calendar_week:02d}"
+            for day_offset in range(7):
+                try:
+                    day = week_start + timedelta(days=day_offset)
+                except OverflowError:
+                    day = None
+                hourly_events: list[list[dict[str, Any]]] = [[] for _ in range(24)]
+                if day is not None:
+                    for record in events_by_date.get(day.isoformat(), []):
+                        occurrence_at = parse_datetime(record["occurrence_at"])
+                        if occurrence_at is not None:
+                            hourly_events[occurrence_at.hour].append({
+                                "event": record,
+                                "time": occurrence_at.strftime("%H:%M"),
+                            })
+                weekly_days.append({
+                    "date": day,
+                    "is_today": day == current_date.date(),
+                    "hours": hourly_events,
+                })
+            try:
+                previous_week_start = week_start - timedelta(days=7)
+            except OverflowError:
+                previous_week_start = None
+            try:
+                next_week_start = week_start + timedelta(days=7)
+            except OverflowError:
+                next_week_start = None
+            previous_url = None
+            if previous_week_start is not None:
+                previous_iso_year, previous_iso_week, _ = previous_week_start.isocalendar()
+                previous_url = url_for(
+                    "records_calendar",
+                    calendar_view="week",
+                    iso_week=f"{previous_iso_year:04d}-W{previous_iso_week:02d}",
+                )
+            next_url = None
+            if next_week_start is not None:
+                next_iso_year, next_iso_week, _ = next_week_start.isocalendar()
+                next_url = url_for(
+                    "records_calendar",
+                    calendar_view="week",
+                    iso_week=f"{next_iso_year:04d}-W{next_iso_week:02d}",
+                )
+            calendar_heading = f"Tydzień {calendar_week}, {calendar_year}"
+
+        if calendar_view != "week":
+            month_numbers = range(1, 13) if calendar_view == "year" else (calendar_month,)
+            calendar_generator = calendar.Calendar(firstweekday=calendar.MONDAY)
+            for month_number in month_numbers:
+                weeks = []
+                for week in calendar_generator.monthdatescalendar(calendar_year, month_number):
+                    weeks.append({
+                        "number": week[0].isocalendar().week,
+                        "days": [
+                            {
+                                "date": day,
+                                "in_month": day.month == month_number,
+                                "is_today": day == current_date.date(),
+                                "events": events_by_date.get(day.isoformat(), []) if day.month == month_number else [],
+                            }
+                            for day in week
+                        ],
+                    })
+                calendar_months.append({
+                    "number": month_number,
+                    "name": month_names[month_number - 1],
+                    "weeks": weeks,
+                })
+
+            if calendar_view == "year":
+                previous_url = (
+                    url_for("records_calendar", calendar_view="year", year=calendar_year - 1)
+                    if calendar_year > 1 else None
+                )
+                next_url = (
+                    url_for("records_calendar", calendar_view="year", year=calendar_year + 1)
+                    if calendar_year < 9999 else None
+                )
+                calendar_heading = str(calendar_year)
+            else:
+                previous_year, previous_month = (
+                    (calendar_year - 1, 12) if calendar_month == 1 else (calendar_year, calendar_month - 1)
+                )
+                next_year, next_month = (
+                    (calendar_year + 1, 1) if calendar_month == 12 else (calendar_year, calendar_month + 1)
+                )
+                previous_url = (
+                    url_for("records_calendar", calendar_view="month", year=previous_year, month=previous_month)
+                    if previous_year >= 1 else None
+                )
+                next_url = (
+                    url_for("records_calendar", calendar_view="month", year=next_year, month=next_month)
+                    if next_year <= 9999 else None
+                )
+                calendar_heading = f"{month_names[calendar_month - 1]} {calendar_year}"
+
+        return render_template(
+            "records_calendar.html",
+            calendar_view=calendar_view,
+            calendar_year=calendar_year,
+            calendar_month=calendar_month,
+            calendar_week=calendar_week,
+            calendar_week_value=calendar_week_value,
+            calendar_months=calendar_months,
+            weekly_days=weekly_days,
+            calendar_hours=range(24),
+            calendar_heading=calendar_heading,
+            calendar_weekdays=("Pon", "Wt", "Śr", "Czw", "Pt", "Sob", "Niedz"),
+            previous_calendar_url=previous_url,
+            next_calendar_url=next_url,
+            month_names=month_names,
+            can_create_records=app.config.get("TESTING") or user_has_permission("can_create_records"),
+        )
+
     @app.route("/", methods=["GET", "POST"])
     def index():
         if request.method == "POST":
@@ -1333,6 +1507,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             "new_record.html",
             machine_names=list_machine_names(),
             event_types=EVENT_TYPES,
+            initial_occurrence_at=format_datetime(request.args.get("occurrence_at")),
         )
 
     @app.route("/import", methods=["GET", "POST"])
