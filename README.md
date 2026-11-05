@@ -146,6 +146,14 @@ rejestru, a zaplanowane zdarzenie pozostaje w harmonogramie z następnym termine
 wyliczonym według ustawionego interwału. Jednorazowe zdarzenia są przenoszone do
 historii po wykonaniu.
 
+Kalendarz planowania udostępnia widok tygodniowy (od poniedziałku do niedzieli,
+w podziale na godziny od 00:00 do 23:00), miesięczny i roczny. Bieżący dzień
+jest wyróżniony w każdym widoku. Użytkownik z uprawnieniem do tworzenia zdarzeń
+może kliknąć pole godziny w widoku tygodniowym albo dzień w widoku miesięcznym
+lub rocznym, aby otworzyć formularz nowego zdarzenia z wstępnie ustawioną datą.
+W widoku tygodniowym ustawiana jest także kliknięta godzina; w widokach
+miesięcznym i rocznym domyślną godziną jest 08:00.
+
 Na stronie głównej aplikacja wyświetla alerty o zdarzeniach, które osiągnęły
 termin wykonania, dopóki nie zostaną oznaczone jako wykonane lub przeniesione na
 inną datę.

@@ -3,6 +3,7 @@ import sqlite3
 import tempfile
 import unittest
 import zipfile
+from datetime import datetime
 from pathlib import Path
 
 from openpyxl import Workbook, load_workbook
@@ -258,6 +259,8 @@ class RepairReportAppTests(unittest.TestCase):
         self.assertIn('id="planned_at" name="planned_at" type="text"', html)
         self.assertIn('placeholder="dd-mm-rrrr gg:mm"', html)
         self.assertIn('type="datetime-local" class="datetime-picker-input"', html)
+        prefilled_page = self.client.get("/scheduled/new?planned_at=2026-05-14T10:00")
+        self.assertIn('value="14-05-2026 10:00"', prefilled_page.get_data(as_text=True))
         self.assertIn("grid-template-columns: repeat(4, minmax(0, 1fr))", html)
         self.assertIn('class="field scheduled-third-row-start"', html)
         self.assertIn('class="field scheduled-notes-field"', html)
@@ -328,6 +331,50 @@ class RepairReportAppTests(unittest.TestCase):
         self.assertIn("title=\"14-05-2026 10:30 — Prasa Yellow — Interwencja — Yellow calendar event\"", month_html)
         self.assertNotIn("title=\"05-01-2026 07:00 — Prasa Blue", month_html)
         self.assertNotIn("title=\"01-12-2026 12:15 — Prasa Purple", month_html)
+
+        today = datetime.now().date()
+        current_year_html = self.client.get(
+            f"/scheduled?calendar_view=year&year={today.year}"
+        ).get_data(as_text=True)
+        current_month_html = self.client.get(
+            f"/scheduled?calendar_view=month&year={today.year}&month={today.month}"
+        ).get_data(as_text=True)
+        self.assertIn('aria-current="date"', current_year_html)
+        self.assertIn("calendar-day-today", current_year_html)
+        self.assertRegex(
+            current_year_html,
+            rf'href="/(?:scheduled/new|planowanie/nowe)\?planned_at={today.isoformat()}T08:00"',
+        )
+        self.assertIn('aria-current="date"', current_month_html)
+        self.assertIn("calendar-day-today", current_month_html)
+        self.assertRegex(
+            month_html,
+            r'href="/(?:scheduled/new|planowanie/nowe)\?planned_at=2026-05-14T08:00"',
+        )
+
+        week_page = self.client.get("/scheduled?calendar_view=week")
+        self.assertEqual(week_page.status_code, 200)
+        week_html = week_page.get_data(as_text=True)
+        self.assertIn('data-calendar-view="week"', week_html)
+        self.assertEqual(week_html.count('class="calendar-week-grid calendar-hour-row"'), 24)
+        self.assertIn("23:00", week_html)
+        self.assertIn("aria-current=\"date\"", week_html)
+        self.assertIn("calendar-day-today", week_html)
+
+        target_week = datetime.fromisocalendar(2026, 20, 1)
+        selected_week = self.client.get("/scheduled?calendar_view=week&iso_week=2026-W20")
+        self.assertEqual(selected_week.status_code, 200)
+        selected_week_html = selected_week.get_data(as_text=True)
+        self.assertIn(target_week.strftime("%d.%m"), selected_week_html)
+        self.assertIn("10:30 · Interwencja · Prasa Yellow", selected_week_html)
+        self.assertRegex(
+            selected_week_html,
+            r'href="/(?:scheduled/new|planowanie/nowe)\?planned_at=2026-05-14T10:00"',
+        )
+        self.assertRegex(
+            selected_week_html,
+            r'href="/(?:scheduled|planowanie)\?calendar_view=week&amp;iso_week=2026-W19"',
+        )
 
     def test_scheduled_event_form_fields_and_dashboard_counts(self):
         with self.client.session_transaction() as session:

@@ -49,10 +49,14 @@
             <form method="get" class="calendar-controls">
                 <label for="calendar-view">Widok</label>
                 <select id="calendar-view" name="calendar_view">
+                    <option value="week" {% if calendar_view == 'week' %}selected{% endif %}>Tygodniowy</option>
                     <option value="month" {% if calendar_view == 'month' %}selected{% endif %}>Miesięczny</option>
                     <option value="year" {% if calendar_view == 'year' %}selected{% endif %}>Roczny</option>
                 </select>
-                {% if calendar_view == 'month' %}
+                {% if calendar_view == 'week' %}
+                <label class="sr-only" for="calendar-iso-week">Tydzień</label>
+                <input id="calendar-iso-week" type="week" name="iso_week" value="{{ calendar_week_value }}" required>
+                {% elif calendar_view == 'month' %}
                 <label class="sr-only" for="calendar-month">Miesiąc</label>
                 <select id="calendar-month" name="month">
                     {% for month_name in month_names %}
@@ -78,6 +82,45 @@
     </div>
 
     <div class="calendar-scroll">
+        {% if calendar_view == 'week' %}
+        <div class="calendar-week-view" data-calendar-view="week">
+            <div class="calendar-week-grid calendar-week-header">
+                <div class="calendar-hour-label">Godzina</div>
+                {% for day in weekly_days %}
+                <div class="calendar-weekday{% if day.is_today %} calendar-day-today{% endif %}"{% if day.is_today %} aria-current="date"{% endif %}>
+                    <span>{{ calendar_weekdays[loop.index0] }}</span>
+                    <strong>{% if day.date %}{{ day.date.strftime("%d.%m") }}{% endif %}</strong>
+                </div>
+                {% endfor %}
+            </div>
+            {% for hour in calendar_hours %}
+            <div class="calendar-week-grid calendar-hour-row">
+                <div class="calendar-hour-label">{{ "%02d:00"|format(hour) }}</div>
+                {% for day in weekly_days %}
+                {% if day.date and (user_role == 'admin' or (current_user and current_user.can_create_records)) %}
+                <a class="calendar-hour-cell calendar-slot-link{% if day.is_today %} calendar-day-today{% endif %}"
+                   href="{{ url_for('new_scheduled_event', planned_at=day.date.isoformat() ~ 'T' ~ ('%02d:00'|format(hour))) }}"
+                   aria-label="Zaplanuj zdarzenie: {{ day.date.strftime('%d-%m-%Y') }} {{ '%02d:00'|format(hour) }}">
+                {% else %}
+                <div class="calendar-hour-cell{% if day.is_today %} calendar-day-today{% endif %}">
+                {% endif %}
+                    {% for scheduled in day.hours[hour] %}
+                    {% set event = scheduled.event %}
+                    {% set event_title = event.planned_at | datetime ~ ' — ' ~ event.name ~ ' — ' ~ event.event_type ~ ' — ' ~ event.description %}
+                    <span class="calendar-event badge {{ calendar_event_class(event.event_type) }}" title="{{ event_title }}">
+                        {{ scheduled.time }} · {{ event.event_type }} · {{ event.name }}
+                    </span>
+                    {% endfor %}
+                {% if day.date and (user_role == 'admin' or (current_user and current_user.can_create_records)) %}
+                </a>
+                {% else %}
+                </div>
+                {% endif %}
+                {% endfor %}
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
         <div class="calendar-months {% if calendar_view == 'year' %}calendar-year-view{% else %}calendar-month-view{% endif %}"
              data-calendar-view="{{ calendar_view }}">
             {% for month in calendar_months %}
@@ -95,7 +138,13 @@
                 <div class="calendar-grid">
                     <div class="calendar-week-number">{{ week.number }}</div>
                     {% for day in week.days %}
-                    <div class="calendar-day{% if not day.in_month %} calendar-day-outside{% endif %}{% if day.events %} calendar-day-has-events{% endif %}">
+                    {% if user_role == 'admin' or (current_user and current_user.can_create_records) %}
+                    <a class="calendar-day calendar-slot-link{% if not day.in_month %} calendar-day-outside{% endif %}{% if day.events %} calendar-day-has-events{% endif %}{% if day.is_today %} calendar-day-today{% endif %}"
+                       href="{{ url_for('new_scheduled_event', planned_at=day.date.isoformat() ~ 'T08:00') }}"
+                       aria-label="Zaplanuj zdarzenie: {{ day.date.strftime('%d-%m-%Y') }}"{% if day.is_today %} aria-current="date"{% endif %}>
+                    {% else %}
+                    <div class="calendar-day{% if not day.in_month %} calendar-day-outside{% endif %}{% if day.events %} calendar-day-has-events{% endif %}{% if day.is_today %} calendar-day-today{% endif %}"{% if day.is_today %} aria-current="date"{% endif %}>
+                    {% endif %}
                         <span class="calendar-day-number">{{ day.date.day }}</span>
                         <div class="calendar-day-events">
                             {% for event in day.events %}
@@ -107,13 +156,18 @@
                             {% endif %}
                             {% endfor %}
                         </div>
+                    {% if user_role == 'admin' or (current_user and current_user.can_create_records) %}
+                    </a>
+                    {% else %}
                     </div>
+                    {% endif %}
                     {% endfor %}
                 </div>
                 {% endfor %}
             </section>
             {% endfor %}
         </div>
+        {% endif %}
     </div>
 </div>
 
@@ -298,6 +352,15 @@
         border: 1px solid var(--border);
         background: var(--bg-card);
     }
+    .calendar-slot-link {
+        color: inherit;
+        text-decoration: none;
+        cursor: pointer;
+    }
+    .calendar-slot-link:hover { background: var(--bg-card-alt); }
+    .calendar-slot-link:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+    .calendar-day-today { border: 2px solid var(--accent); }
+    .calendar-day-today .calendar-day-number { color: var(--accent); font-weight: 800; }
     .calendar-day-number { display: block; color: var(--text); font-size: .75rem; }
     .calendar-day-outside { background: var(--bg-card-alt); }
     .calendar-day-outside .calendar-day-number { color: var(--muted); }
@@ -328,6 +391,46 @@
     .calendar-year-view .calendar-weekdays > div { font-size: .62rem; }
     .calendar-year-view .calendar-weekdays .calendar-week-label { font-size: .5rem; }
     .calendar-year-view .calendar-week-number { padding: .2rem 0; font-size: .58rem; }
+    .calendar-week-view { min-width: 900px; }
+    .calendar-week-grid {
+        display: grid;
+        grid-template-columns: 4.5rem repeat(7, minmax(0, 1fr));
+    }
+    .calendar-weekday,
+    .calendar-hour-label,
+    .calendar-hour-cell {
+        border: 1px solid var(--border);
+    }
+    .calendar-weekday {
+        display: flex;
+        min-height: 3.25rem;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: .15rem;
+        background: var(--bg-card-alt);
+        color: var(--muted);
+        font-size: .75rem;
+    }
+    .calendar-weekday strong { color: var(--text); }
+    .calendar-weekday.calendar-day-today { color: var(--accent); }
+    .calendar-hour-label {
+        display: flex;
+        justify-content: center;
+        padding: .35rem .15rem;
+        background: var(--bg-card-alt);
+        color: var(--muted);
+        font-size: .68rem;
+        font-weight: 700;
+    }
+    .calendar-hour-cell {
+        min-width: 0;
+        min-height: 3rem;
+        padding: .15rem;
+        background: var(--bg-card);
+    }
+    .calendar-hour-cell.calendar-day-today { background: var(--bg-card-alt); }
+    .calendar-hour-cell .calendar-event { margin-bottom: .15rem; }
     @media (max-width: 900px) {
         .calendar-year-view { grid-template-columns: repeat(2, minmax(240px, 1fr)); }
     }
