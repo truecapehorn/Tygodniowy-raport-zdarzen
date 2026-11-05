@@ -13,6 +13,7 @@ Przeglądarkowa aplikacja Flask do prowadzenia tygodniowego raportu napraw dla d
     - [Strona główna](#strona-główna)
     - [Filtrowanie i eksport](#filtrowanie-i-eksport)
     - [Nowy rekord](#nowy-rekord)
+    - [Planowanie zdarzeń](#planowanie-zdarzeń)
     - [Import / Export](#import--export)
     - [Logowanie i zmiana hasła](#logowanie-i-zmiana-hasła)
     - [Panel maszyn](#panel-maszyn)
@@ -124,6 +125,8 @@ wyświetlić historię jej wcześniejszych wpisów. Rok, tydzień, kolejność w
 czas przestoju i koszt łączny są wyliczane automatycznie.
 
 ### Planowanie zdarzeń
+
+![Dodawanie zdarzeń utrzymania ruchu](docs/screenshots/planowanie.PNG)
 
 Strona **Planowanie** (`/scheduled` / `/planowanie`) pokazuje liczbę zdarzeń
 zaplanowanych i zrealizowanych oraz oddzielne listy harmonogramu i historii
