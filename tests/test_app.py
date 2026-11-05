@@ -367,6 +367,8 @@ class RepairReportAppTests(unittest.TestCase):
         selected_week_html = selected_week.get_data(as_text=True)
         self.assertIn(target_week.strftime("%d.%m"), selected_week_html)
         self.assertIn("10:30 · Interwencja · Prasa Yellow", selected_week_html)
+        self.assertIn('id="calendar-iso-week" type="week" name="iso_week" value="2026-W20"', selected_week_html)
+        self.assertIn('.calendar-controls input[type="week"] { width: 9.5rem; }', selected_week_html)
         self.assertRegex(
             selected_week_html,
             r'href="/(?:scheduled/new|planowanie/nowe)\?planned_at=2026-05-14T10:00"',

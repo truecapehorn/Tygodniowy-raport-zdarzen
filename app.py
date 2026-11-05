@@ -1005,8 +1005,8 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
                 events_by_date.setdefault(planned_at.date().isoformat(), []).append(event)
 
         calendar_months = []
-        calendar_week_value = ""
         calendar_week = current_iso_week
+        calendar_week_value = ""
         week_start = None
         weekly_days = []
         if calendar_view == "week":
