@@ -159,7 +159,8 @@
                     <td>
                         <div class="actions">
                             {% if user_role == 'admin' or (current_user and current_user.can_delete_records) %}
-                            <form method="post" action="{{ url_for('scheduled_event_delete', event_id=event.id) }}" style="display:inline;">
+                            <form method="post" action="{{ url_for('scheduled_event_delete', event_id=event.id) }}" style="display:inline;"
+                                  onsubmit="return confirm('Czy na pewno usunąć to zaplanowane zdarzenie?\nOperacja jest nieodwracalna.');">
                                 <button type="submit" class="btn btn-danger btn-sm">Usuń</button>
                             </form>
                             {% endif %}
@@ -216,7 +217,8 @@
                     <td>{{ event.description }}</td>
                     <td>
                         {% if user_role == 'admin' or (current_user and current_user.can_delete_records) %}
-                        <form method="post" action="{{ url_for('scheduled_event_delete', event_id=event.id) }}" style="display:inline;">
+                        <form method="post" action="{{ url_for('scheduled_event_delete', event_id=event.id) }}" style="display:inline;"
+                              onsubmit="return confirm('Czy na pewno usunąć to zaplanowane zdarzenie?\nOperacja jest nieodwracalna.');">
                             <button type="submit" class="btn btn-danger btn-sm">Usuń</button>
                         </form>
                         {% endif %}
@@ -343,7 +345,8 @@
             <strong id="scheduled-modal-title" style="font-size:1rem;color:var(--text);">Szczegóły zdarzenia</strong>
             <div style="display:flex;gap:.4rem;align-items:center;flex-shrink:0;">
                 {% if user_role == 'admin' or (current_user and current_user.can_delete_records) %}
-                <form id="scheduled-modal-delete-form" method="post" style="display:inline;">
+                <form id="scheduled-modal-delete-form" method="post" style="display:inline;"
+                      onsubmit="return confirm('Czy na pewno usunąć to zaplanowane zdarzenie?\nOperacja jest nieodwracalna.');">
                     <button type="submit" class="btn btn-danger btn-sm">Usuń</button>
                 </form>
                 {% endif %}

@@ -397,6 +397,10 @@ class RepairReportAppTests(unittest.TestCase):
         self.assertIn(">Usuń</button>", html)
         self.assertNotIn(">Szczegóły</button>", html)
         self.assertIn('id="scheduled-modal-delete-form"', html)
+        self.assertEqual(
+            html.count("onsubmit=\"return confirm('Czy na pewno usunąć to zaplanowane zdarzenie?"),
+            2,
+        )
         self.assertIn('scheduledModalDeleteForm.action = `/scheduled/${id}/delete`', html)
         self.assertIn("row.addEventListener('click', (event) =>", html)
         self.assertIn("event.target.closest('button, form, a')", html)
@@ -487,6 +491,10 @@ class RepairReportAppTests(unittest.TestCase):
         self.assertIn('class="record-row scheduled-event-row" tabindex="0"', completed_page)
         self.assertRegex(completed_page, r'action="/(?:scheduled|planowanie)/\d+/delete"')
         self.assertNotIn(">Szczegóły</button>", completed_page)
+        self.assertEqual(
+            completed_page.count("onsubmit=\"return confirm('Czy na pewno usunąć to zaplanowane zdarzenie?"),
+            2,
+        )
 
     def test_existing_completed_scheduled_event_is_added_to_register_once(self):
         response = self.client.post(
