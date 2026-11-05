@@ -135,7 +135,7 @@
                         <option value="months">Miesiące</option>
                     </select>
                 </div>
-                <div class="field"><label for="edit-repeat-interval">Interwał powtarzania</label><input type="number" min="0" id="edit-repeat-interval" name="repeat_interval"></div>
+                <div class="field" id="edit-repeat-interval-field" hidden><label for="edit-repeat-interval">Interwał powtarzania</label><input type="number" min="0" id="edit-repeat-interval" name="repeat_interval"></div>
                 <div class="field scheduled-edit-description">
                     <label for="edit-description">Opis zdarzenia</label>
                     <textarea id="edit-description" name="description" required></textarea>
@@ -167,6 +167,7 @@
         grid-template-columns: repeat(12, minmax(0, 1fr));
         gap: 0.75rem;
     }
+    .scheduled-edit-grid > .field[hidden] { display: none; }
     .scheduled-edit-grid textarea { min-height: 120px; }
     .scheduled-edit-description,
     .scheduled-edit-notes { grid-column: 1 / -1; }
@@ -197,6 +198,14 @@ const scheduledModalClose = document.getElementById('scheduled-modal-close');
 const scheduledModalEditButton = document.getElementById('scheduled-modal-edit-button');
 const scheduledModalSaveButton = document.getElementById('scheduled-modal-save-button');
 const scheduledModalCancelButton = document.getElementById('scheduled-modal-cancel-button');
+const editRepeatUnitInput = document.getElementById('edit-repeat-unit');
+const editRepeatIntervalField = document.getElementById('edit-repeat-interval-field');
+
+function updateEditRepeatIntervalVisibility() {
+    editRepeatIntervalField.hidden = editRepeatUnitInput.value === 'none';
+}
+
+editRepeatUnitInput.addEventListener('change', updateEditRepeatIntervalVisibility);
 
 function setScheduledEditMode(editing) {
     scheduledModalContent.style.display = editing ? 'none' : '';
@@ -255,6 +264,7 @@ function openScheduledModal(button) {
     document.getElementById('edit-planned-at').value = date.replace(' ', 'T').slice(0, 16);
     document.getElementById('edit-repeat-interval').value = repeatInterval;
     document.getElementById('edit-repeat-unit').value = repeatUnit;
+    updateEditRepeatIntervalVisibility();
     document.getElementById('edit-description').value = description;
     document.getElementById('edit-cause').value = cause;
     document.getElementById('edit-repair-method').value = repairMethod;

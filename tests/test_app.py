@@ -261,6 +261,9 @@ class RepairReportAppTests(unittest.TestCase):
         self.assertIn("grid-template-columns: repeat(4, minmax(0, 1fr))", html)
         self.assertIn('class="field scheduled-third-row-start"', html)
         self.assertIn('class="field scheduled-notes-field"', html)
+        self.assertIn('id="repeat-interval-field" hidden', html)
+        self.assertIn(".scheduled-form-grid > .field[hidden] { display: none; }", html)
+        self.assertIn("repeatUnitInput.addEventListener('change', updateRepeatIntervalVisibility)", html)
 
         lookup = self.client.get(
             "/api/machines?machine=Prasa%20A&machine_type=Hydrauliczna"
@@ -334,6 +337,9 @@ class RepairReportAppTests(unittest.TestCase):
         self.assertLess(html.index('id="scheduled-modal-delete-form"'), html.index('id="scheduled-modal-edit-button"'))
         self.assertIn('id="scheduled-modal-edit-button" type="button"', html)
         self.assertIn('id="scheduled-modal-edit-form" method="post" style="display:none;"', html)
+        self.assertIn('id="edit-repeat-interval-field" hidden', html)
+        self.assertIn(".scheduled-edit-grid > .field[hidden] { display: none; }", html)
+        self.assertIn("editRepeatUnitInput.addEventListener('change', updateEditRepeatIntervalVisibility)", html)
         self.assertIn('name="cause"', html)
         self.assertIn("scheduled-edit-description,\n    .scheduled-edit-notes { grid-column: 1 / -1; }", html)
         self.assertIn(".scheduled-edit-third { grid-column: span 4; }", html)

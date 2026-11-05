@@ -7,6 +7,7 @@
         grid-template-columns: repeat(4, minmax(0, 1fr));
         gap: 0.75rem;
     }
+    .scheduled-form-grid > .field[hidden] { display: none; }
     .scheduled-form-grid textarea { min-height: 120px; }
     .scheduled-third-row-start { grid-column: 1; }
     .scheduled-notes-field { grid-column: 1 / -1; }
@@ -72,7 +73,7 @@
                     <option value="months">Miesiące</option>
                 </select>
             </div>
-            <div class="field">
+            <div class="field" id="repeat-interval-field" hidden>
                 <label for="repeat_interval">Interwał powtarzania</label>
                 <input id="repeat_interval" name="repeat_interval" type="number" min="0" value="0">
             </div>
@@ -113,6 +114,15 @@ const scheduledMachineTypeList = document.getElementById('scheduled-machine-type
 const scheduledSerialList = document.getElementById('scheduled-serial-number-list');
 const scheduledMachineLookupError = document.getElementById('scheduled-machine-lookup-error');
 let scheduledMachineLookupId = 0;
+const repeatUnitInput = document.getElementById('repeat_unit');
+const repeatIntervalField = document.getElementById('repeat-interval-field');
+
+function updateRepeatIntervalVisibility() {
+    repeatIntervalField.hidden = repeatUnitInput.value === 'none';
+}
+
+repeatUnitInput.addEventListener('change', updateRepeatIntervalVisibility);
+updateRepeatIntervalVisibility();
 
 function scheduledNativeDateTime(value) {
     const text = String(value ?? '').trim();
