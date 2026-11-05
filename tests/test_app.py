@@ -325,6 +325,8 @@ class RepairReportAppTests(unittest.TestCase):
         form_page = self.client.get("/scheduled/new").get_data(as_text=True)
         self.assertIn('id="scheduled-machine-name"', form_page)
         self.assertIn('placeholder="dd-mm-rrrr gg:mm"', form_page)
+        self.assertNotIn('<option value="Awaria">', form_page)
+        self.assertIn('<option value="Przegląd">', form_page)
         home_page = self.client.get("/").get_data(as_text=True)
         self.assertIn("na 15-12-2020 13:45.", home_page)
         self.assertIn("Zaplanowane zdarzenia</div>\n        <strong style=\"display:block;font-size:2rem;color:var(--accent);\">1", html)

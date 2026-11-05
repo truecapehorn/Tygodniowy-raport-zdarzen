@@ -47,7 +47,9 @@
                 <label for="event_type">Rodzaj zdarzenia *</label>
                 <select id="event_type" name="event_type" required>
                     {% for kind in event_types %}
+                    {% if kind != "Awaria" %}
                     <option value="{{ kind }}">{{ kind }}</option>
+                    {% endif %}
                     {% endfor %}
                 </select>
             </div>
