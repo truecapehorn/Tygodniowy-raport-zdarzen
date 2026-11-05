@@ -86,13 +86,15 @@
                 <h3 class="calendar-month-heading">{{ month.name }}</h3>
                 {% endif %}
                 <div class="calendar-grid calendar-weekdays">
+                    <div class="calendar-week-label">Tydz.</div>
                     {% for weekday in calendar_weekdays %}
                     <div>{{ weekday }}</div>
                     {% endfor %}
                 </div>
                 {% for week in month.weeks %}
                 <div class="calendar-grid">
-                    {% for day in week %}
+                    <div class="calendar-week-number">{{ week.number }}</div>
+                    {% for day in week.days %}
                     <div class="calendar-day{% if not day.in_month %} calendar-day-outside{% endif %}{% if day.events %} calendar-day-has-events{% endif %}">
                         <span class="calendar-day-number">{{ day.date.day }}</span>
                         <div class="calendar-day-events">
@@ -267,13 +269,25 @@
     .calendar-year-view { grid-template-columns: repeat(3, minmax(240px, 1fr)); }
     .calendar-month { min-width: 0; }
     .calendar-month-heading { margin: 0 0 .35rem; font-size: .9rem; }
-    .calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+    .calendar-grid { display: grid; grid-template-columns: 1.8rem repeat(7, minmax(0, 1fr)); }
     .calendar-weekdays > div {
         padding: .35rem .15rem;
         color: var(--muted);
         font-size: .7rem;
         font-weight: 700;
         text-align: center;
+    }
+    .calendar-weekdays .calendar-week-label { font-size: .58rem; }
+    .calendar-week-number {
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+        padding: .3rem .1rem;
+        border: 1px solid var(--border);
+        background: var(--bg-card-alt);
+        color: var(--muted);
+        font-size: .68rem;
+        font-weight: 700;
     }
     .calendar-day {
         min-width: 0;
@@ -310,6 +324,8 @@
     .calendar-year-view .calendar-dot.badge-inne { background: var(--muted); }
     .calendar-year-view .calendar-day { min-height: 2.8rem; padding: .15rem; }
     .calendar-year-view .calendar-weekdays > div { font-size: .62rem; }
+    .calendar-year-view .calendar-weekdays .calendar-week-label { font-size: .5rem; }
+    .calendar-year-view .calendar-week-number { padding: .2rem 0; font-size: .58rem; }
     @media (max-width: 900px) {
         .calendar-year-view { grid-template-columns: repeat(2, minmax(240px, 1fr)); }
     }

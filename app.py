@@ -1006,14 +1006,17 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         for month_number in month_numbers:
             weeks = []
             for week in calendar_generator.monthdatescalendar(calendar_year, month_number):
-                weeks.append([
-                    {
-                        "date": day,
-                        "in_month": day.month == month_number,
-                        "events": events_by_date.get(day.isoformat(), []) if day.month == month_number else [],
-                    }
-                    for day in week
-                ])
+                weeks.append({
+                    "number": week[0].isocalendar().week,
+                    "days": [
+                        {
+                            "date": day,
+                            "in_month": day.month == month_number,
+                            "events": events_by_date.get(day.isoformat(), []) if day.month == month_number else [],
+                        }
+                        for day in week
+                    ],
+                })
             calendar_months.append({
                 "number": month_number,
                 "name": month_names[month_number - 1],
