@@ -226,6 +226,7 @@ data-notes="{{ event.notes or '' }}"
                 {% for event in scheduled_events %}
                 <tr class="record-row scheduled-event-row" tabindex="0" aria-label="Otwórz szczegóły zdarzenia"
                     data-scheduled-id="{{ event.id }}"
+                    data-status="{{ event.status }}"
                     data-machine="{{ event.name }}"
                     data-machine-type="{{ event.machine_type }}"
                     data-serial="{{ event.serial_number }}"
@@ -298,6 +299,7 @@ data-notes="{{ event.notes or '' }}"
                 {% for event in completed_events %}
                 <tr class="record-row scheduled-event-row" tabindex="0" aria-label="Otwórz szczegóły zdarzenia"
                     data-scheduled-id="{{ event.id }}"
+                    data-status="{{ event.status }}"
                     data-machine="{{ event.name }}"
                     data-machine-type="{{ event.machine_type }}"
                     data-serial="{{ event.serial_number }}"
@@ -529,6 +531,17 @@ data-notes="{{ event.notes or '' }}"
         <div class="modal-header">
             <strong id="scheduled-modal-title" style="font-size:1rem;color:var(--text);">Szczegóły zdarzenia</strong>
             <div style="display:flex;gap:.4rem;align-items:center;flex-shrink:0;">
+                {% if user_role == 'admin' or (current_user and current_user.can_edit_records) %}
+                <form id="scheduled-modal-complete-form" method="post" style="display:none;">
+                    <input type="hidden" name="expected_planned_at">
+                    <button type="submit" class="btn btn-success btn-sm">Wykonano</button>
+                </form>
+                <form id="scheduled-modal-undo-form" method="post" style="display:none;"
+                      onsubmit="return confirm('Cofnąć wykonanie tego zdarzenia? Powiązany wpis rejestru utworzony przez realizację (jeśli istnieje), jego załączniki oraz następny termin cykliczny mogą zostać usunięte.');">
+                    <input type="hidden" name="expected_planned_at">
+                    <button type="submit" class="btn btn-outline btn-sm">Cofnij Wykonanie</button>
+                </form>
+                {% endif %}
                 {% if user_role == 'admin' or (current_user and current_user.can_delete_records) %}
                 <form id="scheduled-modal-delete-form" method="post" style="display:inline;"
                       onsubmit="return confirm('Czy na pewno usunąć to zaplanowane zdarzenie?\nOperacja jest nieodwracalna.');">
@@ -622,6 +635,8 @@ data-notes="{{ event.notes or '' }}"
 const scheduledModal = document.getElementById('scheduled-modal');
 const scheduledModalTitle = document.getElementById('scheduled-modal-title');
 const scheduledModalContent = document.getElementById('scheduled-modal-content');
+const scheduledModalCompleteForm = document.getElementById('scheduled-modal-complete-form');
+const scheduledModalUndoForm = document.getElementById('scheduled-modal-undo-form');
 const scheduledModalDeleteForm = document.getElementById('scheduled-modal-delete-form');
 const scheduledModalEditForm = document.getElementById('scheduled-modal-edit-form');
 const scheduledModalClose = document.getElementById('scheduled-modal-close');
@@ -656,6 +671,7 @@ function escapeScheduledHtml(value) {
 
 function openScheduledModal(row) {
     const id = row.dataset.scheduledId;
+    const status = row.dataset.status || 'planned';
     const machine = row.dataset.machine || '';
     const machineType = row.dataset.machineType || '';
     const serial = row.dataset.serial || '';
@@ -687,6 +703,16 @@ function openScheduledModal(row) {
 
     if (scheduledModalDeleteForm) {
         scheduledModalDeleteForm.action = `/scheduled/${id}/delete`;
+    }
+    if (scheduledModalCompleteForm) {
+        scheduledModalCompleteForm.action = `/scheduled/${id}/done`;
+        scheduledModalCompleteForm.querySelector('input[name="expected_planned_at"]').value = date;
+        scheduledModalCompleteForm.style.display = status === 'planned' ? '' : 'none';
+    }
+    if (scheduledModalUndoForm) {
+        scheduledModalUndoForm.action = `/scheduled/${id}/undo`;
+        scheduledModalUndoForm.querySelector('input[name="expected_planned_at"]').value = date;
+        scheduledModalUndoForm.style.display = status === 'done' ? '' : 'none';
     }
     scheduledModalEditForm.action = `/scheduled/${id}/edit`;
     document.getElementById('edit-machine-name').value = machine;

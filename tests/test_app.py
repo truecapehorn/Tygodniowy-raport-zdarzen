@@ -601,10 +601,17 @@ class RepairReportAppTests(unittest.TestCase):
         self.assertIn("Zaplanowane zdarzenia</div>\n        <strong style=\"display:block;font-size:2rem;color:var(--accent);\">1", html)
         self.assertIn("Zrealizowane zdarzenia</div>\n        <strong style=\"display:block;font-size:2rem;color:var(--green);\">0", html)
         self.assertIn('class="record-row scheduled-event-row" tabindex="0"', html)
+        self.assertIn('data-status="planned"', html)
         self.assertRegex(html, r'action="/(?:scheduled|planowanie)/\d+/delete"')
         self.assertIn(">Usuń</button>", html)
         self.assertNotIn(">Szczegóły</button>", html)
         self.assertIn('id="scheduled-modal-delete-form"', html)
+        self.assertIn('id="scheduled-modal-complete-form" method="post" style="display:none;"', html)
+        self.assertIn('id="scheduled-modal-undo-form" method="post" style="display:none;"', html)
+        self.assertIn('class="btn btn-success btn-sm">Wykonano</button>', html)
+        self.assertIn('class="btn btn-outline btn-sm">Cofnij Wykonanie</button>', html)
+        self.assertIn("scheduledModalCompleteForm.style.display = status === 'planned' ? '' : 'none';", html)
+        self.assertIn("scheduledModalUndoForm.style.display = status === 'done' ? '' : 'none';", html)
         self.assertEqual(
             html.count("onsubmit=\"return confirm('Czy na pewno usunąć to zaplanowane zdarzenie?"),
             2,
@@ -701,6 +708,7 @@ class RepairReportAppTests(unittest.TestCase):
         self.assertIn("<td class=\"text-muted\">Hydrauliczna<br>H-202</td>", completed_page)
         self.assertIn("<td class=\"text-muted\">Brak</td>", completed_page)
         self.assertIn('class="record-row scheduled-event-row" tabindex="0"', completed_page)
+        self.assertIn('data-status="done"', completed_page)
         self.assertIn(">Cofnij</button>", completed_page)
         self.assertRegex(completed_page, r'action="/(?:scheduled|planowanie)/\d+/undo"')
         self.assertRegex(completed_page, r'action="/(?:scheduled|planowanie)/\d+/delete"')
