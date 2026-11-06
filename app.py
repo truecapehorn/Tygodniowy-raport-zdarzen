@@ -8,7 +8,7 @@ import json
 import secrets
 import sqlite3
 import zipfile
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -1287,10 +1287,14 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
 
         records = query_records_latest(None)
         calendar_view = request.args.get("calendar_view", "month")
-        if calendar_view not in {"month", "year", "week"}:
+        if calendar_view not in {"day", "month", "year", "week"}:
             calendar_view = "month"
 
         current_date = datetime.now()
+        try:
+            calendar_date = date.fromisoformat(request.args.get("calendar_date", ""))
+        except ValueError:
+            calendar_date = current_date.date()
         current_iso_year, current_iso_week, _ = current_date.isocalendar()
         try:
             calendar_year = int(request.args.get(
@@ -1327,7 +1331,43 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         calendar_week = current_iso_week
         calendar_week_value = ""
         weekly_days = []
-        if calendar_view == "week":
+        calendar_slots = []
+        if calendar_view == "day":
+            slot_events: list[list[dict[str, Any]]] = [[] for _ in range(48)]
+            for record in events_by_date.get(calendar_date.isoformat(), []):
+                occurrence_at = parse_datetime(record["occurrence_at"])
+                if occurrence_at is not None:
+                    slot_index = occurrence_at.hour * 2 + occurrence_at.minute // 30
+                    slot_events[slot_index].append({
+                        "event": record,
+                        "time": occurrence_at.strftime("%H:%M"),
+                    })
+            calendar_slots = [
+                {
+                    "time": f"{slot_index // 2:02d}:{'30' if slot_index % 2 else '00'}",
+                    "occurrence_at": f"{calendar_date.isoformat()}T{slot_index // 2:02d}:{'30' if slot_index % 2 else '00'}",
+                    "events": slot_events[slot_index],
+                }
+                for slot_index in range(48)
+            ]
+            try:
+                previous_day = calendar_date - timedelta(days=1)
+            except OverflowError:
+                previous_day = None
+            try:
+                next_day = calendar_date + timedelta(days=1)
+            except OverflowError:
+                next_day = None
+            previous_url = (
+                url_for("records_calendar", calendar_view="day", calendar_date=previous_day.isoformat())
+                if previous_day else None
+            )
+            next_url = (
+                url_for("records_calendar", calendar_view="day", calendar_date=next_day.isoformat())
+                if next_day else None
+            )
+            calendar_heading = calendar_date.strftime("%d-%m-%Y")
+        elif calendar_view == "week":
             requested_iso_week = request.args.get("iso_week", "")
             try:
                 iso_year_text, iso_week_text = requested_iso_week.split("-W")
@@ -1384,7 +1424,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
                 )
             calendar_heading = f"Tydzień {calendar_week}, {calendar_year}"
 
-        if calendar_view != "week":
+        if calendar_view not in {"day", "week"}:
             month_numbers = range(1, 13) if calendar_view == "year" else (calendar_month,)
             calendar_generator = calendar.Calendar(firstweekday=calendar.MONDAY)
             for month_number in month_numbers:
@@ -1440,9 +1480,11 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             calendar_view=calendar_view,
             calendar_year=calendar_year,
             calendar_month=calendar_month,
+            calendar_date=calendar_date.isoformat(),
             calendar_week=calendar_week,
             calendar_week_value=calendar_week_value,
             calendar_months=calendar_months,
+            calendar_slots=calendar_slots,
             weekly_days=weekly_days,
             calendar_hours=range(24),
             calendar_heading=calendar_heading,
