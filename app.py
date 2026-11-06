@@ -1286,7 +1286,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             return redirect(url_for("index"))
 
         records = query_records_latest(None)
-        calendar_view = request.args.get("calendar_view", "month")
+        calendar_view = request.args.get("calendar_view", "day")
         if calendar_view not in {"day", "month", "year", "week"}:
             calendar_view = "month"
 

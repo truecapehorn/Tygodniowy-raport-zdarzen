@@ -12,9 +12,9 @@
   {%- endif -%}
 {% endmacro %}
 
-<div class="page-title">Rejestr działań utrzymania ruchu <small>Zestawienie ostatnich zdarzeń</small></div>
-<div class="actions" style="margin:-.75rem 0 1.25rem;">
-    <a href="{{ url_for('records_calendar') }}" class="btn btn-outline">Kalendarz wszystkich zdarzeń</a>
+<div class="page-heading-row">
+    <div class="page-title">Rejestr działań utrzymania ruchu <small>Zestawienie ostatnich zdarzeń</small></div>
+    <a href="{{ url_for('records_calendar', calendar_view='day') }}" class="btn btn-outline">Kalendarz wszystkich zdarzeń</a>
 </div>
 
 <!-- ── Ostatnie N rekordów ─────────────────────────────────────── -->
@@ -74,6 +74,14 @@
         </table>
     </div>
 </div>
+
+<style>
+    .page-heading-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1.25rem; }
+    .page-heading-row .page-title { margin: 0; }
+    @media (max-width: 700px) {
+        .page-heading-row { align-items: flex-start; flex-wrap: wrap; }
+    }
+</style>
 
 <!-- static file input reused by the edit popup (dynamic innerHTML inputs don't open picker reliably) -->
 <input type="file" id="edit-file-input" multiple

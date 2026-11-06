@@ -401,7 +401,12 @@ class RepairReportAppTests(unittest.TestCase):
             self.assertEqual(response.status_code, 302)
 
         home_page = self.client.get("/")
-        self.assertIn('href="/records-calendar"', home_page.get_data(as_text=True))
+        self.assertIn(
+            'href="/records-calendar?calendar_view=day"',
+            home_page.get_data(as_text=True),
+        )
+        default_calendar = self.client.get("/records-calendar").get_data(as_text=True)
+        self.assertIn('data-calendar-view="day"', default_calendar)
         with self.app.app_context():
             record_id = get_db().execute(
                 "SELECT id FROM repair_records WHERE description = ?",
