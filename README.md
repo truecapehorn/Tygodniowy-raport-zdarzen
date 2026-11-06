@@ -144,7 +144,10 @@ już oznaczone jako wykonane są dodawane do rejestru przy aktualizacji aplikacj
 Po wykonaniu zdarzenia cyklicznego jego wykonana kopia trafia do historii i
 rejestru, a zaplanowane zdarzenie pozostaje w harmonogramie z następnym terminem
 wyliczonym według ustawionego interwału. Jednorazowe zdarzenia są przenoszone do
-historii po wykonaniu.
+historii po wykonaniu. Kategoria **Własne** jest prywatna: jej zdarzenia widzi
+wyłącznie konto, które je utworzyło, a oznaczenie ich jako wykonanych nie tworzy
+wpisu w głównym rejestrze. Dotyczy to również zdarzeń cyklicznych. Zdarzenia
+własne są oznaczane kolorem różowym.
 
 Kalendarz planowania udostępnia widok tygodniowy (od poniedziałku do niedzieli,
 w podziale na godziny od 00:00 do 23:00), miesięczny i roczny. Bieżący dzień

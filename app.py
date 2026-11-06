@@ -67,6 +67,7 @@ EVENT_TYPES = [
     "Interwencja",
     "Inne",
 ]
+SCHEDULED_EVENT_TYPES = [*EVENT_TYPES, "Własne"]
 
 LABOR_RATE_PLN_PER_HOUR = 80
 
@@ -213,6 +214,7 @@ CREATE TABLE IF NOT EXISTS user_activity_log (
 CREATE TABLE IF NOT EXISTS scheduled_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     machine_id INTEGER NOT NULL,
+    created_by_user_id INTEGER,
     repair_record_id INTEGER,
     event_type TEXT NOT NULL,
     description TEXT NOT NULL,
@@ -226,7 +228,8 @@ CREATE TABLE IF NOT EXISTS scheduled_events (
     status TEXT NOT NULL DEFAULT 'planned',
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
-    FOREIGN KEY(machine_id) REFERENCES machines(id)
+    FOREIGN KEY(machine_id) REFERENCES machines(id),
+    FOREIGN KEY(created_by_user_id) REFERENCES users(id)
 );
 """
 
@@ -422,6 +425,18 @@ def get_current_user() -> sqlite3.Row | None:
         return None
     db = get_db()
     return db.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+
+
+def current_user_id() -> int | None:
+    user_id = session.get("user_id")
+    return int(user_id) if user_id else None
+
+
+def scheduled_event_is_visible_to_current_user(event: sqlite3.Row) -> bool:
+    return (
+        event["event_type"] != "Własne"
+        or event["created_by_user_id"] == current_user_id()
+    )
 
 
 def user_has_permission(permission_name: str) -> bool:
@@ -1123,7 +1138,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             completed_events=completed_events,
             planned_count=len(planned_events),
             completed_count=len(completed_events),
-            event_types=EVENT_TYPES,
+            event_types=SCHEDULED_EVENT_TYPES,
             calendar_view=calendar_view,
             calendar_year=calendar_year,
             calendar_month=calendar_month,
@@ -1156,7 +1171,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         return render_template(
             "new_scheduled_event.html",
             machine_names=list_machine_names(),
-            event_types=EVENT_TYPES,
+            event_types=SCHEDULED_EVENT_TYPES,
             planned_at_value=format_datetime(
                 requested_planned_at.isoformat(sep=" ", timespec="minutes")
                 if requested_planned_at else None
@@ -1178,7 +1193,12 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             flash(str(exc), "error")
             return redirect(url_for("scheduled_events"))
         if created:
-            if next_planned_at:
+            if record_id is None:
+                message = "Zdarzenie własne oznaczono jako wykonane; nie dodano go do tabeli głównej."
+                if next_planned_at:
+                    message += f" Następny termin: {format_datetime(next_planned_at)}."
+                flash(message, "success")
+            elif next_planned_at:
                 flash(
                     f"Wykonano zdarzenie cykliczne i dodano rekord #{record_id} do rejestru. "
                     f"Następny termin: {format_datetime(next_planned_at)}.",
@@ -1196,7 +1216,11 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         if not app.config.get("TESTING") and not user_has_permission("can_delete_records"):
             flash("Brak uprawnień do usuwania zaplanowanych zdarzeń.", "error")
             return redirect(url_for("scheduled_events"))
-        delete_scheduled_event(event_id)
+        try:
+            delete_scheduled_event(event_id)
+        except ValueError as exc:
+            flash(str(exc), "error")
+            return redirect(url_for("scheduled_events"))
         flash("Zaplanowane zdarzenie zostało usunięte.", "success")
         return redirect(url_for("scheduled_events"))
 
@@ -1247,7 +1271,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             "SELECT se.*, m.name, m.machine_type, m.serial_number FROM scheduled_events se JOIN machines m ON m.id = se.machine_id WHERE se.id = ?",
             (event_id,),
         ).fetchone()
-        if event is None:
+        if event is None or not scheduled_event_is_visible_to_current_user(event):
             return jsonify({"error": "Zdarzenie nie istnieje."}), 404
         if request.method == "GET":
             return jsonify({
@@ -1275,7 +1299,10 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         if request.method == "DELETE":
             if not app.config.get("TESTING") and not user_has_permission("can_delete_records"):
                 return jsonify({"error": "Brak uprawnień do usuwania."}), 403
-            delete_scheduled_event(event_id)
+            try:
+                delete_scheduled_event(event_id)
+            except ValueError as exc:
+                return jsonify({"error": str(exc)}), 404
             return jsonify({"status": "deleted"})
         return jsonify({"error": "Nieobsługiwane żądanie."}), 405
 
@@ -2024,6 +2051,7 @@ def init_db() -> None:
         row["name"] for row in db.execute("PRAGMA table_info(scheduled_events)").fetchall()
     }
     for column, column_type in (
+        ("created_by_user_id", "INTEGER"),
         ("repair_record_id", "INTEGER"),
         ("cause", "TEXT"),
         ("repair_method", "TEXT"),
@@ -2145,6 +2173,8 @@ def create_record_from_scheduled_event(
     event: sqlite3.Row,
     repaired_at: datetime | None,
 ) -> int:
+    if event["event_type"] == "Własne":
+        raise ValueError("Zdarzenia własne nie mogą trafiać do tabeli głównej.")
     occurrence_at = parse_datetime(event["planned_at"])
     if occurrence_at is None:
         raise ValueError(f"Zdarzenie planowane #{event['id']} ma nieprawidłową datę.")
@@ -2184,7 +2214,7 @@ def materialize_completed_scheduled_events() -> None:
     events = db.execute(
         """
         SELECT * FROM scheduled_events
-        WHERE status = 'done' AND repair_record_id IS NULL
+        WHERE status = 'done' AND repair_record_id IS NULL AND event_type != 'Własne'
         ORDER BY id
         """
     ).fetchall()
@@ -2199,7 +2229,7 @@ def materialize_completed_scheduled_events() -> None:
 def complete_scheduled_event(
     event_id: int,
     expected_planned_at: str | None = None,
-) -> tuple[int, bool, str | None]:
+) -> tuple[int | None, bool, str | None]:
     db = get_db()
     db.execute("BEGIN IMMEDIATE")
     event = db.execute(
@@ -2207,6 +2237,9 @@ def complete_scheduled_event(
         (event_id,),
     ).fetchone()
     if event is None:
+        db.rollback()
+        raise ValueError(f"Zaplanowane zdarzenie #{event_id} nie istnieje.")
+    if not scheduled_event_is_visible_to_current_user(event):
         db.rollback()
         raise ValueError(f"Zaplanowane zdarzenie #{event_id} nie istnieje.")
     if expected_planned_at:
@@ -2220,8 +2253,16 @@ def complete_scheduled_event(
         db.commit()
         return record_id, False, None
 
+    if event["status"] == "done" and event["event_type"] == "Własne":
+        db.commit()
+        return None, False, None
+
     completed_at = datetime.now().replace(second=0, microsecond=0)
-    record_id = create_record_from_scheduled_event(event, completed_at)
+    record_id = (
+        None
+        if event["event_type"] == "Własne"
+        else create_record_from_scheduled_event(event, completed_at)
+    )
     next_planned_at = next_scheduled_occurrence(
         parse_datetime(event["planned_at"]),
         int(event["repeat_interval"]),
@@ -2234,9 +2275,9 @@ def complete_scheduled_event(
             INSERT INTO scheduled_events(
                 machine_id, repair_record_id, event_type, description, cause,
                 repair_method, replaced_parts, notes, planned_at, repeat_interval,
-                repeat_unit, status, created_at, updated_at
+                repeat_unit, status, created_at, updated_at, created_by_user_id
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'done', ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'done', ?, ?, ?)
             """,
             (
                 int(event["machine_id"]),
@@ -2252,6 +2293,7 @@ def complete_scheduled_event(
                 event["repeat_unit"],
                 updated_at,
                 updated_at,
+                event["created_by_user_id"],
             ),
         )
         db.execute(
@@ -2276,15 +2318,21 @@ def complete_scheduled_event(
             (record_id, updated_at, event_id),
         )
     db.commit()
-    log_user_activity(
-        "create_record",
-        f"Utworzono rekord #{record_id} z zaplanowanego zdarzenia #{event_id}.",
-        target_type="record",
-        target_id=record_id,
+    if record_id is not None:
+        log_user_activity(
+            "create_record",
+            f"Utworzono rekord #{record_id} z zaplanowanego zdarzenia #{event_id}.",
+            target_type="record",
+            target_id=record_id,
+        )
+    completion_details = (
+        f"Zrealizowano zdarzenie #{event_id} jako rekord rejestru #{record_id}."
+        if record_id is not None
+        else f"Zrealizowano zdarzenie własne #{event_id} bez dodawania go do rejestru."
     )
     log_user_activity(
         "complete_scheduled_event",
-        f"Zrealizowano zdarzenie #{event_id} jako rekord rejestru #{record_id}.",
+        completion_details,
         target_type="scheduled_event",
         target_id=event_id,
     )
@@ -2381,9 +2429,10 @@ def get_scheduled_events(status: str | None = None) -> list[sqlite3.Row]:
         SELECT se.*, m.name, m.machine_type, m.serial_number
         FROM scheduled_events se
         JOIN machines m ON m.id = se.machine_id
-        WHERE 1 = 1
+        WHERE (se.event_type != 'Własne' OR se.created_by_user_id = ?)
     """
-    params: list[Any] = []
+    user_id = current_user_id()
+    params: list[Any] = [user_id if user_id is not None else -1]
     if status is not None:
         query += " AND se.status = ?"
         params.append(status)
@@ -2400,9 +2449,10 @@ def get_due_scheduled_events() -> list[sqlite3.Row]:
         FROM scheduled_events se
         JOIN machines m ON m.id = se.machine_id
         WHERE se.status = 'planned' AND date(se.planned_at) <= date(?)
+          AND (se.event_type != 'Własne' OR se.created_by_user_id = ?)
         ORDER BY se.planned_at ASC, se.id DESC
         """,
-        (now.date().isoformat(),),
+        (now.date().isoformat(), current_user_id() if current_user_id() is not None else -1),
     ).fetchall()
     return list(rows)
 
@@ -2418,6 +2468,12 @@ def save_scheduled_event(form: dict[str, Any]) -> int:
         raise ValueError("Maszyna, typ i numer seryjny są wymagane.")
     repeat_interval = int(form.get("repeat_interval") or 0)
     repeat_unit = str(form.get("repeat_unit") or "none").strip().lower()
+    event_type = str(form.get("event_type", "")).strip() or "Interwencja"
+    if event_type not in SCHEDULED_EVENT_TYPES or event_type == "Awaria":
+        raise ValueError("Wybierz prawidłowy rodzaj zdarzenia planowanego.")
+    creator_user_id = current_user_id()
+    if event_type == "Własne" and creator_user_id is None:
+        raise ValueError("Aby zaplanować zdarzenie własne, zaloguj się na konto użytkownika.")
     if repeat_interval < 0:
         raise ValueError("Interwał powtarzania musi być nieujemny.")
     if repeat_unit not in {"none", "days", "weeks", "months"}:
@@ -2427,14 +2483,15 @@ def save_scheduled_event(form: dict[str, Any]) -> int:
     cursor = db.execute(
         """
         INSERT INTO scheduled_events(
-            machine_id, event_type, description, cause, repair_method, replaced_parts, notes, planned_at,
+            machine_id, created_by_user_id, event_type, description, cause, repair_method, replaced_parts, notes, planned_at,
             repeat_interval, repeat_unit, status, created_at, updated_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             machine_id,
-            str(form.get("event_type", "")).strip() or "Interwencja",
+            creator_user_id,
+            event_type,
             str(form.get("description", "")).strip(),
             str(form.get("cause", "")).strip() or None,
             str(form.get("repair_method", "")).strip() or None,
@@ -2459,6 +2516,12 @@ def save_scheduled_event(form: dict[str, Any]) -> int:
 
 
 def update_scheduled_event(event_id: int, form: dict[str, Any]) -> None:
+    event = get_db().execute(
+        "SELECT * FROM scheduled_events WHERE id = ?",
+        (event_id,),
+    ).fetchone()
+    if event is None or not scheduled_event_is_visible_to_current_user(event):
+        raise ValueError(f"Zaplanowane zdarzenie #{event_id} nie istnieje.")
     description_value = str(form.get("description", "")).strip()
     if not description_value:
         raise ValueError("Opis zdarzenia jest wymagany.")
@@ -2469,6 +2532,14 @@ def update_scheduled_event(event_id: int, form: dict[str, Any]) -> None:
     repeat_unit = str(form.get("repeat_unit") or "none").strip().lower()
     if repeat_unit not in {"none", "days", "weeks", "months"}:
         repeat_unit = "none"
+    event_type = str(form.get("event_type", "")).strip() or "Interwencja"
+    if event_type not in SCHEDULED_EVENT_TYPES or event_type == "Awaria":
+        raise ValueError("Wybierz prawidłowy rodzaj zdarzenia planowanego.")
+    created_by_user_id = event["created_by_user_id"]
+    if event_type == "Własne" and created_by_user_id is None:
+        created_by_user_id = current_user_id()
+        if created_by_user_id is None:
+            raise ValueError("Aby zaplanować zdarzenie własne, zaloguj się na konto użytkownika.")
     machine_name = str(form.get("machine_name", "")).strip()
     if machine_name:
         machine_type = str(form.get("machine_type", "")).strip()
@@ -2478,10 +2549,11 @@ def update_scheduled_event(event_id: int, form: dict[str, Any]) -> None:
         machine_id = get_or_create_machine(machine_name, machine_type, serial_number)
         db = get_db()
         db.execute(
-            "UPDATE scheduled_events SET machine_id = ?, event_type = ?, description = ?, cause = ?, repair_method = ?, replaced_parts = ?, notes = ?, planned_at = ?, repeat_interval = ?, repeat_unit = ?, updated_at = ? WHERE id = ?",
+            "UPDATE scheduled_events SET machine_id = ?, created_by_user_id = ?, event_type = ?, description = ?, cause = ?, repair_method = ?, replaced_parts = ?, notes = ?, planned_at = ?, repeat_interval = ?, repeat_unit = ?, updated_at = ? WHERE id = ?",
             (
                 machine_id,
-                str(form.get("event_type", "")).strip() or "Interwencja",
+                created_by_user_id,
+                event_type,
                 str(form.get("description", "")).strip(),
                 str(form.get("cause", "")).strip() or None,
                 str(form.get("repair_method", "")).strip() or None,
@@ -2497,9 +2569,10 @@ def update_scheduled_event(event_id: int, form: dict[str, Any]) -> None:
     else:
         db = get_db()
         db.execute(
-            "UPDATE scheduled_events SET event_type = ?, description = ?, cause = ?, repair_method = ?, replaced_parts = ?, notes = ?, planned_at = ?, repeat_interval = ?, repeat_unit = ?, updated_at = ? WHERE id = ?",
+            "UPDATE scheduled_events SET created_by_user_id = ?, event_type = ?, description = ?, cause = ?, repair_method = ?, replaced_parts = ?, notes = ?, planned_at = ?, repeat_interval = ?, repeat_unit = ?, updated_at = ? WHERE id = ?",
             (
-                str(form.get("event_type", "")).strip() or "Interwencja",
+                created_by_user_id,
+                event_type,
                 str(form.get("description", "")).strip(),
                 str(form.get("cause", "")).strip() or None,
                 str(form.get("repair_method", "")).strip() or None,
@@ -2523,6 +2596,12 @@ def update_scheduled_event(event_id: int, form: dict[str, Any]) -> None:
 
 def delete_scheduled_event(event_id: int) -> None:
     db = get_db()
+    event = db.execute(
+        "SELECT * FROM scheduled_events WHERE id = ?",
+        (event_id,),
+    ).fetchone()
+    if event is None or not scheduled_event_is_visible_to_current_user(event):
+        raise ValueError(f"Zaplanowane zdarzenie #{event_id} nie istnieje.")
     db.execute("DELETE FROM scheduled_events WHERE id = ?", (event_id,))
     db.commit()
     log_user_activity(

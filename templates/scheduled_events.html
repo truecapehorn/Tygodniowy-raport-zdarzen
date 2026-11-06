@@ -7,6 +7,7 @@
     {%- elif 'przegl' in event_type_lower -%}badge-przeglad
     {%- elif event_type_lower == 'modernizacja' -%}badge-modernizacja
     {%- elif event_type_lower == 'interwencja' -%}badge-interwencja
+    {%- elif event_type_lower == 'własne' -%}badge-wlasne
     {%- else -%}badge-inne
     {%- endif -%}
 {% endmacro %}
@@ -48,7 +49,7 @@ data-notes="{{ event.notes or '' }}"
 <div class="card">
     <div class="calendar-toolbar">
         <div>
-            <div class="card-title">Kalendarz zdarzeń</div>
+            <div class="card-title">Kalendarz zdarzeń planowanych </div>
             <h2 class="calendar-heading">{{ calendar_heading }}</h2>
         </div>
         <div class="calendar-actions">
@@ -93,7 +94,7 @@ data-notes="{{ event.notes or '' }}"
         <span class="badge badge-przeglad">Przegląd</span>
         <span class="badge badge-interwencja">Interwencja</span>
         <span class="badge badge-modernizacja">Modernizacja</span>
-        <!---<span class="badge badge-awaria">Awaria</span>--->
+        <span class="badge badge-wlasne">Własne</span>
         <span class="badge badge-inne">Inne</span>
     </div>
 
@@ -228,7 +229,7 @@ data-notes="{{ event.notes or '' }}"
                     data-notes="{{ event.notes or '' }}">
                     <td>{{ event.name }}</td>
                     <td class="text-muted">{{ event.machine_type }}<br>{{ event.serial_number }}</td>
-                    <td>{{ event.event_type }}</td>
+                    <td>{% if event.event_type == 'Własne' %}<span class="badge badge-wlasne">{{ event.event_type }}</span>{% else %}{{ event.event_type }}{% endif %}</td>
                     <td>{{ event.planned_at|datetime }}</td>
                     <td class="text-muted">{% if event.repeat_interval and event.repeat_unit and event.repeat_unit != 'none' %}{{ event.repeat_interval }} {{ event.repeat_unit }}{% else %}Brak{% endif %}</td>
                     <td>{{ event.description }}</td>
@@ -288,7 +289,7 @@ data-notes="{{ event.notes or '' }}"
                     data-replaced-parts="{{ event.replaced_parts or '' }}"
                     data-notes="{{ event.notes or '' }}">
                     <td>{{ event.name }}</td>
-                    <td>{{ event.event_type }}</td>
+                    <td>{% if event.event_type == 'Własne' %}<span class="badge badge-wlasne">{{ event.event_type }}</span>{% else %}{{ event.event_type }}{% endif %}</td>
                     <td>{{ event.planned_at|datetime }}</td>
                     <td>{{ event.description }}</td>
                     <td>
@@ -413,6 +414,7 @@ data-notes="{{ event.notes or '' }}"
     .calendar-year-view .calendar-dot.badge-modernizacja { background: var(--purple); }
     .calendar-year-view .calendar-dot.badge-awaria { background: var(--red); }
     .calendar-year-view .calendar-dot.badge-inne { background: var(--muted); }
+    .calendar-year-view .calendar-dot.badge-wlasne { background: var(--pink); }
     .calendar-year-view .calendar-day { min-height: 2.8rem; padding: .15rem; }
     .calendar-year-view .calendar-weekdays > div { font-size: .62rem; }
     .calendar-year-view .calendar-weekdays .calendar-week-label { font-size: .5rem; }

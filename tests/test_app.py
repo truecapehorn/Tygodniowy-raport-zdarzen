@@ -684,6 +684,153 @@ class RepairReportAppTests(unittest.TestCase):
             2,
         )
 
+    def test_personal_scheduled_event_is_private_and_never_added_to_register(self):
+        with self.client.session_transaction() as session:
+            session["logged_in"] = True
+            session["role"] = "user"
+            session["user_id"] = 101
+
+        response = self.client.post(
+            "/scheduled/new",
+            data={
+                "machine_name": "Prasa prywatna",
+                "machine_type": "Hydrauliczna",
+                "serial_number": "OWN-101",
+                "event_type": "Własne",
+                "planned_at": "2020-11-05T09:00",
+                "description": "Prywatny przegląd",
+                "repeat_interval": "0",
+                "repeat_unit": "none",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        with self.app.app_context():
+            event = get_db().execute(
+                "SELECT id, created_by_user_id FROM scheduled_events WHERE description = ?",
+                ("Prywatny przegląd",),
+            ).fetchone()
+        event_id = int(event["id"])
+        self.assertEqual(event["created_by_user_id"], 101)
+
+        form_html = self.client.get("/scheduled/new").get_data(as_text=True)
+        self.assertIn('<option value="Własne">Własne</option>', form_html)
+        owner_page = self.client.get("/scheduled").get_data(as_text=True)
+        self.assertIn("Prywatny przegląd", owner_page)
+        self.assertIn('class="badge badge-wlasne">Własne</span>', owner_page)
+        self.assertIn("badge-wlasne       { background: var(--pink-dim);", self.client.get("/").get_data(as_text=True))
+        self.assertEqual(
+            self.client.get("/api/scheduled-events").get_json()[0]["description"],
+            "Prywatny przegląd",
+        )
+
+        with self.client.session_transaction() as session:
+            session["user_id"] = 202
+        other_user_page = self.client.get("/scheduled").get_data(as_text=True)
+        self.assertNotIn("Prywatny przegląd", other_user_page)
+        self.assertNotIn("Prywatny przegląd", self.client.get("/").get_data(as_text=True))
+        self.assertEqual(self.client.get("/api/scheduled-events").get_json(), [])
+        self.assertEqual(self.client.get(f"/api/scheduled-events/{event_id}").status_code, 404)
+        self.assertEqual(
+            self.client.patch(
+                f"/api/scheduled-events/{event_id}",
+                json={"description": "Nieuprawniona zmiana"},
+            ).status_code,
+            404,
+        )
+        self.assertEqual(
+            self.client.delete(f"/api/scheduled-events/{event_id}").status_code,
+            404,
+        )
+        self.client.post(f"/scheduled/{event_id}/done")
+        self.client.post(
+            f"/scheduled/{event_id}/edit",
+            data={"description": "Nieuprawniona zmiana"},
+        )
+        self.client.post(f"/scheduled/{event_id}/delete")
+        with self.app.app_context():
+            unchanged = get_db().execute(
+                "SELECT status, description FROM scheduled_events WHERE id = ?",
+                (event_id,),
+            ).fetchone()
+        self.assertEqual(tuple(unchanged), ("planned", "Prywatny przegląd"))
+
+        with self.client.session_transaction() as session:
+            session["user_id"] = 101
+        completed = self.client.post(f"/scheduled/{event_id}/done")
+        self.assertEqual(completed.status_code, 302)
+        with self.app.app_context():
+            db = get_db()
+            completed_event = db.execute(
+                "SELECT status, repair_record_id FROM scheduled_events WHERE id = ?",
+                (event_id,),
+            ).fetchone()
+            record_count = db.execute(
+                "SELECT COUNT(*) FROM repair_records WHERE description = ?",
+                ("Prywatny przegląd",),
+            ).fetchone()[0]
+            init_db()
+            materialized_count = db.execute(
+                "SELECT COUNT(*) FROM repair_records WHERE description = ?",
+                ("Prywatny przegląd",),
+            ).fetchone()[0]
+        self.assertEqual(completed_event["status"], "done")
+        self.assertIsNone(completed_event["repair_record_id"])
+        self.assertEqual(record_count, 0)
+        self.assertEqual(materialized_count, 0)
+
+    def test_recurring_personal_scheduled_event_keeps_owner_and_skips_register(self):
+        with self.client.session_transaction() as session:
+            session["logged_in"] = True
+            session["role"] = "user"
+            session["user_id"] = 303
+        response = self.client.post(
+            "/scheduled/new",
+            data={
+                "machine_name": "Prasa cykliczna prywatna",
+                "machine_type": "Hydrauliczna",
+                "serial_number": "OWN-303",
+                "event_type": "Własne",
+                "planned_at": "2020-11-05T09:30",
+                "repeat_interval": "2",
+                "repeat_unit": "weeks",
+                "description": "Prywatny przegląd cykliczny",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        with self.app.app_context():
+            event = get_db().execute(
+                "SELECT id, planned_at FROM scheduled_events WHERE description = ?",
+                ("Prywatny przegląd cykliczny",),
+            ).fetchone()
+
+        response = self.client.post(
+            f"/scheduled/{event['id']}/done",
+            data={"expected_planned_at": event["planned_at"]},
+        )
+        self.assertEqual(response.status_code, 302)
+        with self.app.app_context():
+            rows = get_db().execute(
+                """
+                SELECT status, planned_at, repair_record_id, created_by_user_id
+                FROM scheduled_events
+                WHERE description = ?
+                ORDER BY status
+                """,
+                ("Prywatny przegląd cykliczny",),
+            ).fetchall()
+            record_count = get_db().execute(
+                "SELECT COUNT(*) FROM repair_records WHERE description = ?",
+                ("Prywatny przegląd cykliczny",),
+            ).fetchone()[0]
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[0]["status"], "done")
+        self.assertIsNone(rows[0]["repair_record_id"])
+        self.assertEqual(rows[0]["created_by_user_id"], 303)
+        self.assertEqual(rows[1]["status"], "planned")
+        self.assertEqual(rows[1]["planned_at"], "2020-11-19 09:30")
+        self.assertEqual(rows[1]["created_by_user_id"], 303)
+        self.assertEqual(record_count, 0)
+
     def test_existing_completed_scheduled_event_is_added_to_register_once(self):
         response = self.client.post(
             "/scheduled/new",
