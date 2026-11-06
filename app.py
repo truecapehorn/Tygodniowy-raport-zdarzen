@@ -1492,7 +1492,10 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             previous_calendar_url=previous_url,
             next_calendar_url=next_url,
             month_names=month_names,
+            event_types=EVENT_TYPES,
             can_create_records=app.config.get("TESTING") or user_has_permission("can_create_records"),
+            can_edit_records=app.config.get("TESTING") or user_has_permission("can_edit_records"),
+            can_delete_records=app.config.get("TESTING") or user_has_permission("can_delete_records"),
         )
 
     @app.route("/", methods=["GET", "POST"])

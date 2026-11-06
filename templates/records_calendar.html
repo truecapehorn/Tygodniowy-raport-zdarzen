@@ -175,7 +175,20 @@
     <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="calendar-record-title">
         <div class="modal-header">
             <strong id="calendar-record-title" style="font-size:1rem;color:var(--text);">Szczegóły zdarzenia</strong>
-            <button type="button" class="modal-close" id="calendar-record-close" title="Zamknij" aria-label="Zamknij">&times;</button>
+            <div class="calendar-record-actions">
+                {% if can_delete_records %}
+                <button type="button" class="btn btn-danger btn-sm" id="calendar-record-delete" style="display:none;">&#128465; Usuń</button>
+                {% endif %}
+                {% if can_edit_records %}
+                <button type="button" class="btn btn-primary btn-sm" id="calendar-record-edit" style="display:none;">&#9998; Edytuj</button>
+                {% endif %}
+                <button type="button" class="btn btn-success btn-sm" id="calendar-record-pdf" style="display:none;">&#128196; PDF</button>
+                {% if can_edit_records %}
+                <button type="button" class="btn btn-primary btn-sm" id="calendar-record-save" style="display:none;">&#10004; Zapisz</button>
+                <button type="button" class="btn btn-outline btn-sm" id="calendar-record-cancel" style="display:none;">Anuluj</button>
+                {% endif %}
+                <button type="button" class="modal-close" id="calendar-record-close" title="Zamknij" aria-label="Zamknij">&times;</button>
+            </div>
         </div>
         <div id="calendar-record-content"></div>
     </div>
@@ -239,11 +252,20 @@
     .calendar-day-time { padding: .35rem; border-right: 1px solid var(--border); color: var(--muted); font-size: .72rem; text-align: center; }
     .calendar-day-slot-events { display: flex; flex-direction: column; gap: .15rem; padding: .15rem; }
     .calendar-dot-link { display: inline-flex; align-items: center; justify-content: center; }
+    .calendar-record-actions { display: flex; align-items: center; justify-content: flex-end; gap: .4rem; flex-shrink: 0; }
     #calendar-record-modal.open { display: flex; }
     #calendar-record-content { max-height: 70vh; overflow: auto; }
     .calendar-detail-table { width: 100%; border-collapse: collapse; }
     .calendar-detail-table th, .calendar-detail-table td { padding: .4rem .55rem; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; white-space: pre-wrap; overflow-wrap: anywhere; }
     .calendar-detail-table th { width: 35%; color: var(--muted); font-weight: 600; }
+    .calendar-edit-table { width: 100%; border-collapse: collapse; }
+    .calendar-edit-table th, .calendar-edit-table td { padding: .35rem .55rem; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+    .calendar-edit-table th { width: 30%; color: var(--muted); font-weight: 600; }
+    .calendar-edit-table input, .calendar-edit-table select, .calendar-edit-table textarea {
+        width: 100%; min-height: 2rem; padding: .35rem .5rem; border: 1px solid var(--border);
+        border-radius: 5px; background: var(--bg-input); color: var(--text); font: inherit;
+    }
+    .calendar-edit-table textarea { min-height: 4.5rem; resize: vertical; }
     .calendar-hint { margin-top: .75rem; color: var(--muted); font-size: .8rem; }
     @media (max-width: 900px) { .calendar-year-view { grid-template-columns: repeat(2, minmax(240px, 1fr)); } }
     @media (max-width: 600px) { .calendar-year-view { grid-template-columns: 1fr; } }
@@ -252,39 +274,156 @@
 const calendarRecordModal = document.getElementById('calendar-record-modal');
 const calendarRecordTitle = document.getElementById('calendar-record-title');
 const calendarRecordContent = document.getElementById('calendar-record-content');
+const CALENDAR_EVENT_TYPES = {{ event_types | tojson }};
+const CALENDAR_CAN_EDIT = {{ can_edit_records | tojson }};
+const CALENDAR_CAN_DELETE = {{ can_delete_records | tojson }};
+let calendarCurrentRecord = null;
 function escapeCalendarHtml(value) {
     return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function calendarNativeDateTime(value) {
+    const match = String(value ?? '').match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})/);
+    return match ? `${match[1]}T${match[2]}` : '';
+}
+function setCalendarActionVisibility(mode) {
+    const viewMode = mode === 'view';
+    const editMode = mode === 'edit';
+    const elements = {
+        edit: document.getElementById('calendar-record-edit'),
+        delete: document.getElementById('calendar-record-delete'),
+        pdf: document.getElementById('calendar-record-pdf'),
+        save: document.getElementById('calendar-record-save'),
+        cancel: document.getElementById('calendar-record-cancel'),
+    };
+    if (elements.edit) elements.edit.style.display = viewMode && CALENDAR_CAN_EDIT ? '' : 'none';
+    if (elements.delete) elements.delete.style.display = viewMode && CALENDAR_CAN_DELETE ? '' : 'none';
+    if (elements.pdf) elements.pdf.style.display = viewMode ? '' : 'none';
+    if (elements.save) elements.save.style.display = editMode ? '' : 'none';
+    if (elements.cancel) elements.cancel.style.display = editMode ? '' : 'none';
+}
+function renderCalendarRecord(record) {
+    const fields = [
+        ['Maszyna', record.name], ['Typ maszyny', record.machine_type], ['Numer seryjny', record.serial_number],
+        ['Rodzaj zdarzenia', record.event_type], ['Data wystąpienia', record.occurrence_at],
+        ['Data naprawienia', record.repaired_at], ['MTG maszyny', record.machine_mtg], ['Opis', record.description],
+        ['Przyczyna', record.cause], ['Sposób naprawy', record.repair_method], ['Wymienione części', record.replaced_parts],
+        ['Osoby biorące udział', record.participants], ['Uwagi', record.notes], ['Pracochłonność [h]', record.labor_cost],
+        ['Materiał PLN', record.material_cost], ['Części zamienne PLN', record.spare_parts_cost],
+        ['Serwis PLN', record.service_cost], ['Koszt netto PLN', record.total_cost],
+        ['Wykluczenie z produkcji [h]', record.downtime_hours]
+    ];
+    const rows = fields.map(([label, value]) => `<tr><th>${escapeCalendarHtml(label)}</th><td>${escapeCalendarHtml(value || '—')}</td></tr>`);
+    for (const attachment of record.attachments || []) {
+        const href = `/attachments/${encodeURIComponent(record.id)}/${encodeURIComponent(attachment.filename)}`;
+        rows.push(`<tr><th>Załącznik</th><td><a href="${href}" target="_blank" rel="noopener">${escapeCalendarHtml(attachment.original_name || attachment.filename)}</a></td></tr>`);
+    }
+    calendarRecordContent.innerHTML = `<table class="calendar-detail-table"><tbody>${rows.join('')}</tbody></table>`;
+    setCalendarActionVisibility('view');
 }
 async function openCalendarRecord(recordId) {
     calendarRecordTitle.textContent = 'Wczytywanie…';
     calendarRecordContent.textContent = '';
+    setCalendarActionVisibility('loading');
     calendarRecordModal.classList.add('open');
     calendarRecordModal.setAttribute('aria-hidden', 'false');
     try {
         const response = await fetch(`/api/record/${encodeURIComponent(recordId)}`);
         const record = await response.json();
         if (!response.ok) throw new Error(record.error || 'Nie udało się wczytać zdarzenia.');
+        calendarCurrentRecord = record;
         calendarRecordTitle.textContent = `Zdarzenie #${record.id} — ${record.name || ''}`;
-        const fields = [
-            ['Maszyna', record.name], ['Typ maszyny', record.machine_type], ['Numer seryjny', record.serial_number],
-            ['Rodzaj zdarzenia', record.event_type], ['Data wystąpienia', record.occurrence_at],
-            ['Data naprawienia', record.repaired_at], ['MTG maszyny', record.machine_mtg], ['Opis', record.description],
-            ['Przyczyna', record.cause], ['Sposób naprawy', record.repair_method], ['Wymienione części', record.replaced_parts],
-            ['Osoby biorące udział', record.participants], ['Uwagi', record.notes], ['Pracochłonność [h]', record.labor_cost],
-            ['Materiał PLN', record.material_cost], ['Części zamienne PLN', record.spare_parts_cost],
-            ['Serwis PLN', record.service_cost], ['Koszt netto PLN', record.total_cost],
-            ['Wykluczenie z produkcji [h]', record.downtime_hours]
-        ];
-        const rows = fields.map(([label, value]) => `<tr><th>${escapeCalendarHtml(label)}</th><td>${escapeCalendarHtml(value || '—')}</td></tr>`);
-        for (const attachment of record.attachments || []) {
-            const href = `/attachments/${encodeURIComponent(record.id)}/${encodeURIComponent(attachment.filename)}`;
-            rows.push(`<tr><th>Załącznik</th><td><a href="${href}" target="_blank" rel="noopener">${escapeCalendarHtml(attachment.original_name || attachment.filename)}</a></td></tr>`);
-        }
-        calendarRecordContent.innerHTML = `<table class="calendar-detail-table"><tbody>${rows.join('')}</tbody></table>`;
+        renderCalendarRecord(record);
     } catch (error) {
         calendarRecordTitle.textContent = 'Nie udało się wczytać zdarzenia';
         calendarRecordContent.textContent = error.message;
     }
+}
+function enterCalendarRecordEdit() {
+    if (!calendarCurrentRecord) return;
+    const record = calendarCurrentRecord;
+    const fields = [
+        ['Maszyna', 'machine_name', record.name, 'text'],
+        ['Typ maszyny', 'machine_type', record.machine_type, 'text'],
+        ['Numer seryjny', 'serial_number', record.serial_number, 'text'],
+        ['Rodzaj zdarzenia', 'event_type', record.event_type, 'select'],
+        ['Data wystąpienia', 'occurrence_at', calendarNativeDateTime(record.occurrence_at), 'datetime-local'],
+        ['Data naprawienia', 'repaired_at', calendarNativeDateTime(record.repaired_at), 'datetime-local'],
+        ['MTG maszyny', 'machine_mtg', record.machine_mtg, 'text'],
+        ['Opis', 'description', record.description, 'textarea'],
+        ['Przyczyna', 'cause', record.cause, 'textarea'],
+        ['Sposób naprawy', 'repair_method', record.repair_method, 'textarea'],
+        ['Wymienione części', 'replaced_parts', record.replaced_parts, 'textarea'],
+        ['Osoby biorące udział', 'participants', record.participants, 'text'],
+        ['Uwagi', 'notes', record.notes, 'textarea'],
+        ['Pracochłonność [h]', 'labor_cost', record.labor_cost, 'number'],
+        ['Materiał PLN', 'material_cost', record.material_cost, 'number'],
+        ['Części zamienne PLN', 'spare_parts_cost', record.spare_parts_cost, 'number'],
+        ['Serwis PLN', 'service_cost', record.service_cost, 'number'],
+    ];
+    const rows = fields.map(([label, name, value, type]) => {
+        let input;
+        if (type === 'select') {
+            const options = CALENDAR_EVENT_TYPES.map(eventType =>
+                `<option value="${escapeCalendarHtml(eventType)}"${eventType === value ? ' selected' : ''}>${escapeCalendarHtml(eventType)}</option>`
+            ).join('');
+            input = `<select id="calendar-edit-${name}">${options}</select>`;
+        } else if (type === 'textarea') {
+            input = `<textarea id="calendar-edit-${name}">${escapeCalendarHtml(value)}</textarea>`;
+        } else {
+            input = `<input id="calendar-edit-${name}" type="${type}"${type === 'number' ? ' min="0" step="0.01"' : ''} value="${escapeCalendarHtml(value)}"${name === 'machine_name' || name === 'machine_type' || name === 'serial_number' || name === 'occurrence_at' ? ' required' : ''}>`;
+        }
+        return `<tr><th><label for="calendar-edit-${name}">${escapeCalendarHtml(label)}</label></th><td>${input}</td></tr>`;
+    });
+    calendarRecordContent.innerHTML = `<table class="calendar-edit-table"><tbody>${rows.join('')}</tbody></table>`;
+    setCalendarActionVisibility('edit');
+}
+async function saveCalendarRecordEdit() {
+    if (!calendarCurrentRecord) return;
+    const data = {};
+    for (const name of ['machine_name', 'machine_type', 'serial_number', 'event_type', 'occurrence_at', 'repaired_at', 'machine_mtg', 'description', 'cause', 'repair_method', 'replaced_parts', 'participants', 'notes', 'labor_cost', 'material_cost', 'spare_parts_cost', 'service_cost']) {
+        const field = document.getElementById(`calendar-edit-${name}`);
+        if (field.required && !field.value.trim()) {
+            field.focus();
+            alert('Uzupełnij wymagane pola.');
+            return;
+        }
+        const value = field.value;
+        data[name] = value;
+    }
+    const button = document.getElementById('calendar-record-save');
+    button.disabled = true;
+    try {
+        const response = await fetch(`/api/record/${calendarCurrentRecord.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'Nie udało się zapisać zmian.');
+        window.location.reload();
+    } catch (error) {
+        alert(error.message);
+    } finally {
+        button.disabled = false;
+    }
+}
+async function deleteCalendarRecord() {
+    if (!calendarCurrentRecord || !confirm(`Czy na pewno usunąć rekord #${calendarCurrentRecord.id}?\nOperacja jest nieodwracalna.`)) return;
+    const button = document.getElementById('calendar-record-delete');
+    button.disabled = true;
+    try {
+        const response = await fetch(`/api/record/${calendarCurrentRecord.id}`, { method: 'DELETE' });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'Nie udało się usunąć zdarzenia.');
+        window.location.reload();
+    } catch (error) {
+        alert(error.message);
+    } finally {
+        button.disabled = false;
+    }
+}
+function exportCalendarRecordPdf() {
+    if (calendarCurrentRecord) window.open(`/record/${calendarCurrentRecord.id}/pdf`, '_blank', 'noopener');
 }
 function closeCalendarRecord() {
     calendarRecordModal.classList.remove('open');
@@ -310,6 +449,13 @@ document.querySelectorAll('.calendar-create-slot').forEach(slot => {
     });
 });
 document.getElementById('calendar-record-close').addEventListener('click', closeCalendarRecord);
+document.getElementById('calendar-record-edit')?.addEventListener('click', enterCalendarRecordEdit);
+document.getElementById('calendar-record-save')?.addEventListener('click', saveCalendarRecordEdit);
+document.getElementById('calendar-record-cancel')?.addEventListener('click', () => {
+    if (calendarCurrentRecord) renderCalendarRecord(calendarCurrentRecord);
+});
+document.getElementById('calendar-record-delete')?.addEventListener('click', deleteCalendarRecord);
+document.getElementById('calendar-record-pdf').addEventListener('click', exportCalendarRecordPdf);
 calendarRecordModal.addEventListener('click', event => {
     if (event.target === calendarRecordModal) closeCalendarRecord();
 });

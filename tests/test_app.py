@@ -440,6 +440,9 @@ class RepairReportAppTests(unittest.TestCase):
             "/records-calendar?calendar_view=day&calendar_date=2026-03-02"
         ).get_data(as_text=True)
         self.assertIn('data-calendar-view="day"', day_html)
+        self.assertIn('id="calendar-record-delete"', day_html)
+        self.assertIn('id="calendar-record-edit"', day_html)
+        self.assertIn('id="calendar-record-pdf"', day_html)
         self.assertIn(
             'data-create-url="/new?occurrence_at=2026-03-02T09:30&amp;return_calendar_date=2026-03-02"',
             day_html,
