@@ -10,6 +10,22 @@
     {%- else -%}badge-inne
     {%- endif -%}
 {% endmacro %}
+{% macro scheduled_event_data(event) -%}
+data-scheduled-id="{{ event.id }}"
+data-machine="{{ event.name }}"
+data-machine-type="{{ event.machine_type }}"
+data-serial="{{ event.serial_number }}"
+data-event-type="{{ event.event_type }}"
+data-date="{{ event.planned_at }}"
+data-date-display="{{ event.planned_at|datetime }}"
+data-repeat-interval="{{ event.repeat_interval }}"
+data-repeat-unit="{{ event.repeat_unit }}"
+data-description="{{ event.description }}"
+data-cause="{{ event.cause or '' }}"
+data-repair-method="{{ event.repair_method or '' }}"
+data-replaced-parts="{{ event.replaced_parts or '' }}"
+data-notes="{{ event.notes or '' }}"
+{%- endmacro %}
 
 <div class="page-title">Planowanie zdarzeń <small>Harmonogram przeglądów, interwencji i działań utrzymania ruchu</small></div>
 
@@ -107,7 +123,9 @@
                     {% for scheduled in day.hours[hour] %}
                     {% set event = scheduled.event %}
                     {% set event_title = event.planned_at | datetime ~ ' — ' ~ event.name ~ ' — ' ~ event.event_type ~ ' — ' ~ event.description %}
-                    <span class="calendar-event badge {{ calendar_event_class(event.event_type) }}" title="{{ event_title }}">
+                    <span class="calendar-event badge {{ calendar_event_class(event.event_type) }} calendar-scheduled-event"
+                          {{ scheduled_event_data(event) }}
+                          role="button" tabindex="0" aria-label="Otwórz szczegóły: {{ event_title }}" title="{{ event_title }}">
                         {{ scheduled.time }} · {{ event.event_type }} · {{ event.name }}
                     </span>
                     {% endfor %}
@@ -150,9 +168,13 @@
                             {% for event in day.events %}
                             {% set event_title = event.planned_at | datetime ~ ' — ' ~ event.name ~ ' — ' ~ event.event_type ~ ' — ' ~ event.description %}
                             {% if calendar_view == 'month' %}
-                            <span class="calendar-event badge {{ calendar_event_class(event.event_type) }}" title="{{ event_title }}">{{ event.event_type }} · {{ event.name }}</span>
+                            <span class="calendar-event badge {{ calendar_event_class(event.event_type) }} calendar-scheduled-event"
+                                  {{ scheduled_event_data(event) }}
+                                  role="button" tabindex="0" aria-label="Otwórz szczegóły: {{ event_title }}" title="{{ event_title }}">{{ event.event_type }} · {{ event.name }}</span>
                             {% else %}
-                            <span class="calendar-dot {{ calendar_event_class(event.event_type) }}" title="{{ event_title }}" aria-label="{{ event_title }}"></span>
+                            <span class="calendar-dot {{ calendar_event_class(event.event_type) }} calendar-scheduled-event"
+                                  {{ scheduled_event_data(event) }}
+                                  role="button" tabindex="0" aria-label="Otwórz szczegóły: {{ event_title }}" title="{{ event_title }}"></span>
                             {% endif %}
                             {% endfor %}
                         </div>
@@ -372,6 +394,9 @@
         overflow: hidden;
         text-overflow: ellipsis;
     }
+    .calendar-scheduled-event { cursor: pointer; }
+    .calendar-scheduled-event:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .calendar-event.calendar-scheduled-event:hover { filter: brightness(.92); }
     .calendar-year-view .calendar-dot {
         display: inline-block;
         width: .85rem;
@@ -624,6 +649,20 @@ function openScheduledModal(row) {
     setScheduledEditMode(false);
     scheduledModal.classList.add('open');
 }
+
+document.querySelectorAll('.calendar-scheduled-event').forEach((calendarEvent) => {
+    calendarEvent.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        openScheduledModal(calendarEvent);
+    });
+    calendarEvent.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        event.stopPropagation();
+        openScheduledModal(calendarEvent);
+    });
+});
 
 document.querySelectorAll('.scheduled-event-row').forEach((row) => {
     row.addEventListener('click', (event) => {
