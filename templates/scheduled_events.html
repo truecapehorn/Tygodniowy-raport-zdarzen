@@ -13,6 +13,7 @@
 {% endmacro %}
 {% macro scheduled_event_data(event) -%}
 data-scheduled-id="{{ event.id }}"
+data-status="{{ event.status }}"
 data-machine="{{ event.name }}"
 data-machine-type="{{ event.machine_type }}"
 data-serial="{{ event.serial_number }}"
@@ -90,12 +91,13 @@ data-notes="{{ event.notes or '' }}"
         </div>
     </div>
 
-    <div class="calendar-legend" aria-label="Legenda rodzajów zdarzeń">
+    <div class="calendar-legend" aria-label="Legenda rodzajów i statusów zdarzeń">
         <span class="badge badge-przeglad">Przegląd</span>
         <span class="badge badge-interwencja">Interwencja</span>
         <span class="badge badge-modernizacja">Modernizacja</span>
         <span class="badge badge-wlasne">Własne</span>
         <span class="badge badge-inne">Inne</span>
+        <span class="badge calendar-status-done">✓ Wykonano</span>
     </div>
 
     <div class="calendar-scroll">
@@ -124,10 +126,10 @@ data-notes="{{ event.notes or '' }}"
                     {% for scheduled in day.hours[hour] %}
                     {% set event = scheduled.event %}
                     {% set event_title = event.planned_at | datetime ~ ' — ' ~ event.name ~ ' — ' ~ event.event_type ~ ' — ' ~ event.description %}
-                    <span class="calendar-event badge {{ calendar_event_class(event.event_type) }} calendar-scheduled-event"
+                    <span class="calendar-event badge {{ calendar_event_class(event.event_type) }} calendar-scheduled-event{% if event.status == 'done' %} calendar-scheduled-done{% endif %}"
                           {{ scheduled_event_data(event) }}
-                          role="button" tabindex="0" aria-label="Otwórz szczegóły: {{ event_title }}" title="{{ event_title }}">
-                        {{ scheduled.time }} · {{ event.event_type }} · {{ event.name }}
+                          role="button" tabindex="0" aria-label="{% if event.status == 'done' %}Wykonano. {% endif %}Otwórz szczegóły: {{ event_title }}" title="{% if event.status == 'done' %}WYKONANO — {% endif %}{{ event_title }}">
+                        {% if event.status == 'done' %}✓ {% endif %}{{ scheduled.time }} · {{ event.event_type }} · {{ event.name }}
                     </span>
                     {% endfor %}
                 {% if day.date and (user_role == 'admin' or (current_user and current_user.can_create_records)) %}
@@ -168,14 +170,15 @@ data-notes="{{ event.notes or '' }}"
                         <div class="calendar-day-events">
                             {% for event in day.events %}
                             {% set event_title = event.planned_at | datetime ~ ' — ' ~ event.name ~ ' — ' ~ event.event_type ~ ' — ' ~ event.description %}
+                            {% set event_status_prefix = 'WYKONANO — ' if event.status == 'done' else '' %}
                             {% if calendar_view == 'month' %}
-                            <span class="calendar-event badge {{ calendar_event_class(event.event_type) }} calendar-scheduled-event"
+                            <span class="calendar-event badge {{ calendar_event_class(event.event_type) }} calendar-scheduled-event{% if event.status == 'done' %} calendar-scheduled-done{% endif %}"
                                   {{ scheduled_event_data(event) }}
-                                  role="button" tabindex="0" aria-label="Otwórz szczegóły: {{ event_title }}" title="{{ event_title }}">{{ event.event_type }} · {{ event.name }}</span>
+                                  role="button" tabindex="0" aria-label="{% if event.status == 'done' %}Wykonano. {% endif %}Otwórz szczegóły: {{ event_title }}" title="{{ event_status_prefix }}{{ event_title }}">{% if event.status == 'done' %}✓ {% endif %}{{ event.event_type }} · {{ event.name }}</span>
                             {% else %}
-                            <span class="calendar-dot {{ calendar_event_class(event.event_type) }} calendar-scheduled-event"
+                            <span class="calendar-dot {{ calendar_event_class(event.event_type) }} calendar-scheduled-event{% if event.status == 'done' %} calendar-scheduled-done{% endif %}"
                                   {{ scheduled_event_data(event) }}
-                                  role="button" tabindex="0" aria-label="Otwórz szczegóły: {{ event_title }}" title="{{ event_title }}"></span>
+                                  role="button" tabindex="0" aria-label="{{ event_status_prefix }}Otwórz szczegóły: {{ event_title }}" title="{{ event_status_prefix }}{{ event_title }}"></span>
                             {% endif %}
                             {% endfor %}
                         </div>
@@ -267,6 +270,7 @@ data-notes="{{ event.notes or '' }}"
                     <th>Maszyna</th>
                     <th>Rodzaj</th>
                     <th>Planowana data</th>
+                    <th>Powtarzanie</th>
                     <th>Opis</th>
                     <th>Akcje</th>
                 </tr>
@@ -291,8 +295,16 @@ data-notes="{{ event.notes or '' }}"
                     <td>{{ event.name }}</td>
                     <td>{% if event.event_type == 'Własne' %}<span class="badge badge-wlasne">{{ event.event_type }}</span>{% else %}{{ event.event_type }}{% endif %}</td>
                     <td>{{ event.planned_at|datetime }}</td>
+                    <td class="text-muted">{% if event.repeat_interval and event.repeat_unit and event.repeat_unit != 'none' %}Cykliczne — co {{ event.repeat_interval }} {{ event.repeat_unit }}{% else %}Niecykliczne{% endif %}</td>
                     <td>{{ event.description }}</td>
                     <td>
+                        {% if user_role == 'admin' or (current_user and current_user.can_edit_records) %}
+                        <form method="post" action="{{ url_for('scheduled_event_undo', event_id=event.id) }}" style="display:inline;"
+                              onsubmit="return confirm('Cofnąć wykonanie tego zdarzenia?{% if event.repair_record_id %} Powiązany wpis w rejestrze głównym i jego załączniki zostaną usunięte.{% endif %}{% if event.repeat_interval and event.repeat_unit != 'none' %} Następny termin utworzony przez powtarzanie także zostanie usunięty.{% endif %}');">
+                            <input type="hidden" name="expected_planned_at" value="{{ event.planned_at }}">
+                            <button type="submit" class="btn btn-outline btn-sm">Cofnij wykonanie</button>
+                        </form>
+                        {% endif %}
                         {% if user_role == 'admin' or (current_user and current_user.can_delete_records) %}
                         <form method="post" action="{{ url_for('scheduled_event_delete', event_id=event.id) }}" style="display:inline;"
                               onsubmit="return confirm('Czy na pewno usunąć to zaplanowane zdarzenie?\nOperacja jest nieodwracalna.');">
@@ -344,6 +356,11 @@ data-notes="{{ event.notes or '' }}"
         border: 0;
     }
     .calendar-legend { margin: 0 0 .75rem; }
+    .calendar-status-done {
+        background: var(--green-dim);
+        color: var(--green);
+        border: 1px solid var(--green);
+    }
     .calendar-scroll { overflow-x: auto; }
     .calendar-months { display: grid; gap: 1rem; }
     .calendar-year-view { grid-template-columns: repeat(3, minmax(240px, 1fr)); }
@@ -398,6 +415,19 @@ data-notes="{{ event.notes or '' }}"
     .calendar-scheduled-event { cursor: pointer; }
     .calendar-scheduled-event:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
     .calendar-event.calendar-scheduled-event:hover { filter: brightness(.92); }
+    .calendar-event.calendar-scheduled-done { border-color: var(--green); }
+    .calendar-year-view .calendar-dot.calendar-scheduled-done {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--green);
+        border-color: var(--green);
+        color: var(--bg-card);
+        font-size: .65rem;
+        font-weight: 800;
+        line-height: 1;
+    }
+    .calendar-year-view .calendar-dot.calendar-scheduled-done::before { content: "✓"; }
     .calendar-year-view .calendar-dot {
         display: inline-block;
         width: .85rem;

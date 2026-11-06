@@ -226,6 +226,7 @@ CREATE TABLE IF NOT EXISTS scheduled_events (
     repeat_interval INTEGER NOT NULL DEFAULT 0,
     repeat_unit TEXT NOT NULL DEFAULT 'none',
     status TEXT NOT NULL DEFAULT 'planned',
+    recurrence_next_event_id INTEGER,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     FOREIGN KEY(machine_id) REFERENCES machines(id),
@@ -1210,6 +1211,28 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             flash("Zdarzenie było już wykonane i powiązane z rejestrem.", "info")
         return redirect(url_for("scheduled_events"))
 
+    @app.route("/scheduled/<int:event_id>/undo", methods=["POST"])
+    @app.route("/planowanie/<int:event_id>/undo", methods=["POST"])
+    def scheduled_event_undo(event_id: int):
+        if not app.config.get("TESTING") and not user_has_permission("can_edit_records"):
+            flash("Brak uprawnień do cofania wykonania zdarzeń.", "error")
+            return redirect(url_for("scheduled_events"))
+        try:
+            record_id, next_event_removed = undo_scheduled_event_completion(
+                event_id,
+                request.form.get("expected_planned_at"),
+            )
+        except ValueError as exc:
+            flash(str(exc), "error")
+            return redirect(url_for("scheduled_events"))
+        message = "Cofnięto oznaczenie zdarzenia jako wykonanego."
+        if record_id is not None:
+            message += f" Usunięto powiązany rekord rejestru #{record_id}."
+        if next_event_removed:
+            message += " Usunięto również następny termin utworzony przez powtarzanie."
+        flash(message, "success")
+        return redirect(url_for("scheduled_events"))
+
     @app.route("/scheduled/<int:event_id>/delete", methods=["POST"])
     @app.route("/planowanie/<int:event_id>/delete", methods=["POST"])
     def scheduled_event_delete(event_id: int):
@@ -2056,6 +2079,7 @@ def init_db() -> None:
         ("cause", "TEXT"),
         ("repair_method", "TEXT"),
         ("replaced_parts", "TEXT"),
+        ("recurrence_next_event_id", "INTEGER"),
     ):
         if column not in scheduled_columns:
             db.execute(f"ALTER TABLE scheduled_events ADD COLUMN {column} {column_type}")
@@ -2270,14 +2294,15 @@ def complete_scheduled_event(
     )
     updated_at = datetime.now(UTC).isoformat(timespec="seconds")
     if next_planned_at:
-        db.execute(
+        completed_occurrence = db.execute(
             """
             INSERT INTO scheduled_events(
                 machine_id, repair_record_id, event_type, description, cause,
                 repair_method, replaced_parts, notes, planned_at, repeat_interval,
-                repeat_unit, status, created_at, updated_at, created_by_user_id
+                repeat_unit, status, recurrence_next_event_id, created_at, updated_at,
+                created_by_user_id
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'done', ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'done', ?, ?, ?, ?)
             """,
             (
                 int(event["machine_id"]),
@@ -2291,10 +2316,19 @@ def complete_scheduled_event(
                 event["planned_at"],
                 int(event["repeat_interval"]),
                 event["repeat_unit"],
+                event_id,
                 updated_at,
                 updated_at,
                 event["created_by_user_id"],
             ),
+        )
+        db.execute(
+            """
+            UPDATE scheduled_events
+            SET recurrence_next_event_id = ?
+            WHERE recurrence_next_event_id = ? AND id != ?
+            """,
+            (int(completed_occurrence.lastrowid), event_id, int(completed_occurrence.lastrowid)),
         )
         db.execute(
             """
@@ -2341,6 +2375,135 @@ def complete_scheduled_event(
         True,
         next_planned_at.isoformat(sep=" ", timespec="minutes") if next_planned_at else None,
     )
+
+
+def undo_scheduled_event_completion(
+    event_id: int,
+    expected_planned_at: str | None = None,
+) -> tuple[int | None, bool]:
+    import shutil
+
+    db = get_db()
+    db.execute("BEGIN IMMEDIATE")
+    event = db.execute(
+        "SELECT * FROM scheduled_events WHERE id = ?",
+        (event_id,),
+    ).fetchone()
+    if event is None or not scheduled_event_is_visible_to_current_user(event):
+        db.rollback()
+        raise ValueError(f"Wykonane zdarzenie #{event_id} nie istnieje.")
+    if event["status"] != "done":
+        db.rollback()
+        raise ValueError("To zdarzenie nie jest oznaczone jako wykonane.")
+    if expected_planned_at:
+        expected = parse_datetime(expected_planned_at)
+        current = parse_datetime(event["planned_at"])
+        if expected is None or current is None or expected != current:
+            db.rollback()
+            raise ValueError("Termin tego zdarzenia został już zaktualizowany. Odśwież harmonogram.")
+
+    next_event_id = event["recurrence_next_event_id"]
+    next_planned_at = next_scheduled_occurrence(
+        parse_datetime(event["planned_at"]),
+        int(event["repeat_interval"]),
+        str(event["repeat_unit"]),
+    )
+    if next_event_id is None and next_planned_at is not None:
+        # Older recurring completions predate the explicit link; recover only an unambiguous match.
+        candidates = db.execute(
+            """
+            SELECT id FROM scheduled_events
+            WHERE status = 'planned' AND machine_id = ? AND planned_at = ?
+              AND event_type = ? AND description = ? AND cause IS ?
+              AND repair_method IS ? AND replaced_parts IS ? AND notes IS ?
+              AND repeat_interval = ? AND repeat_unit = ? AND created_by_user_id IS ?
+            """,
+            (
+                int(event["machine_id"]),
+                next_planned_at.isoformat(sep=" ", timespec="minutes"),
+                event["event_type"],
+                event["description"],
+                event["cause"],
+                event["repair_method"],
+                event["replaced_parts"],
+                event["notes"],
+                int(event["repeat_interval"]),
+                event["repeat_unit"],
+                event["created_by_user_id"],
+            ),
+        ).fetchall()
+        if len(candidates) > 1:
+            db.rollback()
+            raise ValueError("Nie można jednoznacznie ustalić następnego terminu. Nie cofnięto wykonania.")
+        if candidates:
+            next_event_id = int(candidates[0]["id"])
+
+    if next_event_id is not None:
+        next_event = db.execute(
+            "SELECT * FROM scheduled_events WHERE id = ?",
+            (int(next_event_id),),
+        ).fetchone()
+        if next_event is None:
+            next_event_id = None
+        else:
+            expected_next_at = (
+                next_planned_at.isoformat(sep=" ", timespec="minutes")
+                if next_planned_at is not None else None
+            )
+            if (
+                next_event["status"] != "planned"
+                or next_event["planned_at"] != expected_next_at
+                or any(
+                    next_event[column] != event[column]
+                    for column in (
+                        "machine_id", "event_type", "description", "cause",
+                        "repair_method", "replaced_parts", "notes",
+                        "repeat_interval", "repeat_unit", "created_by_user_id",
+                    )
+                )
+            ):
+                db.rollback()
+                raise ValueError(
+                    "Następny termin tego zdarzenia został zmieniony. "
+                    "Nie cofnięto wykonania ani nie usunięto żadnych danych."
+                )
+            db.execute("DELETE FROM scheduled_events WHERE id = ?", (int(next_event_id),))
+
+    record_id = int(event["repair_record_id"]) if event["repair_record_id"] is not None else None
+    if record_id is not None:
+        db.execute("DELETE FROM attachments WHERE record_id = ?", (record_id,))
+        db.execute("DELETE FROM repair_records WHERE id = ?", (record_id,))
+    updated_at = datetime.now(UTC).isoformat(timespec="seconds")
+    db.execute(
+        """
+        UPDATE scheduled_events
+        SET status = 'planned', repair_record_id = NULL,
+            recurrence_next_event_id = NULL, updated_at = ?
+        WHERE id = ?
+        """,
+        (updated_at, event_id),
+    )
+    db.commit()
+
+    if record_id is not None:
+        record_upload_dir = Path(current_app_uploads()) / str(record_id)
+        if record_upload_dir.exists():
+            shutil.rmtree(record_upload_dir)
+        log_user_activity(
+            "delete_record",
+            f"Usunięto rekord #{record_id} po cofnięciu wykonania zdarzenia #{event_id}.",
+            target_type="record",
+            target_id=record_id,
+        )
+    log_user_activity(
+        "undo_complete_scheduled_event",
+        f"Cofnięto wykonanie zdarzenia #{event_id}."
+        + (f" Usunięto następny termin #{next_event_id}." if next_event_id is not None else "")
+        + (f" Usunięto rekord rejestru #{record_id}." if record_id is not None else ""),
+        target_type="scheduled_event",
+        target_id=event_id,
+    )
+    return record_id, next_event_id is not None
 
 
 def save_record(form: dict[str, Any]) -> int:

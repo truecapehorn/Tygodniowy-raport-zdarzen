@@ -315,7 +315,8 @@ class RepairReportAppTests(unittest.TestCase):
         self.assertEqual(year_html.count('class="calendar-month-heading"'), 12)
         self.assertIn('class="calendar-week-label">Tydz.</div>', year_html)
         self.assertRegex(year_html, r'class="calendar-week-number">\s*1\s*</div>')
-        self.assertIn('class="calendar-dot badge-przeglad calendar-scheduled-event"', year_html)
+        self.assertIn('class="calendar-dot badge-przeglad calendar-scheduled-event calendar-scheduled-done"', year_html)
+        self.assertIn('.calendar-year-view .calendar-dot.calendar-scheduled-done::before { content: "✓"; }', year_html)
         self.assertIn('class="calendar-dot badge-interwencja calendar-scheduled-event"', year_html)
         self.assertIn('class="calendar-dot badge-modernizacja calendar-scheduled-event"', year_html)
         self.assertIn(".calendar-year-view .calendar-dot {", year_html)
@@ -330,12 +331,23 @@ class RepairReportAppTests(unittest.TestCase):
         self.assertRegex(month_html, r'class="calendar-week-number">\s*18\s*</div>')
         self.assertIn("title=\"14-05-2026 10:30 — Prasa Yellow — Interwencja — Yellow calendar event\"", month_html)
         self.assertIn('class="calendar-event badge badge-interwencja calendar-scheduled-event"', month_html)
+        self.assertIn('class="badge calendar-status-done">✓ Wykonano</span>', month_html)
         self.assertIn('data-machine="Prasa Yellow"', month_html)
         self.assertIn('data-description="Yellow calendar event"', month_html)
         self.assertIn('role="button" tabindex="0" aria-label="Otwórz szczegóły:', month_html)
         self.assertIn("event.stopPropagation();\n        openScheduledModal(calendarEvent);", month_html)
         self.assertNotIn("title=\"05-01-2026 07:00 — Prasa Blue", month_html)
         self.assertNotIn("title=\"01-12-2026 12:15 — Prasa Purple", month_html)
+
+        completed_month_html = self.client.get(
+            "/scheduled?calendar_view=month&year=2026&month=1"
+        ).get_data(as_text=True)
+        self.assertIn(
+            'class="calendar-event badge badge-przeglad calendar-scheduled-event calendar-scheduled-done"',
+            completed_month_html,
+        )
+        self.assertIn(">✓ Przegląd · Prasa Blue</span>", completed_month_html)
+        self.assertIn('data-status="done"', completed_month_html)
 
         today = datetime.now().date()
         current_year_html = self.client.get(
@@ -383,6 +395,11 @@ class RepairReportAppTests(unittest.TestCase):
             selected_week_html,
             r'href="/(?:scheduled|planowanie)\?calendar_view=week&amp;iso_week=2026-W19"',
         )
+        completed_week = self.client.get("/scheduled?calendar_view=week&iso_week=2026-W02")
+        self.assertEqual(completed_week.status_code, 200)
+        completed_week_html = completed_week.get_data(as_text=True)
+        self.assertIn("✓ 07:00 · Przegląd · Prasa Blue", completed_week_html)
+        self.assertIn("WYKONANO — 05-01-2026 07:00 — Prasa Blue", completed_week_html)
 
     def test_records_calendar_shows_events_and_only_day_view_creates_records(self):
         with self.client.session_transaction() as session:
@@ -676,7 +693,11 @@ class RepairReportAppTests(unittest.TestCase):
         completed_page = self.client.get("/scheduled").get_data(as_text=True)
         self.assertIn("Zaplanowane zdarzenia</div>\n        <strong style=\"display:block;font-size:2rem;color:var(--accent);\">0", completed_page)
         self.assertIn("Zrealizowane zdarzenia</div>\n        <strong style=\"display:block;font-size:2rem;color:var(--green);\">1", completed_page)
+        self.assertIn("<th>Powtarzanie</th>", completed_page)
+        self.assertIn("<td class=\"text-muted\">Niecykliczne</td>", completed_page)
         self.assertIn('class="record-row scheduled-event-row" tabindex="0"', completed_page)
+        self.assertIn("Cofnij wykonanie", completed_page)
+        self.assertRegex(completed_page, r'action="/(?:scheduled|planowanie)/\d+/undo"')
         self.assertRegex(completed_page, r'action="/(?:scheduled|planowanie)/\d+/delete"')
         self.assertNotIn(">Szczegóły</button>", completed_page)
         self.assertEqual(
@@ -831,6 +852,215 @@ class RepairReportAppTests(unittest.TestCase):
         self.assertEqual(rows[1]["created_by_user_id"], 303)
         self.assertEqual(record_count, 0)
 
+    def test_undoing_scheduled_completion_removes_generated_record(self):
+        response = self.client.post(
+            "/scheduled/new",
+            data={
+                "machine_name": "Tokarka cofnięcie",
+                "machine_type": "CNC",
+                "serial_number": "UNDO-1",
+                "event_type": "Przegląd",
+                "planned_at": "2026-03-10T09:00",
+                "repeat_interval": "0",
+                "repeat_unit": "none",
+                "description": "Przegląd do cofnięcia",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        with self.app.app_context():
+            event = get_db().execute(
+                "SELECT id, planned_at FROM scheduled_events WHERE description = ?",
+                ("Przegląd do cofnięcia",),
+            ).fetchone()
+        event_id = int(event["id"])
+        self.client.post(f"/scheduled/{event_id}/done")
+        with self.app.app_context():
+            record_id = get_db().execute(
+                "SELECT repair_record_id FROM scheduled_events WHERE id = ?",
+                (event_id,),
+            ).fetchone()["repair_record_id"]
+        self.assertIsNotNone(record_id)
+        response = self.client.post(
+            f"/api/record/{record_id}/attachments",
+            data={"attachments": (io.BytesIO(b"undo attachment"), "undo.txt")},
+            content_type="multipart/form-data",
+        )
+        self.assertEqual(response.status_code, 200)
+        record_upload_dir = Path(self.app.config["UPLOAD_DIR"]) / str(record_id)
+        self.assertTrue(record_upload_dir.exists())
+
+        response = self.client.post(
+            f"/scheduled/{event_id}/undo",
+            data={"expected_planned_at": event["planned_at"]},
+        )
+        self.assertEqual(response.status_code, 302)
+        with self.app.app_context():
+            db = get_db()
+            undone_event = db.execute(
+                "SELECT status, planned_at, repair_record_id FROM scheduled_events WHERE id = ?",
+                (event_id,),
+            ).fetchone()
+            record_count = db.execute(
+                "SELECT COUNT(*) FROM repair_records WHERE id = ?",
+                (record_id,),
+            ).fetchone()[0]
+        self.assertEqual(undone_event["status"], "planned")
+        self.assertEqual(undone_event["planned_at"], event["planned_at"])
+        self.assertIsNone(undone_event["repair_record_id"])
+        self.assertEqual(record_count, 0)
+        self.assertFalse(record_upload_dir.exists())
+
+    def test_undoing_recurring_completions_rolls_back_in_reverse_order(self):
+        response = self.client.post(
+            "/scheduled/new",
+            data={
+                "machine_name": "Tokarka cykliczna cofnięcie",
+                "machine_type": "CNC",
+                "serial_number": "UNDO-2",
+                "event_type": "Przegląd",
+                "planned_at": "2026-03-10T09:00",
+                "repeat_interval": "2",
+                "repeat_unit": "weeks",
+                "description": "Przegląd cykliczny do cofnięcia",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        with self.app.app_context():
+            db = get_db()
+            root = db.execute(
+                "SELECT id, planned_at FROM scheduled_events WHERE description = ?",
+                ("Przegląd cykliczny do cofnięcia",),
+            ).fetchone()
+        root_id = int(root["id"])
+        first_date = str(root["planned_at"])
+
+        self.client.post(
+            f"/scheduled/{root_id}/done",
+            data={"expected_planned_at": first_date},
+        )
+        with self.app.app_context():
+            db = get_db()
+            first = db.execute(
+                "SELECT id, planned_at FROM scheduled_events WHERE status = 'done' AND description = ?",
+                ("Przegląd cykliczny do cofnięcia",),
+            ).fetchone()
+            second_date = db.execute(
+                "SELECT planned_at FROM scheduled_events WHERE id = ?",
+                (root_id,),
+            ).fetchone()["planned_at"]
+
+        self.client.post(
+            f"/scheduled/{root_id}/done",
+            data={"expected_planned_at": second_date},
+        )
+        with self.app.app_context():
+            db = get_db()
+            second = db.execute(
+                """
+                SELECT id, planned_at FROM scheduled_events
+                WHERE status = 'done' AND id != ? AND description = ?
+                """,
+                (first["id"], "Przegląd cykliczny do cofnięcia"),
+            ).fetchone()
+            self.assertEqual(
+                db.execute(
+                    "SELECT recurrence_next_event_id FROM scheduled_events WHERE id = ?",
+                    (first["id"],),
+                ).fetchone()["recurrence_next_event_id"],
+                second["id"],
+            )
+
+        response = self.client.post(
+            f"/scheduled/{second['id']}/undo",
+            data={"expected_planned_at": second["planned_at"]},
+        )
+        self.assertEqual(response.status_code, 302)
+        response = self.client.post(
+            f"/scheduled/{first['id']}/undo",
+            data={"expected_planned_at": first["planned_at"]},
+        )
+        self.assertEqual(response.status_code, 302)
+        with self.app.app_context():
+            db = get_db()
+            rows = db.execute(
+                "SELECT status, planned_at, repair_record_id FROM scheduled_events WHERE description = ?",
+                ("Przegląd cykliczny do cofnięcia",),
+            ).fetchall()
+            record_count = db.execute(
+                "SELECT COUNT(*) FROM repair_records WHERE description = ?",
+                ("Przegląd cykliczny do cofnięcia",),
+            ).fetchone()[0]
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["status"], "planned")
+        self.assertEqual(rows[0]["planned_at"], first_date)
+        self.assertIsNone(rows[0]["repair_record_id"])
+        self.assertEqual(record_count, 0)
+
+    def test_undo_rejects_modified_next_recurring_event(self):
+        response = self.client.post(
+            "/scheduled/new",
+            data={
+                "machine_name": "Tokarka cykliczna zmieniona",
+                "machine_type": "CNC",
+                "serial_number": "UNDO-3",
+                "event_type": "Przegląd",
+                "planned_at": "2026-03-10T09:00",
+                "repeat_interval": "2",
+                "repeat_unit": "weeks",
+                "description": "Przegląd z edytowanym terminem",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        with self.app.app_context():
+            db = get_db()
+            event = db.execute(
+                "SELECT id, planned_at FROM scheduled_events WHERE description = ?",
+                ("Przegląd z edytowanym terminem",),
+            ).fetchone()
+        event_id = int(event["id"])
+        self.client.post(
+            f"/scheduled/{event_id}/done",
+            data={"expected_planned_at": event["planned_at"]},
+        )
+        with self.app.app_context():
+            db = get_db()
+            completed = db.execute(
+                """
+                SELECT id, repair_record_id FROM scheduled_events
+                WHERE status = 'done' AND description = ?
+                """,
+                ("Przegląd z edytowanym terminem",),
+            ).fetchone()
+            db.execute(
+                "UPDATE scheduled_events SET description = 'Zmieniony następny termin' WHERE id = ?",
+                (event_id,),
+            )
+            db.commit()
+
+        response = self.client.post(
+            f"/scheduled/{completed['id']}/undo",
+            data={"expected_planned_at": event["planned_at"]},
+            follow_redirects=True,
+        )
+        self.assertIn("Następny termin tego zdarzenia został zmieniony", response.get_data(as_text=True))
+        with self.app.app_context():
+            db = get_db()
+            completed_status = db.execute(
+                "SELECT status FROM scheduled_events WHERE id = ?",
+                (completed["id"],),
+            ).fetchone()["status"]
+            record_count = db.execute(
+                "SELECT COUNT(*) FROM repair_records WHERE id = ?",
+                (completed["repair_record_id"],),
+            ).fetchone()[0]
+            next_description = db.execute(
+                "SELECT description FROM scheduled_events WHERE id = ?",
+                (event_id,),
+            ).fetchone()["description"]
+        self.assertEqual(completed_status, "done")
+        self.assertEqual(record_count, 1)
+        self.assertEqual(next_description, "Zmieniony następny termin")
+
     def test_existing_completed_scheduled_event_is_added_to_register_once(self):
         response = self.client.post(
             "/scheduled/new",
@@ -942,6 +1172,8 @@ class RepairReportAppTests(unittest.TestCase):
         self.assertEqual(completed["replaced_parts"], "Filtr")
         self.assertEqual(completed["notes"], "Uwagi cykliczne")
         self.assertEqual(record_count, 1)
+        completed_page = self.client.get("/scheduled").get_data(as_text=True)
+        self.assertIn("Cykliczne — co 2 weeks", completed_page)
 
         stale_response = self.client.post(
             f"/scheduled/{event_id}/done",
