@@ -201,7 +201,16 @@ data-notes="{{ event.notes or '' }}"
     <div class="card-title">Zaplanowane zdarzenia</div>
     {% if scheduled_events %}
     <div class="table-wrap">
-        <table>
+        <table class="scheduled-events-table">
+            <colgroup>
+                <col style="width:10%">
+                <col style="width:12%">
+                <col style="width:12%">
+                <col style="width:15%">
+                <col style="width:12%">
+                <col style="width:24%">
+                <col style="width:15%">
+            </colgroup>
             <thead>
                 <tr>
                     <th>Maszyna</th>
@@ -264,10 +273,20 @@ data-notes="{{ event.notes or '' }}"
     <div class="card-title">Wykonane zdarzenia</div>
     {% if completed_events %}
     <div class="table-wrap">
-        <table>
+        <table class="scheduled-events-table">
+            <colgroup>
+                <col style="width:10%">
+                <col style="width:12%">
+                <col style="width:12%">
+                <col style="width:15%">
+                <col style="width:12%">
+                <col style="width:24%">
+                <col style="width:15%">
+            </colgroup>
             <thead>
                 <tr>
                     <th>Maszyna</th>
+                    <th>Typ / numer</th>
                     <th>Rodzaj</th>
                     <th>Planowana data</th>
                     <th>Powtarzanie</th>
@@ -293,6 +312,7 @@ data-notes="{{ event.notes or '' }}"
                     data-replaced-parts="{{ event.replaced_parts or '' }}"
                     data-notes="{{ event.notes or '' }}">
                     <td>{{ event.name }}</td>
+                    <td class="text-muted">{{ event.machine_type }}<br>{{ event.serial_number }}</td>
                     <td>{% if event.event_type == 'Własne' %}<span class="badge badge-wlasne">{{ event.event_type }}</span>{% else %}{{ event.event_type }}{% endif %}</td>
                     <td>{{ event.planned_at|datetime }}</td>
                     <td class="text-muted">{% if event.repeat_interval and event.repeat_unit and event.repeat_unit != 'none' %}{{ event.repeat_interval }} {{ event.repeat_unit }}{% else %}Brak{% endif %}</td>
@@ -302,7 +322,7 @@ data-notes="{{ event.notes or '' }}"
                         <form method="post" action="{{ url_for('scheduled_event_undo', event_id=event.id) }}" style="display:inline;"
                               onsubmit="return confirm('Cofnąć wykonanie tego zdarzenia?{% if event.repair_record_id %} Powiązany wpis w rejestrze głównym i jego załączniki zostaną usunięte.{% endif %}{% if event.repeat_interval and event.repeat_unit != 'none' %} Następny termin utworzony przez powtarzanie także zostanie usunięty.{% endif %}');">
                             <input type="hidden" name="expected_planned_at" value="{{ event.planned_at }}">
-                            <button type="submit" class="btn btn-outline btn-sm">Cofnij wykonanie</button>
+                            <button type="submit" class="btn btn-outline btn-sm">Cofnij</button>
                         </form>
                         {% endif %}
                         {% if user_role == 'admin' or (current_user and current_user.can_delete_records) %}
@@ -323,6 +343,10 @@ data-notes="{{ event.notes or '' }}"
 </div>
 
 <style>
+    .scheduled-events-table {
+        table-layout: fixed;
+        min-width: 1000px;
+    }
     .calendar-toolbar,
     .calendar-actions,
     .calendar-controls,
