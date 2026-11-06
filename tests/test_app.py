@@ -429,6 +429,14 @@ class RepairReportAppTests(unittest.TestCase):
         self.assertIn(f'data-record-id="{record_id}"', month_html)
         record_details = self.client.get(f"/api/record/{record_id}").get_json()
         self.assertEqual(record_details["description"], "Calendar record one")
+        image_upload = self.client.post(
+            f"/api/record/{record_id}/attachments",
+            data={"attachments": (io.BytesIO(b"calendar image"), "calendar-photo.jpg", "image/jpeg")},
+            content_type="multipart/form-data",
+        )
+        self.assertEqual(image_upload.status_code, 200)
+        record_details = self.client.get(f"/api/record/{record_id}").get_json()
+        self.assertEqual(record_details["attachments"][0]["content_type"], "image/jpeg")
 
         week_html = self.client.get(
             "/records-calendar?calendar_view=week&iso_week=2026-W10"
@@ -443,6 +451,9 @@ class RepairReportAppTests(unittest.TestCase):
         self.assertIn('id="calendar-record-delete"', day_html)
         self.assertIn('id="calendar-record-edit"', day_html)
         self.assertIn('id="calendar-record-pdf"', day_html)
+        self.assertIn('id="calendar-edit-file-input"', day_html)
+        self.assertIn("attachment.content_type?.startsWith('image/')", day_html)
+        self.assertIn("calendar-edit-attachment-zone", day_html)
         self.assertIn(
             'data-create-url="/new?occurrence_at=2026-03-02T09:30&amp;return_calendar_date=2026-03-02"',
             day_html,

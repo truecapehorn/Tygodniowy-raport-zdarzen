@@ -193,6 +193,11 @@
         <div id="calendar-record-content"></div>
     </div>
 </div>
+{% if can_edit_records %}
+<input type="file" id="calendar-edit-file-input" multiple
+       accept="image/*,.pdf,.doc,.docx,.txt,.xls,.xlsx,.csv,.zip,.rar"
+       style="display:none;">
+{% endif %}
 
 <style>
     .calendar-toolbar, .calendar-actions, .calendar-controls, .calendar-legend { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem; }
@@ -255,17 +260,20 @@
     .calendar-record-actions { display: flex; align-items: center; justify-content: flex-end; gap: .4rem; flex-shrink: 0; }
     #calendar-record-modal.open { display: flex; }
     #calendar-record-content { max-height: 70vh; overflow: auto; }
-    .calendar-detail-table { width: 100%; border-collapse: collapse; }
-    .calendar-detail-table th, .calendar-detail-table td { padding: .4rem .55rem; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; white-space: pre-wrap; overflow-wrap: anywhere; }
-    .calendar-detail-table th { width: 35%; color: var(--muted); font-weight: 600; }
-    .calendar-edit-table { width: 100%; border-collapse: collapse; }
-    .calendar-edit-table th, .calendar-edit-table td { padding: .35rem .55rem; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
-    .calendar-edit-table th { width: 30%; color: var(--muted); font-weight: 600; }
-    .calendar-edit-table input, .calendar-edit-table select, .calendar-edit-table textarea {
+    .calendar-edit-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: .65rem; }
+    .calendar-edit-grid .field.full { grid-column: 1 / -1; }
+    .calendar-edit-grid input, .calendar-edit-grid select, .calendar-edit-grid textarea {
         width: 100%; min-height: 2rem; padding: .35rem .5rem; border: 1px solid var(--border);
         border-radius: 5px; background: var(--bg-input); color: var(--text); font: inherit;
     }
-    .calendar-edit-table textarea { min-height: 4.5rem; resize: vertical; }
+    .calendar-edit-grid textarea { min-height: 4.5rem; resize: vertical; }
+    .calendar-edit-attachments { margin-top: 1rem; }
+    .calendar-edit-attachment-list { display: flex; flex-wrap: wrap; gap: .35rem; margin-bottom: .5rem; }
+    .calendar-edit-attachment { display: inline-flex; align-items: center; gap: .25rem; padding: .2rem .5rem; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-card-alt); font-size: .75rem; }
+    .calendar-edit-attachment button { border: 0; background: none; color: var(--red); cursor: pointer; font-size: 1rem; }
+    .calendar-edit-attachment-zone { border: 2px dashed var(--border); border-radius: 6px; padding: 1rem; color: var(--muted); text-align: center; font-size: .82rem; cursor: pointer; }
+    .calendar-edit-attachment-zone:hover, .calendar-edit-attachment-zone.dragging { border-color: var(--accent); }
+    .calendar-edit-file-preview { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .5rem; }
     .calendar-hint { margin-top: .75rem; color: var(--muted); font-size: .8rem; }
     @media (max-width: 900px) { .calendar-year-view { grid-template-columns: repeat(2, minmax(240px, 1fr)); } }
     @media (max-width: 600px) { .calendar-year-view { grid-template-columns: 1fr; } }
@@ -303,22 +311,39 @@ function setCalendarActionVisibility(mode) {
 }
 function renderCalendarRecord(record) {
     const fields = [
-        ['Maszyna', record.name], ['Typ maszyny', record.machine_type], ['Numer seryjny', record.serial_number],
-        ['Rodzaj zdarzenia', record.event_type], ['Data wystąpienia', record.occurrence_at],
-        ['Data naprawienia', record.repaired_at], ['MTG maszyny', record.machine_mtg], ['Opis', record.description],
-        ['Przyczyna', record.cause], ['Sposób naprawy', record.repair_method], ['Wymienione części', record.replaced_parts],
-        ['Osoby biorące udział', record.participants], ['Uwagi', record.notes], ['Pracochłonność [h]', record.labor_cost],
-        ['Materiał PLN', record.material_cost], ['Części zamienne PLN', record.spare_parts_cost],
-        ['Serwis PLN', record.service_cost], ['Koszt netto PLN', record.total_cost],
-        ['Wykluczenie z produkcji [h]', record.downtime_hours]
+        ['MASZYNA', record.name, false], ['TYP', record.machine_type, false], ['NUMER', record.serial_number, false],
+        ['ROK / TYDZIEŃ / LP.', `${record.record_year} / W${record.record_week} / ${record.week_sequence}`, false],
+        ['RODZAJ ZDARZENIA', record.event_type, false], ['MTG MASZYNY', record.machine_mtg, false],
+        ['DATA WYSTĄPIENIA', calendarFormatDateTime(record.occurrence_at), false],
+        ['DATA NAPRAWIENIA', calendarFormatDateTime(record.repaired_at), false],
+        ['OPIS', record.description, true], ['PRZYCZYNA', record.cause, true],
+        ['SPOSÓB NAPRAWY', record.repair_method, true], ['WYMIENIONE CZĘŚCI', record.replaced_parts, true],
+        ['OSOBY BIORĄCE UDZIAŁ W INTERWENCJI', record.participants, true], ['UWAGI', record.notes, true],
+        ['PRACOCHŁONNOŚĆ [H]', record.labor_cost, false], ['MATERIAŁ PLN', record.material_cost, false],
+        ['CZĘŚCI ZAMIENNE PLN', record.spare_parts_cost, false], ['SERWIS PLN', record.service_cost, false],
+        ['KOSZT NETTO PLN', record.total_cost, false], ['WYKLUCZENIE Z PROD. [H]', record.downtime_hours, false]
     ];
-    const rows = fields.map(([label, value]) => `<tr><th>${escapeCalendarHtml(label)}</th><td>${escapeCalendarHtml(value || '—')}</td></tr>`);
-    for (const attachment of record.attachments || []) {
-        const href = `/attachments/${encodeURIComponent(record.id)}/${encodeURIComponent(attachment.filename)}`;
-        rows.push(`<tr><th>Załącznik</th><td><a href="${href}" target="_blank" rel="noopener">${escapeCalendarHtml(attachment.original_name || attachment.filename)}</a></td></tr>`);
+    let html = '<div class="detail-grid">';
+    for (const [label, value, full] of fields) {
+        html += `<div class="detail-item${full ? ' full' : ''}"><div class="dl">${escapeCalendarHtml(label)}</div><div class="dv">${escapeCalendarHtml(value)}</div></div>`;
     }
-    calendarRecordContent.innerHTML = `<table class="calendar-detail-table"><tbody>${rows.join('')}</tbody></table>`;
+    html += '</div>';
+    if (record.attachments?.length) {
+        html += '<div style="margin-top:1rem;"><div class="card-title" style="margin-bottom:.5rem;">ZAŁĄCZNIKI</div><div class="attach-list">';
+        for (const attachment of record.attachments) {
+            const href = `/attachments/${encodeURIComponent(record.id)}/${encodeURIComponent(attachment.filename)}`;
+            html += attachment.content_type?.startsWith('image/')
+                ? `<a href="${href}" target="_blank" rel="noopener"><img src="${href}" alt="${escapeCalendarHtml(attachment.original_name)}" title="${escapeCalendarHtml(attachment.original_name)}"></a>`
+                : `<a href="${href}" target="_blank" rel="noopener" class="btn btn-outline btn-sm">&#128206; ${escapeCalendarHtml(attachment.original_name)}</a>`;
+        }
+        html += `</div><div style="margin-top:.5rem;"><a href="/record/${record.id}/attachments.zip" class="btn btn-success btn-sm">&#11015; Pobierz</a></div></div>`;
+    }
+    calendarRecordContent.innerHTML = html;
     setCalendarActionVisibility('view');
+}
+function calendarFormatDateTime(value) {
+    const match = String(value ?? '').match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
+    return match ? `${match[3]}-${match[2]}-${match[1]} ${match[4]}:${match[5]}` : value;
 }
 async function openCalendarRecord(recordId) {
     calendarRecordTitle.textContent = 'Wczytywanie…';
@@ -341,6 +366,7 @@ async function openCalendarRecord(recordId) {
 function enterCalendarRecordEdit() {
     if (!calendarCurrentRecord) return;
     const record = calendarCurrentRecord;
+    if (!document.getElementById('calendar-edit-attachment-zone')) calendarEditFiles = [];
     const fields = [
         ['Maszyna', 'machine_name', record.name, 'text'],
         ['Typ maszyny', 'machine_type', record.machine_type, 'text'],
@@ -372,10 +398,86 @@ function enterCalendarRecordEdit() {
         } else {
             input = `<input id="calendar-edit-${name}" type="${type}"${type === 'number' ? ' min="0" step="0.01"' : ''} value="${escapeCalendarHtml(value)}"${name === 'machine_name' || name === 'machine_type' || name === 'serial_number' || name === 'occurrence_at' ? ' required' : ''}>`;
         }
-        return `<tr><th><label for="calendar-edit-${name}">${escapeCalendarHtml(label)}</label></th><td>${input}</td></tr>`;
+        const full = type === 'textarea' ? ' full' : '';
+        return `<div class="field${full}"><label for="calendar-edit-${name}">${escapeCalendarHtml(label)}</label>${input}</div>`;
     });
-    calendarRecordContent.innerHTML = `<table class="calendar-edit-table"><tbody>${rows.join('')}</tbody></table>`;
+    const attachments = record.attachments || [];
+    const existingAttachments = attachments.length
+        ? attachments.map(attachment => `<span class="calendar-edit-attachment"><span>${escapeCalendarHtml(attachment.original_name)}</span>${CALENDAR_CAN_DELETE ? `<button type="button" title="Usuń załącznik" aria-label="Usuń załącznik" onclick="deleteCalendarAttachment(${attachment.id})">&times;</button>` : ''}</span>`).join('')
+        : '<span class="text-muted" style="font-size:.8rem;">Brak załączników.</span>';
+    calendarRecordContent.innerHTML = `<div class="calendar-edit-grid">${rows.join('')}</div>
+        <div class="calendar-edit-attachments">
+            <div class="card-title">Załączniki — dodaj pliki lub zdjęcia</div>
+            <div class="calendar-edit-attachment-list">${existingAttachments}</div>
+            <div class="calendar-edit-attachment-zone" id="calendar-edit-attachment-zone" role="button" tabindex="0">
+                Kliknij lub przeciągnij pliki tutaj
+            </div>
+            <div class="calendar-edit-file-preview" id="calendar-edit-file-preview"></div>
+        </div>`;
+    initCalendarEditAttachments();
+    renderCalendarEditFilePreview();
     setCalendarActionVisibility('edit');
+}
+let calendarEditFiles = [];
+function renderCalendarEditFilePreview() {
+    const preview = document.getElementById('calendar-edit-file-preview');
+    if (!preview) return;
+    preview.innerHTML = calendarEditFiles.map((file, index) =>
+        `<span class="calendar-edit-attachment">${escapeCalendarHtml(file.name)} (${(file.size / 1024).toFixed(0)} KB)<button type="button" title="Usuń plik" aria-label="Usuń plik" onclick="removeCalendarEditFile(${index})">&times;</button></span>`
+    ).join('');
+}
+function addCalendarEditFiles(files) {
+    calendarEditFiles.push(...Array.from(files));
+    renderCalendarEditFilePreview();
+}
+function removeCalendarEditFile(index) {
+    calendarEditFiles.splice(index, 1);
+    renderCalendarEditFilePreview();
+}
+function initCalendarEditAttachments() {
+    const zone = document.getElementById('calendar-edit-attachment-zone');
+    const input = document.getElementById('calendar-edit-file-input');
+    if (!zone || !input) return;
+    input.value = '';
+    zone.addEventListener('click', () => input.click());
+    zone.addEventListener('keydown', event => {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            input.click();
+        }
+    });
+    zone.addEventListener('dragover', event => {
+        event.preventDefault();
+        zone.classList.add('dragging');
+    });
+    zone.addEventListener('dragleave', () => zone.classList.remove('dragging'));
+    zone.addEventListener('drop', event => {
+        event.preventDefault();
+        zone.classList.remove('dragging');
+        addCalendarEditFiles(event.dataTransfer.files);
+    });
+    input.onchange = () => {
+        addCalendarEditFiles(input.files);
+        input.value = '';
+    };
+}
+document.addEventListener('paste', event => {
+    if (!CALENDAR_CAN_EDIT || !calendarRecordModal.classList.contains('open')) return;
+    if (document.getElementById('calendar-edit-attachment-zone') && event.clipboardData?.files.length) {
+        addCalendarEditFiles(event.clipboardData.files);
+    }
+});
+async function deleteCalendarAttachment(attachmentId) {
+    if (!confirm('Usunąć ten załącznik? Operacja jest nieodwracalna.')) return;
+    try {
+        const response = await fetch(`/api/attachment/${attachmentId}`, { method: 'DELETE' });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'Nie udało się usunąć załącznika.');
+        calendarCurrentRecord.attachments = calendarCurrentRecord.attachments.filter(attachment => attachment.id !== attachmentId);
+        enterCalendarRecordEdit();
+    } catch (error) {
+        alert(error.message);
+    }
 }
 async function saveCalendarRecordEdit() {
     if (!calendarCurrentRecord) return;
@@ -400,6 +502,16 @@ async function saveCalendarRecordEdit() {
         });
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || 'Nie udało się zapisać zmian.');
+        if (calendarEditFiles.length) {
+            const formData = new FormData();
+            calendarEditFiles.forEach(file => formData.append('attachments', file));
+            const uploadResponse = await fetch(`/api/record/${calendarCurrentRecord.id}/attachments`, {
+                method: 'POST',
+                body: formData,
+            });
+            const uploadResult = await uploadResponse.json();
+            if (!uploadResponse.ok) throw new Error(uploadResult.error || 'Nie udało się dodać załączników.');
+        }
         window.location.reload();
     } catch (error) {
         alert(error.message);
@@ -428,6 +540,9 @@ function exportCalendarRecordPdf() {
 function closeCalendarRecord() {
     calendarRecordModal.classList.remove('open');
     calendarRecordModal.setAttribute('aria-hidden', 'true');
+    calendarEditFiles = [];
+    const fileInput = document.getElementById('calendar-edit-file-input');
+    if (fileInput) fileInput.value = '';
 }
 document.querySelectorAll('.calendar-event-link, .calendar-dot-link').forEach(link => {
     link.addEventListener('click', event => {
@@ -452,6 +567,7 @@ document.getElementById('calendar-record-close').addEventListener('click', close
 document.getElementById('calendar-record-edit')?.addEventListener('click', enterCalendarRecordEdit);
 document.getElementById('calendar-record-save')?.addEventListener('click', saveCalendarRecordEdit);
 document.getElementById('calendar-record-cancel')?.addEventListener('click', () => {
+    calendarEditFiles = [];
     if (calendarCurrentRecord) renderCalendarRecord(calendarCurrentRecord);
 });
 document.getElementById('calendar-record-delete')?.addEventListener('click', deleteCalendarRecord);
