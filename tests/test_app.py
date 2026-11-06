@@ -694,7 +694,7 @@ class RepairReportAppTests(unittest.TestCase):
         self.assertIn("Zaplanowane zdarzenia</div>\n        <strong style=\"display:block;font-size:2rem;color:var(--accent);\">0", completed_page)
         self.assertIn("Zrealizowane zdarzenia</div>\n        <strong style=\"display:block;font-size:2rem;color:var(--green);\">1", completed_page)
         self.assertIn("<th>Powtarzanie</th>", completed_page)
-        self.assertIn("<td class=\"text-muted\">Niecykliczne</td>", completed_page)
+        self.assertIn("<td class=\"text-muted\">Brak</td>", completed_page)
         self.assertIn('class="record-row scheduled-event-row" tabindex="0"', completed_page)
         self.assertIn("Cofnij wykonanie", completed_page)
         self.assertRegex(completed_page, r'action="/(?:scheduled|planowanie)/\d+/undo"')
@@ -1173,7 +1173,7 @@ class RepairReportAppTests(unittest.TestCase):
         self.assertEqual(completed["notes"], "Uwagi cykliczne")
         self.assertEqual(record_count, 1)
         completed_page = self.client.get("/scheduled").get_data(as_text=True)
-        self.assertIn("Cykliczne — co 2 weeks", completed_page)
+        self.assertIn("<td class=\"text-muted\">2 weeks</td>", completed_page)
 
         stale_response = self.client.post(
             f"/scheduled/{event_id}/done",

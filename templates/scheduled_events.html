@@ -295,7 +295,7 @@ data-notes="{{ event.notes or '' }}"
                     <td>{{ event.name }}</td>
                     <td>{% if event.event_type == 'Własne' %}<span class="badge badge-wlasne">{{ event.event_type }}</span>{% else %}{{ event.event_type }}{% endif %}</td>
                     <td>{{ event.planned_at|datetime }}</td>
-                    <td class="text-muted">{% if event.repeat_interval and event.repeat_unit and event.repeat_unit != 'none' %}Cykliczne — co {{ event.repeat_interval }} {{ event.repeat_unit }}{% else %}Niecykliczne{% endif %}</td>
+                    <td class="text-muted">{% if event.repeat_interval and event.repeat_unit and event.repeat_unit != 'none' %}{{ event.repeat_interval }} {{ event.repeat_unit }}{% else %}Brak{% endif %}</td>
                     <td>{{ event.description }}</td>
                     <td>
                         {% if user_role == 'admin' or (current_user and current_user.can_edit_records) %}
