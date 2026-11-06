@@ -73,7 +73,7 @@
         <div class="calendar-day-view" data-calendar-view="day">
             {% for slot in calendar_slots %}
             <div class="calendar-day-slot{% if can_create_records %} calendar-create-slot{% endif %}"
-                 {% if can_create_records %}data-create-url="{{ url_for('new_record', occurrence_at=slot.occurrence_at) }}" role="link" tabindex="0" aria-label="Dodaj zdarzenie: {{ slot.time }}"{% endif %}>
+                 {% if can_create_records %}data-create-url="{{ url_for('new_record', occurrence_at=slot.occurrence_at, return_calendar_date=calendar_date) }}" role="link" tabindex="0" aria-label="Dodaj zdarzenie: {{ slot.time }}"{% endif %}>
                 <span class="calendar-day-time">{{ slot.time }}</span>
                 <div class="calendar-day-slot-events">
                     {% for item in slot.events %}
@@ -83,7 +83,7 @@
                        href="{{ url_for('record_details_api', record_id=event.id) }}"
                        data-record-id="{{ event.id }}"
                        title="{{ event_title }}">
-                        {{ item.time }} · {{ event.event_type }} · {{ event.name }}
+                        {{ item.time }} · {{ event.event_type }} · {{ event.name }}{% if event.machine_type %} · {{ event.machine_type }}{% endif %}{% if event.description %} · <span class="calendar-event-description">{{ event.description | truncate(110, true, '...') }}</span>{% endif %}
                     </a>
                     {% endfor %}
                 </div>
@@ -213,7 +213,8 @@
     .calendar-day-number { display: block; font-size: .72rem; font-weight: 700; text-align: right; }
     .calendar-day-events { display: flex; flex-direction: column; gap: .15rem; }
     .calendar-event, .calendar-event-link { display: block; overflow: hidden; text-overflow: ellipsis; }
-    .calendar-event-link { text-decoration: none; }
+    .calendar-event-link { width: 100%; white-space: nowrap; text-decoration: none; }
+    .calendar-event-description { font-weight: 400; }
     .calendar-event-link:hover { filter: brightness(.92); }
     .calendar-dot { display: inline-block; width: .55rem; height: .55rem; margin: .15rem; border-radius: 50%; }
     .calendar-dot.badge-awaria { background: var(--red); }

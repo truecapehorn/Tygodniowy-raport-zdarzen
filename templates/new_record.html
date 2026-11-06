@@ -6,6 +6,9 @@
 
 <div class="card">
     <form id="main-form" method="post" enctype="multipart/form-data">
+        {% if return_calendar_date %}
+        <input type="hidden" name="return_calendar_date" value="{{ return_calendar_date }}">
+        {% endif %}
         <div class="card-title">Zdarzenie i czas</div>
         <div class="form-grid">
             <div class="field">

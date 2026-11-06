@@ -440,8 +440,17 @@ class RepairReportAppTests(unittest.TestCase):
             "/records-calendar?calendar_view=day&calendar_date=2026-03-02"
         ).get_data(as_text=True)
         self.assertIn('data-calendar-view="day"', day_html)
-        self.assertIn('data-create-url="/new?occurrence_at=2026-03-02T09:30"', day_html)
+        self.assertIn(
+            'data-create-url="/new?occurrence_at=2026-03-02T09:30&amp;return_calendar_date=2026-03-02"',
+            day_html,
+        )
         self.assertIn("09:30 · Awaria · Prasa calendar", day_html)
+        self.assertIn(
+            'class="calendar-event-description">Calendar record one</span>',
+            day_html,
+        )
+        self.assertIn("Prasa calendar · Hydrauliczna", day_html)
+        self.assertNotIn("CAL-001", day_html)
         self.assertEqual(day_html.count('class="calendar-day-slot calendar-create-slot"'), 48)
         self.assertIn(
             'href="/records-calendar?calendar_view=day&amp;calendar_date=2026-03-01"',
@@ -456,6 +465,37 @@ class RepairReportAppTests(unittest.TestCase):
             "/new?occurrence_at=2026-03-02T09:30"
         ).get_data(as_text=True)
         self.assertIn('name="occurrence_at" value="02-03-2026 09:30"', new_record_html)
+
+    def test_new_record_returns_to_calendar_day_when_created_from_day_view(self):
+        with self.client.session_transaction() as session:
+            session["logged_in"] = True
+            session["role"] = "admin"
+
+        form_page = self.client.get(
+            "/new?occurrence_at=2026-03-02T09:30&return_calendar_date=2026-03-02"
+        )
+        self.assertIn(
+            'name="return_calendar_date" value="2026-03-02"',
+            form_page.get_data(as_text=True),
+        )
+        response = self.client.post(
+            "/new",
+            data={
+                "return_calendar_date": "2026-03-02",
+                "occurrence_at": "02-03-2026 09:30",
+                "machine_name": "Prasa return",
+                "machine_type": "Hydrauliczna",
+                "serial_number": "RET-001",
+                "event_type": "Awaria",
+                "description": "Powrót do kalendarza dziennego",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(
+            response.location,
+            "/records-calendar?calendar_view=day&calendar_date=2026-03-02",
+        )
 
     def test_scheduled_event_form_fields_and_dashboard_counts(self):
         with self.client.session_transaction() as session:

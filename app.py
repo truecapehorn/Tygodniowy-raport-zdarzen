@@ -1535,6 +1535,11 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         if not app.config.get("TESTING") and not user_has_permission("can_create_records"):
             flash("Brak uprawnie\u0144 do dodawania rekord\u00f3w.", "error")
             return redirect(url_for("index"))
+        return_calendar_date = request.values.get("return_calendar_date", "")
+        try:
+            return_calendar_date = date.fromisoformat(return_calendar_date).isoformat()
+        except ValueError:
+            return_calendar_date = ""
         if request.method == "POST":
             try:
                 record_id = save_record(request.form)
@@ -1542,6 +1547,12 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
                     if f and f.filename:
                         save_attachment(record_id, f)
                 flash("Rekord został zapisany.", "success")
+                if return_calendar_date:
+                    return redirect(url_for(
+                        "records_calendar",
+                        calendar_view="day",
+                        calendar_date=return_calendar_date,
+                    ))
                 return redirect(url_for("index"))
             except ValueError as exc:
                 flash(str(exc), "error")
@@ -1550,6 +1561,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             machine_names=list_machine_names(),
             event_types=EVENT_TYPES,
             initial_occurrence_at=format_datetime(request.args.get("occurrence_at")),
+            return_calendar_date=return_calendar_date,
         )
 
     @app.route("/import", methods=["GET", "POST"])
