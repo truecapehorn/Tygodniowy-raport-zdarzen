@@ -287,6 +287,7 @@ async function openRecord(id) {
     document.getElementById('modal-view').innerHTML = '';
     document.getElementById('modal-edit').style.display = 'none';
     document.getElementById('modal-view').style.display = '';
+    document.getElementById('modal-btn-pdf').style.display = '';
     document.getElementById('modal-btn-edit').style.display   = USER_ROLE === 'admin' ? '' : 'none';
     document.getElementById('modal-btn-delete').style.display = USER_ROLE === 'admin' ? '' : 'none';
     document.getElementById('modal-btn-save').style.display   = 'none';
@@ -317,6 +318,7 @@ function switchToEdit() {
     document.getElementById('modal-edit').style.display = '';
     document.getElementById('modal-btn-edit').style.display   = 'none';
     document.getElementById('modal-btn-delete').style.display = 'none';
+    document.getElementById('modal-btn-pdf').style.display = 'none';
     document.getElementById('modal-btn-save').style.display   = '';
     document.getElementById('modal-btn-cancel').style.display = '';
     document.getElementById('modal-edit').innerHTML = buildEditForm(currentRecord);
@@ -327,6 +329,7 @@ function switchToView() {
     document.getElementById('modal-view').style.display = '';
     document.getElementById('modal-btn-edit').style.display   = (USER_ROLE === 'admin' || CAN_EDIT) ? '' : 'none';
     document.getElementById('modal-btn-delete').style.display = (USER_ROLE === 'admin' || CAN_DELETE) ? '' : 'none';
+    document.getElementById('modal-btn-pdf').style.display = '';
     document.getElementById('modal-btn-save').style.display   = 'none';
     document.getElementById('modal-btn-cancel').style.display = 'none';
 }
