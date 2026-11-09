@@ -1572,7 +1572,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         due_events = get_due_scheduled_events()
         for event in due_events:
             flash(
-                f"Maszyna {event['name']} ma zaplanowane {event['event_type'].lower()} na {format_datetime(event['planned_at'])}.",
+                f"Maszyna {event['name']} ma zaplanowane zdarzenie {event['event_type'].lower()} na {format_datetime(event['planned_at'])}.",
                 "info",
             )
         return render_template(
