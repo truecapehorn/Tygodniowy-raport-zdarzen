@@ -1,15 +1,12 @@
 {% extends 'base.html' %}
 {% block content %}
-<div class="page-title">
+<div class="page-title machine-page-title">
     {% if can_manage_machines %}Zarządzanie maszynami{% else %}Lista maszyn{% endif %}
     <small>Maszyny i powiązane wpisy</small>
-</div>
-
-{% if can_manage_machines %}
-<div class="actions machine-toolbar">
+    {% if can_manage_machines %}
     <button id="machine-add-button" type="button" class="btn btn-primary">Dodaj maszynę</button>
+    {% endif %}
 </div>
-{% endif %}
 
 <div class="card">
     <div class="card-title">Lista maszyn</div>
@@ -128,7 +125,7 @@
 </div>
 
 <style>
-    .machine-toolbar { margin: 0 0 1rem; }
+    .machine-page-title { align-items: center; }
     .machine-table { min-width: 700px; }
     .machine-sort-button {
         padding: 0;
