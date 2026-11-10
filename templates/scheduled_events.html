@@ -629,6 +629,7 @@ data-notes="{{ event.notes or '' }}"
 </div>
 
 <style>
+    #scheduled-modal.editing #scheduled-modal-complete-form { display: none !important; }
     .scheduled-edit-grid {
         display: grid;
         grid-template-columns: repeat(12, minmax(0, 1fr));
@@ -677,6 +678,7 @@ function updateEditRepeatIntervalVisibility() {
 editRepeatUnitInput.addEventListener('change', updateEditRepeatIntervalVisibility);
 
 function setScheduledEditMode(editing) {
+    scheduledModal.classList.toggle('editing', editing);
     scheduledModalContent.style.display = editing ? 'none' : '';
     scheduledModalEditForm.style.display = editing ? '' : 'none';
     scheduledModalEditButton.style.display = editing ? 'none' : '';
