@@ -11,6 +11,27 @@
     {%- else -%}badge-inne
     {%- endif -%}
 {% endmacro %}
+{% macro recurrence_label(interval, unit) -%}
+{%- set count = interval|int -%}
+{%- if count > 0 and unit and unit != 'none' -%}
+{{ count }} {% set remainder = count % 100 -%}
+{%- if unit == 'days' -%}
+{{ 'dzień' if count == 1 else 'dni' }}
+{%- elif unit == 'weeks' -%}
+{%- if count == 1 -%}tydzień
+{%- elif remainder % 10 in [2, 3, 4] and remainder not in [12, 13, 14] -%}tygodnie
+{%- else -%}tygodni
+{%- endif -%}
+{%- elif unit == 'months' -%}
+{%- if count == 1 -%}miesiąc
+{%- elif remainder % 10 in [2, 3, 4] and remainder not in [12, 13, 14] -%}miesiące
+{%- else -%}miesięcy
+{%- endif -%}
+{%- else -%}{{ unit }}
+{%- endif -%}
+{%- else -%}Brak
+{%- endif -%}
+{%- endmacro %}
 {% macro scheduled_event_data(event) -%}
 data-scheduled-id="{{ event.id }}"
 data-status="{{ event.status }}"
@@ -22,6 +43,7 @@ data-date="{{ event.planned_at }}"
 data-date-display="{{ event.planned_at|datetime }}"
 data-repeat-interval="{{ event.repeat_interval }}"
 data-repeat-unit="{{ event.repeat_unit }}"
+data-repeat-display="{{ recurrence_label(event.repeat_interval, event.repeat_unit) }}"
 data-description="{{ event.description }}"
 data-cause="{{ event.cause or '' }}"
 data-repair-method="{{ event.repair_method or '' }}"
@@ -235,6 +257,7 @@ data-notes="{{ event.notes or '' }}"
                     data-date-display="{{ event.planned_at|datetime }}"
                     data-repeat-interval="{{ event.repeat_interval }}"
                     data-repeat-unit="{{ event.repeat_unit }}"
+                    data-repeat-display="{{ recurrence_label(event.repeat_interval, event.repeat_unit) }}"
                     data-description="{{ event.description }}"
                     data-cause="{{ event.cause or '' }}"
                     data-repair-method="{{ event.repair_method or '' }}"
@@ -244,7 +267,7 @@ data-notes="{{ event.notes or '' }}"
                     <td class="text-muted">{{ event.machine_type }}<br>{{ event.serial_number }}</td>
                     <td><span class="badge {{ calendar_event_class(event.event_type) }}">{{ event.event_type }}</span></td>
                     <td>{{ event.planned_at|datetime }}</td>
-                    <td class="text-muted">{% if event.repeat_interval and event.repeat_unit and event.repeat_unit != 'none' %}{{ event.repeat_interval }} {{ event.repeat_unit }}{% else %}Brak{% endif %}</td>
+                    <td class="text-muted">{{ recurrence_label(event.repeat_interval, event.repeat_unit) }}</td>
                     <td>{{ event.description }}</td>
                     <td>
                         <div class="actions">
@@ -308,6 +331,7 @@ data-notes="{{ event.notes or '' }}"
                     data-date-display="{{ event.planned_at|datetime }}"
                     data-repeat-interval="{{ event.repeat_interval }}"
                     data-repeat-unit="{{ event.repeat_unit }}"
+                    data-repeat-display="{{ recurrence_label(event.repeat_interval, event.repeat_unit) }}"
                     data-description="{{ event.description }}"
                     data-cause="{{ event.cause or '' }}"
                     data-repair-method="{{ event.repair_method or '' }}"
@@ -317,7 +341,7 @@ data-notes="{{ event.notes or '' }}"
                     <td class="text-muted">{{ event.machine_type }}<br>{{ event.serial_number }}</td>
                     <td><span class="badge {{ calendar_event_class(event.event_type) }}">{{ event.event_type }}</span></td>
                     <td>{{ event.planned_at|datetime }}</td>
-                    <td class="text-muted">{% if event.repeat_interval and event.repeat_unit and event.repeat_unit != 'none' %}{{ event.repeat_interval }} {{ event.repeat_unit }}{% else %}Brak{% endif %}</td>
+                    <td class="text-muted">{{ recurrence_label(event.repeat_interval, event.repeat_unit) }}</td>
                     <td>{{ event.description }}</td>
                     <td>
                         {% if user_role == 'admin' or (current_user and current_user.can_edit_records) %}
@@ -680,6 +704,7 @@ function openScheduledModal(row) {
     const dateDisplay = row.dataset.dateDisplay || date;
     const repeatInterval = row.dataset.repeatInterval || '0';
     const repeatUnit = row.dataset.repeatUnit || 'none';
+    const repeatDisplay = row.dataset.repeatDisplay || 'Brak';
     const description = row.dataset.description || '';
     const cause = row.dataset.cause || '';
     const repairMethod = row.dataset.repairMethod || '';
@@ -693,7 +718,7 @@ function openScheduledModal(row) {
         <div class="detail-item"><div class="dl">Numer seryjny</div><div class="dv">${escapeScheduledHtml(serial)}</div></div>
         <div class="detail-item"><div class="dl">Rodzaj zdarzenia</div><div class="dv">${escapeScheduledHtml(eventType)}</div></div>
         <div class="detail-item"><div class="dl">Planowana data</div><div class="dv">${escapeScheduledHtml(dateDisplay)}</div></div>
-        <div class="detail-item"><div class="dl">Powtarzanie</div><div class="dv">${repeatInterval && repeatUnit !== 'none' ? `${escapeScheduledHtml(repeatInterval)} ${escapeScheduledHtml(repeatUnit)}` : 'Brak'}</div></div>
+        <div class="detail-item"><div class="dl">Powtarzanie</div><div class="dv">${escapeScheduledHtml(repeatDisplay)}</div></div>
         <div class="detail-item full"><div class="dl">Opis</div><div class="dv">${escapeScheduledHtml(description)}</div></div>
         <div class="detail-item full"><div class="dl">Przyczyna</div><div class="dv">${escapeScheduledHtml(cause)}</div></div>
         <div class="detail-item full"><div class="dl">Sposób naprawy / wykonania</div><div class="dv">${escapeScheduledHtml(repairMethod)}</div></div>
