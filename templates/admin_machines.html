@@ -7,12 +7,6 @@
 
 <div class="actions machine-toolbar">
     <button id="machine-add-button" type="button" class="btn btn-primary">Dodaj maszynę</button>
-    <a href="{{ url_for('admin_export_machines') }}" class="btn btn-outline">Eksportuj do Excel</a>
-    <form method="post" action="{{ url_for('admin_import_machines') }}" enctype="multipart/form-data" class="machine-import-form">
-        <label for="machine-import-file">Importuj z Excel</label>
-        <input id="machine-import-file" type="file" name="file" accept=".xlsx" required>
-        <button type="submit" class="btn btn-outline">Importuj</button>
-    </form>
 </div>
 
 <div class="card">
@@ -131,9 +125,6 @@
 
 <style>
     .machine-toolbar { margin: 0 0 1rem; }
-    .machine-import-form { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem; }
-    .machine-import-form label { font-size: .8rem; font-weight: 700; }
-    .machine-import-form input { max-width: 260px; }
     .machine-table { min-width: 700px; }
     .machine-sort-button {
         padding: 0;

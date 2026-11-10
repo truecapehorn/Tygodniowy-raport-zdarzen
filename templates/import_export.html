@@ -34,4 +34,22 @@
 </div>
 {% endif %}
 
+{% if user_role == 'admin' %}
+<div class="card">
+    <div class="card-title">Import / export bazy maszyn</div>
+    <p class="text-muted" style="font-size:.875rem;margin-bottom:1rem;line-height:1.6;">
+        Eksportuj listę maszyn do pliku <strong>.xlsx</strong> lub zaimportuj ją z pliku Excel.
+        Dopasowane maszyny zostaną zaktualizowane, a puste komórki nie nadpiszą istniejących danych.
+    </p>
+    <div class="actions" style="margin-top:0;">
+        <a href="{{ url_for('admin_export_machines') }}" class="btn btn-outline">Eksportuj maszyny (.xlsx)</a>
+        <form method="post" action="{{ url_for('admin_import_machines') }}" enctype="multipart/form-data" style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;">
+            <label for="machine-import-file" style="font-size:.8rem;font-weight:700;">Importuj z Excel</label>
+            <input id="machine-import-file" type="file" name="file" accept=".xlsx" required>
+            <button type="submit" class="btn btn-primary">Importuj maszyny</button>
+        </form>
+    </div>
+</div>
+{% endif %}
+
 {% endblock %}

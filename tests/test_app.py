@@ -103,7 +103,9 @@ class RepairReportAppTests(unittest.TestCase):
         self.assertEqual(client.get("/").status_code, 200)
         data_page = client.get("/data")
         self.assertEqual(data_page.status_code, 200)
-        self.assertNotIn("Eksportuj całą bazę", data_page.get_data(as_text=True))
+        data_page_html = data_page.get_data(as_text=True)
+        self.assertNotIn("Eksportuj całą bazę", data_page_html)
+        self.assertNotIn("Import / export bazy maszyn", data_page_html)
 
         filter_page = client.get("/filter?description_terms=test")
         self.assertEqual(filter_page.status_code, 200)
@@ -1394,6 +1396,21 @@ class RepairReportAppTests(unittest.TestCase):
         self.assertEqual(edit_response.location, "/")
         self.assertEqual(delete_response.location, "/")
 
+    def test_machine_import_export_controls_are_on_data_page(self):
+        with self.client.session_transaction() as session:
+            session["logged_in"] = True
+            session["role"] = "admin"
+
+        data_page = self.client.get("/data").get_data(as_text=True)
+        machines_page = self.client.get("/admin/machines").get_data(as_text=True)
+
+        self.assertIn("Import / export bazy maszyn", data_page)
+        self.assertIn('/admin/machines/export', data_page)
+        self.assertIn('/admin/machines/import', data_page)
+        self.assertNotIn("Eksportuj do Excel", machines_page)
+        self.assertNotIn("Importuj z Excel", machines_page)
+        self.assertIn("Dodaj maszynę", machines_page)
+
     def test_admin_machine_table_shows_related_record_count(self):
         for day in ("30", "31"):
             self.client.post(
@@ -2017,6 +2034,7 @@ class RepairReportAppTests(unittest.TestCase):
             follow_redirects=True,
         )
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.request.path, "/data")
         self.assertIn("Dodano: 1, zaktualizowano: 1, pominięto: 0", response.get_data(as_text=True))
 
         with self.app.app_context():

@@ -1383,12 +1383,12 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         uploaded_file = request.files.get("file")
         if uploaded_file is None or not uploaded_file.filename:
             flash("Wybierz plik Excel do importu.", "error")
-            return redirect(url_for("admin_machines"))
+            return redirect(url_for("data_page"))
         try:
             created, updated, skipped, warnings = import_machine_workbook(uploaded_file.read())
         except (ValueError, zipfile.BadZipFile, InvalidFileException, OSError) as exc:
             flash(f"Nie udało się zaimportować maszyn: {exc}", "error")
-            return redirect(url_for("admin_machines"))
+            return redirect(url_for("data_page"))
 
         log_user_activity(
             "import_machines",
@@ -1401,7 +1401,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             + (f" Szczegóły pominięć: {'; '.join(warnings[:5])}" if warnings else ""),
             "success",
         )
-        return redirect(url_for("admin_machines"))
+        return redirect(url_for("data_page"))
 
     @app.route("/admin/machines/<int:machine_id>/delete", methods=["POST"])
     def admin_delete_machine(machine_id: int):
