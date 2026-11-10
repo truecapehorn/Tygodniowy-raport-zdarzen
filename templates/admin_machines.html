@@ -1,65 +1,317 @@
 {% extends 'base.html' %}
 {% block content %}
-<div class="page-title">Zarządzanie maszynami <small>Maszyny i powiązane wpisy</small></div>
+<div class="page-title">
+    Zarządzanie maszynami
+    <small>Maszyny i powiązane wpisy</small>
+</div>
 
-{% if edit_machine %}
-<div class="card">
-    <div class="card-title">Edytuj maszynę</div>
-    <form method="post" action="{{ url_for('admin_edit_machine', machine_id=edit_machine.id) }}">
-        <div class="form-grid3">
-            <div class="field">
-                <label for="machine-name">Nazwa maszyny</label>
-                <input id="machine-name" name="name" value="{{ edit_machine.name }}" required>
-            </div>
-            <div class="field">
-                <label for="machine-type">Typ</label>
-                <input id="machine-type" name="machine_type" value="{{ edit_machine.machine_type }}" required>
-            </div>
-            <div class="field">
-                <label for="machine-serial">Numer seryjny</label>
-                <input id="machine-serial" name="serial_number" value="{{ edit_machine.serial_number }}" required>
-            </div>
-        </div>
-        <div class="actions">
-            <button type="submit" class="btn btn-primary">Zapisz zmiany</button>
-            <a href="{{ url_for('admin_machines') }}" class="btn btn-outline">Anuluj</a>
-        </div>
+<div class="actions machine-toolbar">
+    <button id="machine-add-button" type="button" class="btn btn-primary">Dodaj maszynę</button>
+    <a href="{{ url_for('admin_export_machines') }}" class="btn btn-outline">Eksportuj do Excel</a>
+    <form method="post" action="{{ url_for('admin_import_machines') }}" enctype="multipart/form-data" class="machine-import-form">
+        <label for="machine-import-file">Importuj z Excel</label>
+        <input id="machine-import-file" type="file" name="file" accept=".xlsx" required>
+        <button type="submit" class="btn btn-outline">Importuj</button>
     </form>
 </div>
-{% endif %}
 
 <div class="card">
     <div class="card-title">Lista maszyn</div>
     <div class="table-wrap">
-        <table>
+        <table class="machine-table">
             <thead>
                 <tr>
-                    <th>Nazwa</th>
-                    <th>Typ</th>
-                    <th>Numer seryjny</th>
-                    <th>Wpisy</th>
-                    <th>Akcje</th>
+                    <th>NAZWA / FIRMA</th>
+                    <th>NAZWA / MODEL</th>
+                    <th>NUMER SERYJNY</th>
+                    <th>RODZAJ</th>
                 </tr>
             </thead>
             <tbody>
                 {% for machine in machines %}
-                <tr>
+                <tr class="machine-row" tabindex="0" role="button"
+                    aria-label="Pokaż szczegóły maszyny {{ machine.name }} {{ machine.machine_type }}"
+                    data-machine-id="{{ machine.id }}"
+                    data-name="{{ machine.name }}"
+                    data-machine-type="{{ machine.machine_type }}"
+                    data-serial-number="{{ machine.serial_number }}"
+                    data-machine-category="{{ machine.machine_category or '' }}"
+                    data-commissioning-date="{{ machine.commissioning_date or '' }}"
+                    data-warranty-period-months="{{ machine.warranty_period_months if machine.warranty_period_months is not none else '' }}"
+                    data-warranty-end-date="{{ machine.warranty_end_date or '' }}"
+                    data-power="{{ machine.power if machine.power is not none else '' }}"
+                    data-power-unit="{{ machine.power_unit or '' }}"
+                    data-protection-a="{{ machine.protection_a or '' }}"
+                    data-seller-data="{{ machine.seller_data or '' }}"
+                    data-notes="{{ machine.notes or '' }}"
+                    data-record-count="{{ machine.record_count }}">
                     <td>{{ machine.name }}</td>
                     <td>{{ machine.machine_type }}</td>
                     <td>{{ machine.serial_number }}</td>
-                    <td>{{ machine.record_count }}</td>
-                    <td>
-                        <a href="{{ url_for('admin_machines', edit=machine.id) }}" class="btn btn-outline btn-sm">Edytuj</a>
-                        <form method="post" action="{{ url_for('admin_delete_machine', machine_id=machine.id) }}" style="display:inline;">
-                            <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Usunąć tę maszynę i wszystkie jej wpisy ({{ machine.record_count }})? Tej operacji nie można cofnąć.');">Usuń</button>
-                        </form>
-                    </td>
+                    <td>{{ machine.machine_category or '—' }}</td>
                 </tr>
                 {% else %}
-                <tr class="empty-row"><td colspan="5">Brak maszyn w bazie.</td></tr>
+                <tr class="empty-row"><td colspan="4">Brak maszyn w bazie.</td></tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
 </div>
+
+<div class="modal-backdrop" id="machine-modal" aria-hidden="true">
+    <div class="modal-box machine-modal-box" role="dialog" aria-modal="true" aria-labelledby="machine-modal-title">
+        <div class="modal-header">
+            <strong id="machine-modal-title" style="font-size:1rem;color:var(--text);">Szczegóły maszyny</strong>
+            <div class="machine-modal-actions">
+                <button id="machine-modal-delete" type="button" class="btn btn-danger btn-sm">Usuń</button>
+                <button id="machine-modal-edit" type="button" class="btn btn-primary btn-sm">Edytuj</button>
+                <button id="machine-modal-save" type="submit" form="machine-modal-form" class="btn btn-primary btn-sm" style="display:none;">Zapisz</button>
+                <button id="machine-modal-cancel" type="button" class="btn btn-outline btn-sm" style="display:none;">Anuluj</button>
+                <button id="machine-modal-close" type="button" class="modal-close" title="Zamknij" aria-label="Zamknij">&#10005;</button>
+            </div>
+        </div>
+        <div id="machine-modal-view" class="detail-grid"></div>
+        <form id="machine-modal-form" method="post" style="display:none;">
+            <div class="machine-form-grid">
+                <div class="field">
+                    <label for="machine-name">Nazwa / firma</label>
+                    <input id="machine-name" name="name" required>
+                </div>
+                <div class="field">
+                    <label for="machine-type">Nazwa / model</label>
+                    <input id="machine-type" name="machine_type" required>
+                </div>
+                <div class="field">
+                    <label for="machine-serial">Numer seryjny</label>
+                    <input id="machine-serial" name="serial_number" required>
+                </div>
+                <div class="field">
+                    <label for="machine-category">Rodzaj maszyny</label>
+                    <input id="machine-category" name="machine_category">
+                </div>
+                <div class="field">
+                    <label for="machine-commissioning-date">Data uruchomienia</label>
+                    <input id="machine-commissioning-date" type="date" name="commissioning_date">
+                </div>
+                <div class="field">
+                    <label for="machine-warranty-period">Okres gwarancji (miesiące)</label>
+                    <input id="machine-warranty-period" type="number" min="0" step="1" name="warranty_period_months">
+                </div>
+                <div class="field">
+                    <label for="machine-warranty-end">Data końca gwarancji</label>
+                    <input id="machine-warranty-end" type="date" readonly>
+                </div>
+                <div class="field">
+                    <label for="machine-power">Moc</label>
+                    <input id="machine-power" type="number" step="any" name="power">
+                </div>
+                <div class="field">
+                    <label for="machine-power-unit">Jednostka mocy</label>
+                    <input id="machine-power-unit" name="power_unit">
+                </div>
+                <div class="field">
+                    <label for="machine-protection">Zabezpieczenie [A]</label>
+                    <input id="machine-protection" name="protection_a">
+                </div>
+                <div class="field">
+                    <label for="machine-seller">Dane sprzedawcy</label>
+                    <input id="machine-seller" name="seller_data">
+                </div>
+                <div class="field machine-notes-field">
+                    <label for="machine-notes">Uwagi</label>
+                    <textarea id="machine-notes" name="notes" rows="3"></textarea>
+                </div>
+            </div>
+        </form>
+        <form id="machine-modal-delete-form" method="post" style="display:none;"></form>
+    </div>
+</div>
+
+<style>
+    .machine-toolbar { margin: 0 0 1rem; }
+    .machine-import-form { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem; }
+    .machine-import-form label { font-size: .8rem; font-weight: 700; }
+    .machine-import-form input { max-width: 260px; }
+    .machine-table { min-width: 700px; }
+    .machine-row { cursor: pointer; }
+    .machine-row:hover { background: var(--bg-card-alt); }
+    .machine-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+    .machine-modal-box { width: min(1050px, calc(100vw - 2rem)); }
+    .machine-modal-actions { display: flex; align-items: center; flex-wrap: wrap; gap: .4rem; flex-shrink: 0; }
+    .machine-form-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+        gap: .75rem;
+    }
+    .machine-notes-field { grid-column: 1 / -1; }
+    @media (max-width: 620px) {
+        .machine-modal-actions { gap: .25rem; }
+        .machine-modal-actions .btn { padding: .25rem .4rem; }
+    }
+</style>
+
+<script>
+const machineModal = document.getElementById('machine-modal');
+const machineModalTitle = document.getElementById('machine-modal-title');
+const machineModalView = document.getElementById('machine-modal-view');
+const machineModalForm = document.getElementById('machine-modal-form');
+const machineDeleteForm = document.getElementById('machine-modal-delete-form');
+const machineEditButton = document.getElementById('machine-modal-edit');
+const machineDeleteButton = document.getElementById('machine-modal-delete');
+const machineSaveButton = document.getElementById('machine-modal-save');
+const machineCancelButton = document.getElementById('machine-modal-cancel');
+const machineCloseButton = document.getElementById('machine-modal-close');
+const commissioningDateInput = document.getElementById('machine-commissioning-date');
+const warrantyPeriodInput = document.getElementById('machine-warranty-period');
+const warrantyEndInput = document.getElementById('machine-warranty-end');
+let currentMachineRow = null;
+
+function machineHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function machineDetails(row) {
+    const data = row.dataset;
+    const items = [
+        ['Nazwa / firma', data.name],
+        ['Nazwa / model', data.machineType],
+        ['Numer seryjny', data.serialNumber],
+        ['Rodzaj maszyny', data.machineCategory],
+        ['Data uruchomienia', data.commissioningDate],
+        ['Okres gwarancji', data.warrantyPeriodMonths !== '' ? `${data.warrantyPeriodMonths} mies.` : ''],
+        ['Data końca gwarancji', data.warrantyEndDate],
+        ['Moc', data.power !== '' ? `${data.power} ${data.powerUnit}`.trim() : ''],
+        ['Jednostka mocy', data.powerUnit],
+        ['Zabezpieczenie [A]', data.protectionA],
+        ['Dane sprzedawcy', data.sellerData],
+        ['Uwagi', data.notes],
+        ['Powiązane wpisy', data.recordCount],
+    ];
+    return items.map(([label, value]) => `
+        <div class="detail-item${label === 'Uwagi' ? ' full' : ''}">
+            <div class="dl">${machineHtml(label)}</div>
+            <div class="dv">${machineHtml(value || '—').replace(/\n/g, '<br>')}</div>
+        </div>
+    `).join('');
+}
+
+function setMachineEditMode(editing) {
+    machineModalView.style.display = editing ? 'none' : '';
+    machineModalForm.style.display = editing ? '' : 'none';
+    machineEditButton.style.display = editing ? 'none' : '';
+    machineDeleteButton.style.display = editing || !currentMachineRow ? 'none' : '';
+    machineSaveButton.style.display = editing ? '' : 'none';
+    machineCancelButton.style.display = editing ? '' : 'none';
+}
+
+function openMachineModal(row, editing = false) {
+    currentMachineRow = row;
+    machineModal.classList.add('open');
+    machineModal.setAttribute('aria-hidden', 'false');
+    machineModalView.innerHTML = row ? machineDetails(row) : '';
+    machineDeleteButton.style.display = row ? '' : 'none';
+    machineEditButton.style.display = row ? '' : 'none';
+    machineModalTitle.textContent = row
+        ? `${row.dataset.name} — ${row.dataset.machineType}`
+        : 'Dodaj maszynę';
+
+    machineModalForm.reset();
+    machineModalForm.action = row
+        ? `/admin/machines/${row.dataset.machineId}/edit`
+        : '{{ url_for("admin_create_machine") }}';
+    machineDeleteForm.action = row
+        ? `/admin/machines/${row.dataset.machineId}/delete`
+        : '';
+    if (row) {
+        const values = {
+            'machine-name': row.dataset.name,
+            'machine-type': row.dataset.machineType,
+            'machine-serial': row.dataset.serialNumber,
+            'machine-category': row.dataset.machineCategory,
+            'machine-commissioning-date': row.dataset.commissioningDate,
+            'machine-warranty-period': row.dataset.warrantyPeriodMonths,
+            'machine-warranty-end': row.dataset.warrantyEndDate,
+            'machine-power': row.dataset.power,
+            'machine-power-unit': row.dataset.powerUnit,
+            'machine-protection': row.dataset.protectionA,
+            'machine-seller': row.dataset.sellerData,
+            'machine-notes': row.dataset.notes,
+        };
+        Object.entries(values).forEach(([id, value]) => {
+            document.getElementById(id).value = value || '';
+        });
+    }
+    updateMachineWarrantyEndDate();
+    setMachineEditMode(editing);
+}
+
+function closeMachineModal() {
+    machineModal.classList.remove('open');
+    machineModal.setAttribute('aria-hidden', 'true');
+    currentMachineRow = null;
+}
+
+function updateMachineWarrantyEndDate() {
+    if (!commissioningDateInput || !warrantyPeriodInput || !warrantyEndInput) return;
+    const [year, month, day] = commissioningDateInput.value.split('-').map(Number);
+    const period = Number(warrantyPeriodInput.value);
+    if (!year || !month || !day || warrantyPeriodInput.value === '' || !Number.isInteger(period) || period < 0) {
+        warrantyEndInput.value = '';
+        return;
+    }
+    const targetMonthIndex = year * 12 + month - 1 + period;
+    const targetYear = Math.floor(targetMonthIndex / 12);
+    const targetMonth = targetMonthIndex % 12;
+    const lastDay = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate();
+    const targetDay = Math.min(day, lastDay);
+    warrantyEndInput.value = `${targetYear}-${String(targetMonth + 1).padStart(2, '0')}-${String(targetDay).padStart(2, '0')}`;
+}
+
+document.querySelectorAll('.machine-row').forEach((row) => {
+    row.addEventListener('click', () => openMachineModal(row));
+    row.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            openMachineModal(row);
+        }
+    });
+});
+
+document.getElementById('machine-add-button').addEventListener('click', () => openMachineModal(null, true));
+machineEditButton.addEventListener('click', () => setMachineEditMode(true));
+machineCancelButton.addEventListener('click', () => {
+    if (!currentMachineRow) {
+        closeMachineModal();
+        return;
+    }
+    openMachineModal(currentMachineRow);
+});
+machineDeleteButton.addEventListener('click', () => machineDeleteForm.requestSubmit());
+machineDeleteForm.addEventListener('submit', (event) => {
+    const machineName = currentMachineRow?.dataset.name || '';
+    const recordCount = currentMachineRow?.dataset.recordCount || '0';
+    if (!confirm(`Czy na pewno usunąć maszynę „${machineName}” oraz ${recordCount} powiązanych wpisów? Tej operacji nie można cofnąć.`)) {
+        event.preventDefault();
+    }
+});
+machineCloseButton.addEventListener('click', closeMachineModal);
+machineModal.addEventListener('click', (event) => {
+    if (event.target === machineModal) closeMachineModal();
+});
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && machineModal.classList.contains('open')) closeMachineModal();
+});
+commissioningDateInput?.addEventListener('change', updateMachineWarrantyEndDate);
+warrantyPeriodInput?.addEventListener('input', updateMachineWarrantyEndDate);
+
+{% if edit_machine %}
+const initialMachineRow = document.querySelector('.machine-row[data-machine-id="{{ edit_machine.id }}"]');
+if (initialMachineRow) openMachineModal(initialMachineRow, true);
+{% endif %}
+</script>
 {% endblock %}

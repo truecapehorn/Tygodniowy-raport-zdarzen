@@ -12,7 +12,14 @@ from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate
 from werkzeug.security import generate_password_hash
 
-from app import PageNumberCanvas, create_app, get_db, init_db, log_user_activity
+from app import (
+    PageNumberCanvas,
+    create_app,
+    get_db,
+    import_machine_workbook,
+    init_db,
+    log_user_activity,
+)
 
 
 class RepairReportAppTests(unittest.TestCase):
@@ -1826,6 +1833,247 @@ class RepairReportAppTests(unittest.TestCase):
             self.assertEqual(page.status_code, 200)
             self.assertIn("const CAN_EDIT = 1;", html)
             self.assertIn("(USER_ROLE === 'admin' || CAN_EDIT)", html)
+
+    def test_admin_can_create_and_edit_machines_with_warranty_calculation(self):
+        with self.client.session_transaction() as session:
+            session["logged_in"] = True
+            session["role"] = "admin"
+
+        page = self.client.get("/admin/machines?new=1")
+        self.assertEqual(page.status_code, 200)
+        page_html = page.get_data(as_text=True)
+        self.assertIn("Dodaj maszynę", page_html)
+        self.assertIn('name="machine_category"', page_html)
+        self.assertEqual(page_html.count("<th>"), 4)
+        for heading in ("NAZWA / FIRMA", "NAZWA / MODEL", "NUMER SERYJNY", "RODZAJ"):
+            self.assertIn(heading, page_html)
+        self.assertIn('id="machine-modal-view"', page_html)
+        self.assertIn('id="machine-modal-edit"', page_html)
+        self.assertIn('id="machine-modal-save"', page_html)
+        self.assertIn("machineDeleteForm.addEventListener('submit'", page_html)
+        self.assertNotIn('id="machine-modal-pdf"', page_html)
+
+        response = self.client.post(
+            "/admin/machines/new",
+            data={
+                "name": "Producent",
+                "machine_type": "Model 1",
+                "serial_number": "M-001",
+                "machine_category": "Prasa",
+                "commissioning_date": "2024-02-29",
+                "warranty_period_months": "12",
+                "power": "15.5",
+                "power_unit": "kW",
+                "protection_a": "32",
+                "seller_data": "Serwis Example",
+                "notes": "Nowa maszyna",
+            },
+            follow_redirects=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Maszyna została dodana.", response.get_data(as_text=True))
+
+        with self.app.app_context():
+            machine = get_db().execute(
+                "SELECT * FROM machines WHERE serial_number = ?", ("M-001",)
+            ).fetchone()
+            machine_id = machine["id"]
+            self.assertEqual(machine["warranty_end_date"], "2025-02-28")
+            self.assertEqual(machine["machine_category"], "Prasa")
+            self.assertEqual(machine["power"], 15.5)
+
+        response = self.client.post(
+            f"/admin/machines/{machine_id}/edit",
+            data={
+                "name": "Producent",
+                "machine_type": "Model 1",
+                "serial_number": "M-001",
+                "machine_category": "Prasa hydrauliczna",
+                "commissioning_date": "2024-01-31",
+                "warranty_period_months": "1",
+                "power": "15.5",
+                "power_unit": "kW",
+                "protection_a": "32",
+                "seller_data": "Serwis Example",
+                "notes": "Zmieniono",
+            },
+            follow_redirects=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        with self.app.app_context():
+            machine = get_db().execute(
+                "SELECT machine_category, warranty_end_date, notes FROM machines WHERE id = ?",
+                (machine_id,),
+            ).fetchone()
+        self.assertEqual(tuple(machine), ("Prasa hydrauliczna", "2024-02-29", "Zmieniono"))
+
+    def test_admin_can_import_and_export_machine_workbook(self):
+        with self.app.app_context():
+            get_db().execute(
+                """
+                INSERT INTO machines(name, machine_type, serial_number, notes)
+                VALUES (?, ?, ?, ?)
+                """,
+                ("Producent", "Model istniejący", "SER-001", "Zachowaj tę uwagę"),
+            )
+            get_db().commit()
+
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = "MASZYNY"
+        sheet.append(
+            [
+                "Firma",
+                "Nazwa",
+                "Nr fab.",
+                "Rodzaj",
+                "Data uruchomienia",
+                "Okres gwarancji [mies.]",
+                "Moc",
+                "Jednostka",
+                "Zabezpieczenie [A]",
+                "Sprzedawca",
+                "Uwagi",
+            ]
+        )
+        sheet.append(
+            [
+                "Inna nazwa z pliku",
+                "Inny model z pliku",
+                "SER001",
+                "Tokarka",
+                datetime(2023, 1, 31),
+                12,
+                7.5,
+                "kW",
+                16,
+                "Dostawca A",
+                None,
+            ]
+        )
+        sheet.append(
+            [
+                "Nowy producent",
+                "Nowy model",
+                "SER-002",
+                "Frezarka",
+                datetime(2024, 3, 1),
+                24,
+                11,
+                "kW",
+                20,
+                "Dostawca B",
+                "Maszyna z importu",
+            ]
+        )
+        workbook_bytes = io.BytesIO()
+        workbook.save(workbook_bytes)
+        workbook_bytes.seek(0)
+
+        with self.client.session_transaction() as session:
+            session["logged_in"] = True
+            session["role"] = "admin"
+
+        response = self.client.post(
+            "/admin/machines/import",
+            data={"file": (workbook_bytes, "maszyny.xlsx")},
+            content_type="multipart/form-data",
+            follow_redirects=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Dodano: 1, zaktualizowano: 1, pominięto: 0", response.get_data(as_text=True))
+
+        with self.app.app_context():
+            machines = get_db().execute(
+                "SELECT * FROM machines WHERE serial_number IN (?, ?) ORDER BY serial_number",
+                ("SER-001", "SER-002"),
+            ).fetchall()
+        self.assertEqual(len(machines), 2)
+        existing, new_machine = machines
+        self.assertEqual(existing["name"], "Producent")
+        self.assertEqual(existing["machine_type"], "Model istniejący")
+        self.assertEqual(existing["machine_category"], "Tokarka")
+        self.assertEqual(existing["commissioning_date"], "2023-01-31")
+        self.assertEqual(existing["warranty_end_date"], "2024-01-31")
+        self.assertEqual(existing["notes"], "Zachowaj tę uwagę")
+        self.assertEqual(new_machine["warranty_end_date"], "2026-03-01")
+        self.assertEqual(new_machine["notes"], "Maszyna z importu")
+
+        exported = self.client.get("/admin/machines/export")
+        self.assertEqual(exported.status_code, 200)
+        exported_workbook = load_workbook(io.BytesIO(exported.data), data_only=True)
+        exported_rows = list(exported_workbook.active.iter_rows(values_only=True))
+        self.assertEqual(exported_rows[0][0:3], ("Firma", "Nazwa", "Nr fab."))
+        self.assertIn("Data końca gwarancji", exported_rows[0])
+        self.assertEqual(exported_workbook.active.title, "MASZYNY")
+
+    def test_existing_machine_database_is_migrated_without_losing_rows(self):
+        legacy_database = Path(self.temp_dir.name) / "legacy_machines.sqlite3"
+        connection = sqlite3.connect(legacy_database)
+        try:
+            connection.execute(
+                """
+                CREATE TABLE machines (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    machine_type TEXT NOT NULL,
+                    serial_number TEXT NOT NULL,
+                    UNIQUE(name, machine_type, serial_number)
+                )
+                """
+            )
+            connection.execute(
+                "INSERT INTO machines(name, machine_type, serial_number) VALUES (?, ?, ?)",
+                ("Producent", "Model", "LEGACY-001"),
+            )
+            connection.commit()
+        finally:
+            connection.close()
+
+        app = create_app(
+            {
+                "TESTING": True,
+                "DATABASE": str(legacy_database),
+                "UPLOAD_DIR": str(Path(self.temp_dir.name) / "legacy_uploads"),
+                "SECRET_KEY": "test",
+            }
+        )
+        with app.app_context():
+            machine = get_db().execute(
+                "SELECT * FROM machines WHERE serial_number = ?", ("LEGACY-001",)
+            ).fetchone()
+            columns = {
+                row["name"] for row in get_db().execute("PRAGMA table_info(machines)")
+            }
+        self.assertEqual(machine["name"], "Producent")
+        self.assertTrue(
+            {
+                "machine_category",
+                "commissioning_date",
+                "warranty_period_months",
+                "warranty_end_date",
+                "power",
+                "power_unit",
+                "protection_a",
+                "seller_data",
+                "notes",
+            }.issubset(columns)
+        )
+
+    def test_machine_import_can_skip_creation_of_unmatched_machines(self):
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.append(["Firma", "Nazwa", "Nr fab.", "Rodzaj"])
+        sheet.append(["Producent", "Model", "NEW-001", "Prasa"])
+        content = io.BytesIO()
+        workbook.save(content)
+
+        with self.app.app_context():
+            result = import_machine_workbook(content.getvalue(), create_missing=False)
+            count = get_db().execute("SELECT COUNT(*) FROM machines").fetchone()[0]
+        self.assertEqual(result[:3], (0, 0, 1))
+        self.assertEqual(count, 0)
+        self.assertIn("nie znaleziono maszyny w bazie", result[3][0])
 
 
 if __name__ == "__main__":

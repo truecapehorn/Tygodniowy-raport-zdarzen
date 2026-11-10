@@ -5,8 +5,11 @@ from __future__ import annotations
 import calendar
 import io
 import json
+import math
+import re
 import secrets
 import sqlite3
+import unicodedata
 import zipfile
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -26,6 +29,7 @@ from flask import (
     url_for,
 )
 from openpyxl import Workbook, load_workbook
+from openpyxl.utils.exceptions import InvalidFileException
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_LEFT
 from reportlab.lib.pagesizes import A4
@@ -140,12 +144,60 @@ HEADER_ALIASES = {
     "uwagi": "Uwagi",
 }
 
+MACHINE_EXPORT_COLUMNS = [
+    "Firma",
+    "Nazwa",
+    "Nr fab.",
+    "Rodzaj",
+    "Data uruchomienia",
+    "Okres gwarancji [mies.]",
+    "Data końca gwarancji",
+    "Moc",
+    "Jednostka mocy",
+    "Zabezpieczenie [A]",
+    "Dane sprzedawcy",
+    "Uwagi",
+]
+
+MACHINE_IMPORT_HEADER_ALIASES = {
+    "firma": "name",
+    "maszyna": "name",
+    "nazwa": "machine_type",
+    "model": "machine_type",
+    "typ": "machine_type",
+    "nr fab": "serial_number",
+    "numer seryjny": "serial_number",
+    "numer": "serial_number",
+    "rodzaj": "machine_category",
+    "rodzaj maszyny": "machine_category",
+    "data uruchomienia": "commissioning_date",
+    "okres gwarancji mies": "warranty_period_months",
+    "okres gwarancji": "warranty_period_months",
+    "data konca gwarancji": "warranty_end_date",
+    "moc": "power",
+    "jednostka": "power_unit",
+    "jednostka mocy": "power_unit",
+    "zabezpieczenie a": "protection_a",
+    "sprzedawca": "seller_data",
+    "dane sprzedawcy": "seller_data",
+    "uwagi": "notes",
+}
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS machines (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     machine_type TEXT NOT NULL,
     serial_number TEXT NOT NULL,
+    machine_category TEXT,
+    commissioning_date TEXT,
+    warranty_period_months INTEGER,
+    warranty_end_date TEXT,
+    power REAL,
+    power_unit TEXT,
+    protection_a TEXT,
+    seller_data TEXT,
+    notes TEXT,
     UNIQUE(name, machine_type, serial_number)
 );
 
@@ -326,6 +378,318 @@ def row_value(values: tuple[Any, ...], header_map: dict[str, int], header: str, 
     if index is None or index < 0 or index >= len(values):
         return default
     return values[index]
+
+
+def calculate_warranty_end_date(
+    commissioning_date: str | None,
+    warranty_period_months: int | None,
+) -> str | None:
+    if not commissioning_date or warranty_period_months is None:
+        return None
+    start = date.fromisoformat(commissioning_date)
+    target_month = start.year * 12 + start.month - 1 + warranty_period_months
+    year, month_index = divmod(target_month, 12)
+    if not 1 <= year <= 9999:
+        raise ValueError("Wyliczona data końca gwarancji wykracza poza obsługiwany zakres.")
+    month = month_index + 1
+    day = min(start.day, calendar.monthrange(year, month)[1])
+    return date(year, month, day).isoformat()
+
+
+def _machine_optional_text(value: Any) -> str | None:
+    if value in (None, ""):
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def _machine_optional_date(value: Any, label: str) -> str | None:
+    if value in (None, ""):
+        return None
+    parsed = parse_datetime(value)
+    if parsed is None:
+        raise ValueError(f"Nieprawidłowa wartość w polu „{label}”: {value}.")
+    return parsed.date().isoformat()
+
+
+def _machine_optional_number(value: Any, label: str) -> float | None:
+    if value in (None, ""):
+        return None
+    try:
+        number = float(str(value).strip().replace(" ", "").replace(",", "."))
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"Nieprawidłowa wartość liczbowa w polu „{label}”: {value}.") from exc
+    if not math.isfinite(number):
+        raise ValueError(f"Nieprawidłowa wartość liczbowa w polu „{label}”: {value}.")
+    return number
+
+
+def _machine_optional_months(value: Any, label: str) -> int | None:
+    text = _machine_optional_text(value)
+    if text is None or text.casefold() in {"-", "nd", "n/a", "brak"}:
+        return None
+    months = _machine_optional_number(text, label)
+    if months is None:
+        return None
+    if months < 0 or not months.is_integer():
+        raise ValueError(f"{label} musi być nieujemną liczbą całkowitą miesięcy.")
+    return int(months)
+
+
+def _machine_form_data(form: Any) -> dict[str, Any]:
+    name = str(form.get("name", "")).strip()
+    machine_type = str(form.get("machine_type", "")).strip()
+    serial_number = str(form.get("serial_number", "")).strip()
+    if not all((name, machine_type, serial_number)):
+        raise ValueError("Nazwa, typ i numer seryjny są wymagane.")
+
+    machine_data = {
+        "name": name,
+        "machine_type": machine_type,
+        "serial_number": serial_number,
+        "machine_category": _machine_optional_text(form.get("machine_category")),
+        "commissioning_date": _machine_optional_date(
+            form.get("commissioning_date"), "Data uruchomienia"
+        ),
+        "warranty_period_months": _machine_optional_months(
+            form.get("warranty_period_months"), "Okres gwarancji"
+        ),
+        "power": _machine_optional_number(form.get("power"), "Moc"),
+        "power_unit": _machine_optional_text(form.get("power_unit")),
+        "protection_a": _machine_optional_text(form.get("protection_a")),
+        "seller_data": _machine_optional_text(form.get("seller_data")),
+        "notes": _machine_optional_text(form.get("notes")),
+    }
+    machine_data["warranty_end_date"] = calculate_warranty_end_date(
+        machine_data["commissioning_date"], machine_data["warranty_period_months"]
+    )
+    return machine_data
+
+
+def _machine_match_key(value: Any) -> str:
+    normalized = unicodedata.normalize("NFKC", str(value or "")).casefold()
+    return "".join(character for character in normalized if character.isalnum())
+
+
+def _numeric_machine_serial_key(value: Any) -> str | None:
+    key = _machine_match_key(value)
+    if not key.isdigit():
+        return None
+    return key.lstrip("0") or "0"
+
+
+def import_machine_workbook(
+    binary_content: bytes,
+    *,
+    create_missing: bool = True,
+) -> tuple[int, int, int, list[str]]:
+    workbook = load_workbook(io.BytesIO(binary_content), data_only=True, read_only=True)
+    try:
+        rows = list(workbook.active.iter_rows(values_only=True))
+    finally:
+        workbook.close()
+    if not rows:
+        raise ValueError("Plik Excel jest pusty.")
+
+    header_row_index = None
+    header_map: dict[str, int] = {}
+    for row_index, row in enumerate(rows[:10]):
+        candidate: dict[str, int] = {}
+        for column_index, header in enumerate(row):
+            if header is None:
+                continue
+            canonical = MACHINE_IMPORT_HEADER_ALIASES.get(normalize_header(header))
+            if canonical:
+                candidate.setdefault(canonical, column_index)
+        if {"name", "machine_type", "serial_number"}.issubset(candidate):
+            header_row_index = row_index
+            header_map = candidate
+            break
+    if header_row_index is None:
+        raise ValueError(
+            "Nie rozpoznano nagłówków tabeli maszyn. Wymagane są kolumny Firma, Nazwa i Nr fab."
+        )
+
+    field_labels = {
+        "machine_category": "Rodzaj",
+        "commissioning_date": "Data uruchomienia",
+        "warranty_period_months": "Okres gwarancji",
+        "power": "Moc",
+        "power_unit": "Jednostka mocy",
+        "protection_a": "Zabezpieczenie [A]",
+        "seller_data": "Dane sprzedawcy",
+        "notes": "Uwagi",
+    }
+    prepared_rows: list[tuple[int, dict[str, Any]]] = []
+    skipped = 0
+    warnings: list[str] = []
+    for row_index, values in enumerate(rows[header_row_index + 1 :], start=header_row_index + 2):
+        if not any(value not in (None, "") for value in values):
+            continue
+        row_data: dict[str, Any] = {
+            "name": _machine_optional_text(row_value(values, header_map, "name")),
+            "machine_type": _machine_optional_text(
+                row_value(values, header_map, "machine_type")
+            ),
+            "serial_number": _machine_optional_text(
+                row_value(values, header_map, "serial_number")
+            ),
+        }
+        for field, label in field_labels.items():
+            column_index = header_map.get(field)
+            value = values[column_index] if column_index is not None and column_index < len(values) else None
+            try:
+                if field == "commissioning_date":
+                    row_data[field] = _machine_optional_date(value, label)
+                elif field == "warranty_period_months":
+                    row_data[field] = _machine_optional_months(value, label)
+                elif field == "power":
+                    row_data[field] = _machine_optional_number(value, label)
+                else:
+                    row_data[field] = _machine_optional_text(value)
+            except ValueError as exc:
+                raise ValueError(f"Wiersz {row_index}: {exc}") from exc
+        if not row_data["name"] or not row_data["machine_type"]:
+            skipped += 1
+            warnings.append(f"Wiersz {row_index}: brak firmy lub modelu.")
+            continue
+        row_data["serial_number"] = row_data["serial_number"] or "-"
+        prepared_rows.append((row_index, row_data))
+
+    db = get_db()
+    machines = db.execute(
+        "SELECT id, name, machine_type, serial_number, commissioning_date, "
+        "warranty_period_months FROM machines"
+    ).fetchall()
+    serial_index: dict[str, list[sqlite3.Row]] = {}
+    numeric_serial_index: dict[str, list[sqlite3.Row]] = {}
+    identity_index: dict[tuple[str, str], list[sqlite3.Row]] = {}
+
+    def index_machine(machine: sqlite3.Row) -> None:
+        serial_key = _machine_match_key(machine["serial_number"])
+        if not is_placeholder_serial(str(machine["serial_number"] or "")):
+            serial_index.setdefault(serial_key, []).append(machine)
+            numeric_serial_key = _numeric_machine_serial_key(machine["serial_number"])
+            if numeric_serial_key is not None:
+                numeric_serial_index.setdefault(numeric_serial_key, []).append(machine)
+        identity_key = (
+            _machine_match_key(machine["name"]),
+            _machine_match_key(machine["machine_type"]),
+        )
+        identity_index.setdefault(identity_key, []).append(machine)
+
+    for machine in machines:
+        index_machine(machine)
+    fields = (
+        "machine_category",
+        "commissioning_date",
+        "warranty_period_months",
+        "warranty_end_date",
+        "power",
+        "power_unit",
+        "protection_a",
+        "seller_data",
+        "notes",
+    )
+    created = updated = 0
+    with db:
+        for row_number, row_data in prepared_rows:
+            serial_key = _machine_match_key(row_data["serial_number"])
+            identity_key = (
+                _machine_match_key(row_data["name"]),
+                _machine_match_key(row_data["machine_type"]),
+            )
+            match = None
+            ambiguity = None
+            if not is_placeholder_serial(row_data["serial_number"]):
+                serial_matches = serial_index.get(serial_key, [])
+                if not serial_matches:
+                    numeric_serial_key = _numeric_machine_serial_key(row_data["serial_number"])
+                    if numeric_serial_key is not None:
+                        serial_matches = numeric_serial_index.get(numeric_serial_key, [])
+                if len(serial_matches) > 1:
+                    ambiguity = f"numer seryjny „{row_data['serial_number']}” pasuje do kilku maszyn"
+                elif serial_matches:
+                    match = serial_matches[0]
+            if match is None:
+                identity_matches = identity_index.get(identity_key, [])
+                if ambiguity is None and len(identity_matches) > 1:
+                    ambiguity = "firma i model pasują do kilku maszyn"
+                elif ambiguity is None and identity_matches:
+                    match = identity_matches[0]
+            if ambiguity:
+                skipped += 1
+                warnings.append(f"Wiersz {row_number}: {ambiguity}.")
+                continue
+
+            if match is None:
+                if not create_missing:
+                    skipped += 1
+                    warnings.append(f"Wiersz {row_number}: nie znaleziono maszyny w bazie.")
+                    continue
+                row_data["warranty_end_date"] = calculate_warranty_end_date(
+                    row_data["commissioning_date"], row_data["warranty_period_months"]
+                )
+                cursor = db.execute(
+                    """
+                    INSERT INTO machines(
+                        name, machine_type, serial_number, machine_category, commissioning_date,
+                        warranty_period_months, warranty_end_date, power, power_unit,
+                        protection_a, seller_data, notes
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        row_data["name"],
+                        row_data["machine_type"],
+                        row_data["serial_number"],
+                        *(row_data[field] for field in fields),
+                    ),
+                )
+                new_machine = db.execute(
+                    "SELECT id, name, machine_type, serial_number, commissioning_date, "
+                    "warranty_period_months FROM machines WHERE id = ?",
+                    (cursor.lastrowid,),
+                ).fetchone()
+                index_machine(new_machine)
+                created += 1
+                continue
+
+            merged = {
+                field: row_data[field] if row_data[field] is not None else match[field]
+                for field in ("commissioning_date", "warranty_period_months")
+            }
+            warranty_end_date = calculate_warranty_end_date(
+                merged["commissioning_date"], merged["warranty_period_months"]
+            )
+            db.execute(
+                """
+                UPDATE machines SET
+                    machine_category = COALESCE(?, machine_category),
+                    commissioning_date = ?,
+                    warranty_period_months = ?,
+                    warranty_end_date = ?,
+                    power = COALESCE(?, power),
+                    power_unit = COALESCE(?, power_unit),
+                    protection_a = COALESCE(?, protection_a),
+                    seller_data = COALESCE(?, seller_data),
+                    notes = COALESCE(?, notes)
+                WHERE id = ?
+                """,
+                (
+                    row_data["machine_category"],
+                    merged["commissioning_date"],
+                    merged["warranty_period_months"],
+                    warranty_end_date,
+                    row_data["power"],
+                    row_data["power_unit"],
+                    row_data["protection_a"],
+                    row_data["seller_data"],
+                    row_data["notes"],
+                    match["id"],
+                ),
+            )
+            updated += 1
+    return created, updated, skipped, warnings
 
 
 def calculate_downtime_hours(occurrence_at: datetime, repaired_at: datetime | None) -> float:
@@ -830,8 +1194,61 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
                 "SELECT * FROM machines WHERE id = ?", (edit_machine_id,)
             ).fetchone()
         return render_template(
-            "admin_machines.html", machines=machines, edit_machine=edit_machine
+            "admin_machines.html",
+            machines=machines,
+            edit_machine=edit_machine,
         )
+
+    @app.route("/admin/machines/new", methods=["POST"])
+    def admin_create_machine():
+        if session.get("role") != "admin":
+            flash("Brak uprawnień administratora.", "error")
+            return redirect(url_for("index"))
+
+        try:
+            machine = _machine_form_data(request.form)
+            db = get_db()
+            cursor = db.execute(
+                """
+                INSERT INTO machines(
+                    name, machine_type, serial_number, machine_category, commissioning_date,
+                    warranty_period_months, warranty_end_date, power, power_unit,
+                    protection_a, seller_data, notes
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    machine["name"],
+                    machine["machine_type"],
+                    machine["serial_number"],
+                    machine["machine_category"],
+                    machine["commissioning_date"],
+                    machine["warranty_period_months"],
+                    machine["warranty_end_date"],
+                    machine["power"],
+                    machine["power_unit"],
+                    machine["protection_a"],
+                    machine["seller_data"],
+                    machine["notes"],
+                ),
+            )
+            db.commit()
+        except ValueError as exc:
+            flash(str(exc), "error")
+            return redirect(url_for("admin_machines", new=1))
+        except sqlite3.IntegrityError:
+            get_db().rollback()
+            flash("Maszyna o takich danych lub numerze seryjnym już istnieje.", "error")
+            return redirect(url_for("admin_machines", new=1))
+
+        machine_id = int(cursor.lastrowid)
+        log_user_activity(
+            "create_machine",
+            f"Dodano maszynę {machine['name']} (ID {machine_id}).",
+            target_type="machine",
+            target_id=machine_id,
+        )
+        flash("Maszyna została dodana.", "success")
+        return redirect(url_for("admin_machines"))
 
     @app.route("/admin/machines/<int:machine_id>/edit", methods=["POST"])
     def admin_edit_machine(machine_id: int):
@@ -839,39 +1256,151 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             flash("Brak uprawnień administratora.", "error")
             return redirect(url_for("index"))
 
-        name = request.form.get("name", "").strip()
-        machine_type = request.form.get("machine_type", "").strip()
-        serial_number = request.form.get("serial_number", "").strip()
-        if not all((name, machine_type, serial_number)):
-            flash("Nazwa, typ i numer seryjny są wymagane.", "error")
-            return redirect(url_for("admin_machines", edit=machine_id))
-
-        db = get_db()
         try:
+            machine = _machine_form_data(request.form)
+            db = get_db()
             cursor = db.execute(
                 """
                 UPDATE machines
-                SET name = ?, machine_type = ?, serial_number = ?
+                SET name = ?, machine_type = ?, serial_number = ?, machine_category = ?,
+                    commissioning_date = ?, warranty_period_months = ?, warranty_end_date = ?,
+                    power = ?, power_unit = ?, protection_a = ?, seller_data = ?, notes = ?
                 WHERE id = ?
                 """,
-                (name, machine_type, serial_number, machine_id),
+                (
+                    machine["name"],
+                    machine["machine_type"],
+                    machine["serial_number"],
+                    machine["machine_category"],
+                    machine["commissioning_date"],
+                    machine["warranty_period_months"],
+                    machine["warranty_end_date"],
+                    machine["power"],
+                    machine["power_unit"],
+                    machine["protection_a"],
+                    machine["seller_data"],
+                    machine["notes"],
+                    machine_id,
+                ),
             )
             if cursor.rowcount == 0:
                 flash("Maszyna nie istnieje.", "error")
                 return redirect(url_for("admin_machines"))
             db.commit()
+        except ValueError as exc:
+            flash(str(exc), "error")
+            return redirect(url_for("admin_machines", edit=machine_id))
         except sqlite3.IntegrityError:
-            db.rollback()
+            get_db().rollback()
             flash("Maszyna o takich danych lub numerze seryjnym już istnieje.", "error")
             return redirect(url_for("admin_machines", edit=machine_id))
 
         log_user_activity(
             "update_machine",
-            f"Zmieniono dane maszyny {name} (ID {machine_id}).",
+            f"Zmieniono dane maszyny {machine['name']} (ID {machine_id}).",
             target_type="machine",
             target_id=machine_id,
         )
         flash("Dane maszyny zostały zaktualizowane.", "success")
+        return redirect(url_for("admin_machines"))
+
+    @app.route("/admin/machines/export")
+    def admin_export_machines():
+        if session.get("role") != "admin":
+            flash("Brak uprawnień administratora.", "error")
+            return redirect(url_for("index"))
+
+        db = get_db()
+        machines = db.execute(
+            """
+            SELECT name, machine_type, serial_number, machine_category, commissioning_date,
+                   warranty_period_months, warranty_end_date, power, power_unit, protection_a,
+                   seller_data, notes
+            FROM machines
+            ORDER BY name, machine_type, serial_number
+            """
+        ).fetchall()
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = "MASZYNY"
+        sheet.append(MACHINE_EXPORT_COLUMNS)
+        for machine in machines:
+            commissioning_date = (
+                date.fromisoformat(machine["commissioning_date"])
+                if machine["commissioning_date"]
+                else None
+            )
+            warranty_end_date = (
+                date.fromisoformat(machine["warranty_end_date"])
+                if machine["warranty_end_date"]
+                else None
+            )
+            sheet.append(
+                [
+                    machine["name"],
+                    machine["machine_type"],
+                    machine["serial_number"],
+                    machine["machine_category"] or "",
+                    commissioning_date,
+                    machine["warranty_period_months"],
+                    warranty_end_date,
+                    machine["power"],
+                    machine["power_unit"] or "",
+                    machine["protection_a"],
+                    machine["seller_data"] or "",
+                    machine["notes"] or "",
+                ]
+            )
+        sheet.freeze_panes = "A2"
+        sheet.auto_filter.ref = sheet.dimensions
+        for column, width in enumerate((24, 28, 22, 24, 18, 22, 20, 12, 16, 20, 32, 40), start=1):
+            sheet.column_dimensions[chr(64 + column)].width = width
+        for row in sheet.iter_rows(min_row=2):
+            row[4].number_format = "DD.MM.YYYY"
+            row[6].number_format = "DD.MM.YYYY"
+
+        output = io.BytesIO()
+        workbook.save(output)
+        output.seek(0)
+        log_user_activity(
+            "export_machines",
+            "Wyeksportowano listę maszyn do pliku Excel.",
+            target_type="machines",
+        )
+        return send_file(
+            output,
+            as_attachment=True,
+            download_name="maszyny.xlsx",
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
+    @app.route("/admin/machines/import", methods=["POST"])
+    def admin_import_machines():
+        if session.get("role") != "admin":
+            flash("Brak uprawnień administratora.", "error")
+            return redirect(url_for("index"))
+
+        uploaded_file = request.files.get("file")
+        if uploaded_file is None or not uploaded_file.filename:
+            flash("Wybierz plik Excel do importu.", "error")
+            return redirect(url_for("admin_machines"))
+        try:
+            created, updated, skipped, warnings = import_machine_workbook(uploaded_file.read())
+        except (ValueError, zipfile.BadZipFile, InvalidFileException, OSError) as exc:
+            flash(f"Nie udało się zaimportować maszyn: {exc}", "error")
+            return redirect(url_for("admin_machines"))
+
+        log_user_activity(
+            "import_machines",
+            f"Zaimportowano listę maszyn: dodano {created}, zaktualizowano {updated}, pominięto {skipped}.",
+            target_type="machines",
+        )
+        flash(
+            f"Import zakończony. Dodano: {created}, zaktualizowano: {updated}, pominięto: {skipped}. "
+            "Dopasowane maszyny zachowują swoje dane identyfikacyjne; puste komórki nie nadpisują danych."
+            + (f" Szczegóły pominięć: {'; '.join(warnings[:5])}" if warnings else ""),
+            "success",
+        )
         return redirect(url_for("admin_machines"))
 
     @app.route("/admin/machines/<int:machine_id>/delete", methods=["POST"])
@@ -2070,6 +2599,22 @@ def save_attachment(record_id: int, file_storage: Any) -> None:
 def init_db() -> None:
     db = get_db()
     db.executescript(SCHEMA)
+    machine_columns = {
+        row["name"] for row in db.execute("PRAGMA table_info(machines)").fetchall()
+    }
+    for column, column_type in (
+        ("machine_category", "TEXT"),
+        ("commissioning_date", "TEXT"),
+        ("warranty_period_months", "INTEGER"),
+        ("warranty_end_date", "TEXT"),
+        ("power", "REAL"),
+        ("power_unit", "TEXT"),
+        ("protection_a", "TEXT"),
+        ("seller_data", "TEXT"),
+        ("notes", "TEXT"),
+    ):
+        if column not in machine_columns:
+            db.execute(f"ALTER TABLE machines ADD COLUMN {column} {column_type}")
     scheduled_columns = {
         row["name"] for row in db.execute("PRAGMA table_info(scheduled_events)").fetchall()
     }
