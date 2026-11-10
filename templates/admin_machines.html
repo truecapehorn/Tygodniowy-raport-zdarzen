@@ -1,13 +1,15 @@
 {% extends 'base.html' %}
 {% block content %}
 <div class="page-title">
-    Zarządzanie maszynami
+    {% if can_manage_machines %}Zarządzanie maszynami{% else %}Lista maszyn{% endif %}
     <small>Maszyny i powiązane wpisy</small>
 </div>
 
+{% if can_manage_machines %}
 <div class="actions machine-toolbar">
     <button id="machine-add-button" type="button" class="btn btn-primary">Dodaj maszynę</button>
 </div>
+{% endif %}
 
 <div class="card">
     <div class="card-title">Lista maszyn</div>
@@ -59,10 +61,12 @@
         <div class="modal-header">
             <strong id="machine-modal-title" style="font-size:1rem;color:var(--text);">Szczegóły maszyny</strong>
             <div class="machine-modal-actions">
+                {% if can_manage_machines %}
                 <button id="machine-modal-delete" type="button" class="btn btn-danger btn-sm">Usuń</button>
                 <button id="machine-modal-edit" type="button" class="btn btn-primary btn-sm">Edytuj</button>
                 <button id="machine-modal-save" type="submit" form="machine-modal-form" class="btn btn-primary btn-sm" style="display:none;">Zapisz</button>
                 <button id="machine-modal-cancel" type="button" class="btn btn-outline btn-sm" style="display:none;">Anuluj</button>
+                {% endif %}
                 <button id="machine-modal-close" type="button" class="modal-close" title="Zamknij" aria-label="Zamknij">&#10005;</button>
             </div>
         </div>
@@ -155,6 +159,7 @@
 </style>
 
 <script>
+const CAN_MANAGE_MACHINES = {{ can_manage_machines | tojson }};
 const machineModal = document.getElementById('machine-modal');
 const machineModalTitle = document.getElementById('machine-modal-title');
 const machineModalView = document.getElementById('machine-modal-view');
@@ -241,6 +246,7 @@ function machineDetails(row) {
 }
 
 function setMachineEditMode(editing) {
+    if (!CAN_MANAGE_MACHINES) return;
     machineModalView.style.display = editing ? 'none' : '';
     machineModalForm.style.display = editing ? '' : 'none';
     machineEditButton.style.display = editing ? 'none' : '';
@@ -254,19 +260,23 @@ function openMachineModal(row, editing = false) {
     machineModal.classList.add('open');
     machineModal.setAttribute('aria-hidden', 'false');
     machineModalView.innerHTML = row ? machineDetails(row) : '';
-    machineDeleteButton.style.display = row ? '' : 'none';
-    machineEditButton.style.display = row ? '' : 'none';
+    if (CAN_MANAGE_MACHINES) {
+        machineDeleteButton.style.display = row ? '' : 'none';
+        machineEditButton.style.display = row ? '' : 'none';
+    }
     machineModalTitle.textContent = row
         ? `${row.dataset.name} — ${row.dataset.machineType}`
         : 'Dodaj maszynę';
 
-    machineModalForm.reset();
-    machineModalForm.action = row
-        ? `/admin/machines/${row.dataset.machineId}/edit`
-        : '{{ url_for("admin_create_machine") }}';
-    machineDeleteForm.action = row
-        ? `/admin/machines/${row.dataset.machineId}/delete`
-        : '';
+    if (CAN_MANAGE_MACHINES) {
+        machineModalForm.reset();
+        machineModalForm.action = row
+            ? `/admin/machines/${row.dataset.machineId}/edit`
+            : '{{ url_for("admin_create_machine") }}';
+        machineDeleteForm.action = row
+            ? `/admin/machines/${row.dataset.machineId}/delete`
+            : '';
+    }
     if (row) {
         const values = {
             'machine-name': row.dataset.name,
@@ -283,11 +293,16 @@ function openMachineModal(row, editing = false) {
             'machine-notes': row.dataset.notes,
         };
         Object.entries(values).forEach(([id, value]) => {
-            document.getElementById(id).value = value || '';
+            const field = document.getElementById(id);
+            if (field) field.value = value || '';
         });
     }
-    updateMachineWarrantyEndDate();
-    setMachineEditMode(editing);
+    if (CAN_MANAGE_MACHINES) {
+        updateMachineWarrantyEndDate();
+        setMachineEditMode(editing);
+    } else {
+        machineModalView.style.display = '';
+    }
 }
 
 function closeMachineModal() {
@@ -322,16 +337,16 @@ document.querySelectorAll('.machine-row').forEach((row) => {
     });
 });
 
-document.getElementById('machine-add-button').addEventListener('click', () => openMachineModal(null, true));
-machineEditButton.addEventListener('click', () => setMachineEditMode(true));
-machineCancelButton.addEventListener('click', () => {
+document.getElementById('machine-add-button')?.addEventListener('click', () => openMachineModal(null, true));
+machineEditButton?.addEventListener('click', () => setMachineEditMode(true));
+machineCancelButton?.addEventListener('click', () => {
     if (!currentMachineRow) {
         closeMachineModal();
         return;
     }
     openMachineModal(currentMachineRow);
 });
-machineDeleteButton.addEventListener('click', () => machineDeleteForm.requestSubmit());
+machineDeleteButton?.addEventListener('click', () => machineDeleteForm.requestSubmit());
 machineDeleteForm.addEventListener('submit', (event) => {
     const machineName = currentMachineRow?.dataset.name || '';
     const recordCount = currentMachineRow?.dataset.recordCount || '0';

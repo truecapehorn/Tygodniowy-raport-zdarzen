@@ -423,9 +423,11 @@
             <li><a href="{{ url_for('new_record') }}"     {% if request.endpoint == 'new_record'     %}class="active"{% endif %}>Nowy rekord</a></li>
             <li><a href="{{ url_for('scheduled_events') }}" {% if request.endpoint in ('scheduled_events', 'new_scheduled_event', 'scheduled_event_done', 'scheduled_event_delete', 'scheduled_event_edit') %}class="active"{% endif %}>Planowanie</a></li>
             {% endif %}
+            {% if user_role == 'admin' or (current_user and (current_user.can_create_records or current_user.can_edit_records or current_user.can_delete_records)) %}
+            <li><a href="{{ url_for('admin_machines') }}" {% if request.endpoint in ('admin_machines', 'admin_edit_machine', 'admin_delete_machine') %}class="active"{% endif %}>Maszyny</a></li>
+            {% endif %}
             {% if user_role == 'admin' %}
             <li><a href="{{ url_for('data_page') }}"      {% if request.endpoint == 'data_page'      %}class="active"{% endif %}>Import / Eksport</a></li>
-            <li><a href="{{ url_for('admin_machines') }}" {% if request.endpoint in ('admin_machines', 'admin_edit_machine', 'admin_delete_machine') %}class="active"{% endif %}>Maszyny</a></li>
             <li><a href="{{ url_for('admin_users') }}"    {% if request.endpoint == 'admin_users'    %}class="active"{% endif %}>Użytkownicy</a></li>
             {% endif %}
             {% if user_role != 'guest' %}

@@ -1173,8 +1173,13 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
 
     @app.route("/admin/machines")
     def admin_machines():
-        if session.get("role") != "admin":
-            flash("Brak uprawnień administratora.", "error")
+        can_manage_machines = session.get("role") == "admin"
+        can_view_machines = can_manage_machines or any(
+            user_has_permission(permission)
+            for permission in ("can_create_records", "can_edit_records", "can_delete_records")
+        )
+        if not can_view_machines:
+            flash("Brak uprawnień do przeglądania listy maszyn.", "error")
             return redirect(url_for("index"))
 
         db = get_db()
@@ -1189,7 +1194,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         ).fetchall()
         edit_machine_id = request.args.get("edit", type=int)
         edit_machine = None
-        if edit_machine_id:
+        if edit_machine_id and can_manage_machines:
             edit_machine = db.execute(
                 "SELECT * FROM machines WHERE id = ?", (edit_machine_id,)
             ).fetchone()
@@ -1197,6 +1202,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             "admin_machines.html",
             machines=machines,
             edit_machine=edit_machine,
+            can_manage_machines=can_manage_machines,
         )
 
     @app.route("/admin/machines/new", methods=["POST"])
