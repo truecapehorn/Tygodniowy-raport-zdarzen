@@ -85,7 +85,8 @@ Pełna dokumentacja: [CONFIG.md](CONFIG.md), [CONFIG_EXAMPLES.md](CONFIG_EXAMPLE
 - eksport przefiltrowanych danych lub całej bazy do `.xlsx`,
 - logowanie użytkowników i administratorów,
 - zarządzanie uprawnieniami do przeglądania, tworzenia, edycji i usuwania rekordów,
-- administracyjne zarządzanie danymi maszyn i ich wpisami.
+- rejestr maszyn z dodatkowymi danymi technicznymi, sortowaniem i liczbą powiązanych wpisów,
+- import i eksport listy maszyn z poziomu strony **Import / Export** (administrator).
 
 ## Przykładowy wygląd aplikacji
 
@@ -172,6 +173,11 @@ administratora oraz użytkownika z uprawnieniem do tworzenia rekordów.
 Użytkownicy inni niż gość mogą pobrać eksport całej bazy jako plik `.xlsx`.
 Plik zawiera arkusz `ZBIORCZE` z kolumnami w układzie raportu tygodniowego.
 
+Administrator znajdzie na tej stronie również import i eksport bazy maszyn.
+Import maszyn przyjmuje pliki `.xlsx`; dopasowane maszyny są aktualizowane,
+a puste komórki nie nadpisują już zapisanych danych. Eksport tworzy plik
+`maszyny.xlsx` z arkuszem `MASZYNY`.
+
 ### Logowanie i zmiana hasła
 
 Strona logowania (`/login`) umożliwia wejście na konto użytkownika lub
@@ -182,15 +188,21 @@ wyłącznie do odczytu. Zalogowany użytkownik może otworzyć **Zmień hasło**
 
 ### Panel maszyn
 
-![Lista maszyn w bazie danych](docs/screenshots/1-panel-maszyn.jpg)
+![Lista maszyn w bazie danych](docs/screenshots/machines.jpg)
 
-Po zalogowaniu jako administrator wybierz w menu aplikacji pozycję **Maszyny**
-lub otwórz adres `/admin/machines`. Panel wyświetla nazwę, typ, numer seryjny
-każdej maszyny oraz liczbę powiązanych z nią wpisów.
+Administrator oraz użytkownik z uprawnieniem do tworzenia, edycji lub usuwania
+rekordów może otworzyć pozycję **Maszyny** w menu albo adres `/admin/machines`.
+Administrator może dodawać, edytować i usuwać maszyny; pozostali uprawnieni
+użytkownicy mają dostęp tylko do odczytu.
 
-Administrator może edytować nazwę, typ i numer seryjny. Zmiana dotyczy wszystkich
-wpisów przypisanych do tej maszyny. Numer seryjny musi być unikalny; zapis nie
-powiedzie się, jeśli jest już używany przez inną maszynę.
+Lista pokazuje nazwę firmy, model, numer seryjny, rodzaj maszyny i liczbę
+powiązanych wpisów. Nagłówki kolumn pozwalają sortować listę. Szczegóły maszyny
+obejmują też datę uruchomienia, długość i wyliczoną datę końca gwarancji, moc
+i jej jednostkę, zabezpieczenie, dane sprzedawcy oraz uwagi.
+
+Administrator może edytować dane maszyny; zmiany danych identyfikacyjnych
+dotyczą wszystkich przypisanych do niej wpisów. Numer seryjny musi być unikalny;
+zapis nie powiedzie się, jeśli jest już używany przez inną maszynę.
 
 Usunięcie maszyny usuwa również wszystkie jej wpisy i załączone pliki. Przed
 operacją aplikacja pokazuje liczbę wpisów do usunięcia i prosi o potwierdzenie.
