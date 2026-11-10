@@ -1,55 +1,122 @@
 {% extends "base.html" %}
-{% block title %}Import / Export – Tygodniowy raport zdarzen DUR{% endblock %}
+{% block title %}Import / Eksport – Tygodniowy raport zdarzen DUR{% endblock %}
 {% block content %}
 
-<div class="page-title">Import / Export <small>Zarządzanie danymi bazy</small></div>
+<style>
+    .transfer-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 1.25rem;
+        align-items: stretch;
+    }
+    .transfer-card {
+        display: flex;
+        flex-direction: column;
+        margin-bottom: 0;
+    }
+    .transfer-description {
+        color: var(--muted);
+        font-size: 0.875rem;
+        line-height: 1.6;
+        margin-bottom: 1.25rem;
+        min-height: 4.2rem;
+    }
+    .transfer-actions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.75rem;
+        margin-top: auto;
+    }
+    .transfer-action {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.55rem;
+        min-width: 0;
+    }
+    .transfer-control-row {
+        display: flex;
+        align-items: stretch;
+        gap: 0.75rem;
+        width: 100%;
+    }
+    .transfer-action-label {
+        color: var(--muted);
+        font-size: 0.73rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+    }
+    .transfer-control-row input[type="file"] { flex: 1; min-width: 0; height: 42px; }
+    .transfer-action .btn {
+        justify-content: center;
+        align-items: center;
+        height: 42px;
+        min-height: 42px;
+    }
+    @media (max-width: 760px) {
+        .transfer-description { min-height: 0; }
+    }
+    @media (max-width: 520px) {
+        .transfer-actions { grid-template-columns: 1fr; }
+        .transfer-control-row { align-items: stretch; flex-direction: column; }
+        .transfer-control-row .btn,
+        .transfer-action > .btn { width: 100%; }
+    }
+</style>
 
-{% if user_role == 'admin' or (current_user and current_user.can_create_records) %}
-<div class="card">
-    <div class="card-title">Import z pliku Excel</div>
-    <p class="text-muted" style="font-size:.875rem;margin-bottom:1rem;line-height:1.6;">
-        Załaduj plik <strong>.xls</strong> lub <strong>.xlsx</strong>.
-        Aplikacja automatycznie znajdzie zakładkę <strong>ZBIORCZE</strong> (lub użyje pierwszej zakładki).
-        Kolumny są dopasowywane automatycznie. Istniejące rekordy nie są usuwane.
-    </p>
-    <form method="post" enctype="multipart/form-data">
-        <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;">
-            <input type="file" name="file" accept=".xls,.xlsx" required>
-            <button type="submit" class="btn btn-primary">Importuj dane</button>
+<div class="page-title">Import / Eksport <small>Zarządzanie danymi bazy</small></div>
+
+<div class="transfer-grid">
+    {% if user_role == 'admin' or (current_user and current_user.can_create_records) or user_role != 'guest' %}
+    <section class="card transfer-card">
+        <div class="card-title">Baza zdarzeń</div>
+        <p class="transfer-description">
+            Importuj zdarzenia z pliku Excel albo pobierz wszystkie rekordy w układzie raportu tygodniowego.
+            Import rozpoznaje zakładkę <strong>ZBIORCZE</strong> i nie usuwa istniejących rekordów.
+        </p>
+        <div class="transfer-actions">
+            {% if user_role == 'admin' or (current_user and current_user.can_create_records) %}
+            <form class="transfer-action" method="post" enctype="multipart/form-data">
+                <label class="transfer-action-label" for="records-import-file">Import z pliku Excel</label>
+                <div class="transfer-control-row">
+                    <input id="records-import-file" type="file" name="file" accept=".xls,.xlsx" required>
+                    <button type="submit" class="btn btn-primary">Importuj zdarzenia</button>
+                </div>
+            </form>
+            {% endif %}
+            {% if user_role != 'guest' %}
+            <div class="transfer-action">
+                <span class="transfer-action-label">Eksport do pliku Excel</span>
+                <a href="{{ url_for('export_data') }}" class="btn btn-success">Eksportuj zdarzenia (.xlsx)</a>
+            </div>
+            {% endif %}
         </div>
-    </form>
-</div>
-{% endif %}
+    </section>
+    {% endif %}
 
-{% if user_role != 'guest' %}
-<div class="card">
-    <div class="card-title">Eksport całej bazy danych</div>
-    <p class="text-muted" style="font-size:.875rem;margin-bottom:1rem;line-height:1.6;">
-        Eksport wszystkich rekordów do pliku <strong>.xlsx</strong> z zakładką <strong>ZBIORCZE</strong>,
-        w układzie kolumn zgodnym z raportem tygodniowym.
-    </p>
-    <div class="actions" style="margin-top:0;">
-        <a href="{{ url_for('export_data') }}" class="btn btn-success">Eksportuj całą bazę (.xlsx)</a>
-    </div>
+    {% if user_role == 'admin' %}
+    <section class="card transfer-card">
+        <div class="card-title">Import / export bazy maszyn</div>
+        <p class="transfer-description">
+            Importuj lub eksportuj listę maszyn. Dopasowane maszyny zostaną zaktualizowane,
+            a puste komórki w pliku nie nadpiszą istniejących danych.
+        </p>
+        <div class="transfer-actions">
+            <form class="transfer-action" method="post" action="{{ url_for('admin_import_machines') }}" enctype="multipart/form-data">
+                <label class="transfer-action-label" for="machine-import-file">Import z pliku Excel</label>
+                <div class="transfer-control-row">
+                    <input id="machine-import-file" type="file" name="file" accept=".xlsx" required>
+                    <button type="submit" class="btn btn-primary">Importuj maszyny</button>
+                </div>
+            </form>
+            <div class="transfer-action">
+                <span class="transfer-action-label">Eksport do pliku Excel</span>
+                <a href="{{ url_for('admin_export_machines') }}" class="btn btn-success">Eksportuj maszyny (.xlsx)</a>
+            </div>
+        </div>
+    </section>
+    {% endif %}
 </div>
-{% endif %}
-
-{% if user_role == 'admin' %}
-<div class="card">
-    <div class="card-title">Import / export bazy maszyn</div>
-    <p class="text-muted" style="font-size:.875rem;margin-bottom:1rem;line-height:1.6;">
-        Eksportuj listę maszyn do pliku <strong>.xlsx</strong> lub zaimportuj ją z pliku Excel.
-        Dopasowane maszyny zostaną zaktualizowane, a puste komórki nie nadpiszą istniejących danych.
-    </p>
-    <div class="actions" style="margin-top:0;">
-        <a href="{{ url_for('admin_export_machines') }}" class="btn btn-outline">Eksportuj maszyny (.xlsx)</a>
-        <form method="post" action="{{ url_for('admin_import_machines') }}" enctype="multipart/form-data" style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;">
-            <label for="machine-import-file" style="font-size:.8rem;font-weight:700;">Importuj z Excel</label>
-            <input id="machine-import-file" type="file" name="file" accept=".xlsx" required>
-            <button type="submit" class="btn btn-primary">Importuj maszyny</button>
-        </form>
-    </div>
-</div>
-{% endif %}
 
 {% endblock %}
