@@ -1413,7 +1413,10 @@ class RepairReportAppTests(unittest.TestCase):
 
         page = self.client.get("/admin/machines").get_data(as_text=True)
 
-        self.assertIn("<th>POWIĄZANE WPISY</th>", page)
+        self.assertIn(
+            '<th aria-sort="none"><button type="button" class="machine-sort-button">POWIĄZANE WPISY',
+            page,
+        )
         self.assertIn(
             '<td>Linia A</td>\n                    <td>Pakowarka</td>\n'
             '                    <td>P-100</td>\n                    <td>—</td>\n'
@@ -1871,7 +1874,7 @@ class RepairReportAppTests(unittest.TestCase):
         page_html = page.get_data(as_text=True)
         self.assertIn("Dodaj maszynę", page_html)
         self.assertIn('name="machine_category"', page_html)
-        self.assertEqual(page_html.count("<th>"), 5)
+        self.assertEqual(page_html.count('class="machine-sort-button"'), 5)
         for heading in (
             "NAZWA / FIRMA",
             "NAZWA / MODEL",

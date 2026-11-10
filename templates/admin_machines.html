@@ -21,11 +21,11 @@
         <table class="machine-table">
             <thead>
                 <tr>
-                    <th>NAZWA / FIRMA</th>
-                    <th>NAZWA / MODEL</th>
-                    <th>NUMER SERYJNY</th>
-                    <th>RODZAJ</th>
-                    <th>POWIĄZANE WPISY</th>
+                    <th aria-sort="none"><button type="button" class="machine-sort-button">NAZWA / FIRMA <span aria-hidden="true">↕</span></button></th>
+                    <th aria-sort="none"><button type="button" class="machine-sort-button">NAZWA / MODEL <span aria-hidden="true">↕</span></button></th>
+                    <th aria-sort="none"><button type="button" class="machine-sort-button">NUMER SERYJNY <span aria-hidden="true">↕</span></button></th>
+                    <th aria-sort="none"><button type="button" class="machine-sort-button">RODZAJ <span aria-hidden="true">↕</span></button></th>
+                    <th aria-sort="none"><button type="button" class="machine-sort-button">POWIĄZANE WPISY <span aria-hidden="true">↕</span></button></th>
                 </tr>
             </thead>
             <tbody>
@@ -135,6 +135,17 @@
     .machine-import-form label { font-size: .8rem; font-weight: 700; }
     .machine-import-form input { max-width: 260px; }
     .machine-table { min-width: 700px; }
+    .machine-sort-button {
+        padding: 0;
+        border: 0;
+        background: none;
+        color: inherit;
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+    }
+    .machine-sort-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .machine-sort-button span { margin-left: .25rem; }
     .machine-row { cursor: pointer; }
     .machine-row:hover { background: var(--bg-card-alt); }
     .machine-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
@@ -167,6 +178,42 @@ const commissioningDateInput = document.getElementById('machine-commissioning-da
 const warrantyPeriodInput = document.getElementById('machine-warranty-period');
 const warrantyEndInput = document.getElementById('machine-warranty-end');
 let currentMachineRow = null;
+
+const machineTable = document.querySelector('.machine-table');
+const machineSortCollator = new Intl.Collator('pl', { numeric: true, sensitivity: 'base' });
+let machineSortColumn = -1;
+let machineSortDirection = 1;
+
+machineTable.querySelectorAll('.machine-sort-button').forEach((button, columnIndex) => {
+    button.addEventListener('click', () => {
+        machineSortDirection = machineSortColumn === columnIndex ? -machineSortDirection : 1;
+        machineSortColumn = columnIndex;
+
+        const rows = [...machineTable.tBodies[0].querySelectorAll('.machine-row')];
+        const values = rows.map((row) => row.cells[columnIndex].textContent.trim());
+        const numeric = values.length > 0 && values.every((value) => value !== '' && Number.isFinite(Number(value)));
+        const sortedRows = rows
+            .map((row, originalIndex) => ({ row, originalIndex, value: row.cells[columnIndex].textContent.trim() }))
+            .sort((a, b) => {
+                if (!a.value || !b.value) {
+                    return a.value ? -1 : b.value ? 1 : a.originalIndex - b.originalIndex;
+                }
+                const comparison = numeric
+                    ? Number(a.value) - Number(b.value)
+                    : machineSortCollator.compare(a.value, b.value);
+                return comparison * machineSortDirection || a.originalIndex - b.originalIndex;
+            });
+
+        sortedRows.forEach(({ row }) => machineTable.tBodies[0].appendChild(row));
+        machineTable.querySelectorAll('thead th').forEach((header, index) => {
+            const active = index === columnIndex;
+            header.setAttribute('aria-sort', active ? (machineSortDirection === 1 ? 'ascending' : 'descending') : 'none');
+            header.querySelector('.machine-sort-button span').textContent = active
+                ? (machineSortDirection === 1 ? '↑' : '↓')
+                : '↕';
+        });
+    });
+});
 
 function machineHtml(value) {
     return String(value ?? '')
