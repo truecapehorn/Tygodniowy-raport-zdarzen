@@ -25,6 +25,7 @@
                     <th>NAZWA / MODEL</th>
                     <th>NUMER SERYJNY</th>
                     <th>RODZAJ</th>
+                    <th>POWIĄZANE WPISY</th>
                 </tr>
             </thead>
             <tbody>
@@ -49,9 +50,10 @@
                     <td>{{ machine.machine_type }}</td>
                     <td>{{ machine.serial_number }}</td>
                     <td>{{ machine.machine_category or '—' }}</td>
+                    <td>{{ machine.record_count }}</td>
                 </tr>
                 {% else %}
-                <tr class="empty-row"><td colspan="4">Brak maszyn w bazie.</td></tr>
+                <tr class="empty-row"><td colspan="5">Brak maszyn w bazie.</td></tr>
                 {% endfor %}
             </tbody>
         </table>

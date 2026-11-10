@@ -1394,6 +1394,33 @@ class RepairReportAppTests(unittest.TestCase):
         self.assertEqual(edit_response.location, "/")
         self.assertEqual(delete_response.location, "/")
 
+    def test_admin_machine_table_shows_related_record_count(self):
+        for day in ("30", "31"):
+            self.client.post(
+                "/",
+                data={
+                    "occurrence_at": f"2026-08-{day}T08:00",
+                    "machine_name": "Linia A",
+                    "machine_type": "Pakowarka",
+                    "serial_number": "P-100",
+                    "event_type": "Awaria",
+                    "description": f"Wpis {day}",
+                },
+            )
+        with self.client.session_transaction() as session:
+            session["logged_in"] = True
+            session["role"] = "admin"
+
+        page = self.client.get("/admin/machines").get_data(as_text=True)
+
+        self.assertIn("<th>POWIĄZANE WPISY</th>", page)
+        self.assertIn(
+            '<td>Linia A</td>\n                    <td>Pakowarka</td>\n'
+            '                    <td>P-100</td>\n                    <td>—</td>\n'
+            '                    <td>2</td>',
+            page,
+        )
+
     def test_serial_number_reuses_existing_machine_even_with_different_label(self):
         first = {
             "occurrence_at": "2026-08-30T08:00",
@@ -1844,8 +1871,14 @@ class RepairReportAppTests(unittest.TestCase):
         page_html = page.get_data(as_text=True)
         self.assertIn("Dodaj maszynę", page_html)
         self.assertIn('name="machine_category"', page_html)
-        self.assertEqual(page_html.count("<th>"), 4)
-        for heading in ("NAZWA / FIRMA", "NAZWA / MODEL", "NUMER SERYJNY", "RODZAJ"):
+        self.assertEqual(page_html.count("<th>"), 5)
+        for heading in (
+            "NAZWA / FIRMA",
+            "NAZWA / MODEL",
+            "NUMER SERYJNY",
+            "RODZAJ",
+            "POWIĄZANE WPISY",
+        ):
             self.assertIn(heading, page_html)
         self.assertIn('id="machine-modal-view"', page_html)
         self.assertIn('id="machine-modal-edit"', page_html)
