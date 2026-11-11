@@ -75,6 +75,7 @@
             {% for slot in calendar_slots %}
             <div class="calendar-day-slot{% if can_create_records %} calendar-create-slot{% endif %}"
                  data-calendar-hour="{{ slot.time[:2] }}"
+                 data-calendar-minute="{{ slot.time[3:5] }}"
                  {% if can_create_records %}data-create-url="{{ url_for('new_record', occurrence_at=slot.occurrence_at, return_calendar_date=calendar_date) }}" role="link" tabindex="0" aria-label="Dodaj zdarzenie: {{ slot.time }}"{% endif %}>
                 <span class="calendar-day-time">{{ slot.time }}</span>
                 <div class="calendar-day-slot-events">
