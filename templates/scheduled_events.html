@@ -263,7 +263,7 @@ data-notes="{{ event.notes or '' }}"
                     data-repair-method="{{ event.repair_method or '' }}"
                     data-replaced-parts="{{ event.replaced_parts or '' }}"
                     data-notes="{{ event.notes or '' }}">
-                    <td>{{ event.name }}</td>
+                    <td class="{% if event.event_type|lower == 'awaria' %}event-row-awaria{% elif 'przegl' in event.event_type|lower %}event-row-przeglad{% elif event.event_type|lower == 'modernizacja' %}event-row-modernizacja{% elif event.event_type|lower == 'interwencja' %}event-row-interwencja{% elif event.event_type|lower == 'własne' %}event-row-wlasne{% else %}event-row-inne{% endif %}">{{ event.name }}</td>
                     <td class="text-muted">{{ event.machine_type }}<br>{{ event.serial_number }}</td>
                     <td><span class="badge {{ calendar_event_class(event.event_type) }}">{{ event.event_type }}</span></td>
                     <td>{{ event.planned_at|datetime }}</td>
@@ -274,7 +274,7 @@ data-notes="{{ event.notes or '' }}"
                             {% if user_role == 'admin' or (current_user and current_user.can_delete_records) %}
                             <form method="post" action="{{ url_for('scheduled_event_delete', event_id=event.id) }}" style="display:inline;"
                                   onsubmit="return confirm('Czy na pewno usunąć to zaplanowane zdarzenie?\nOperacja jest nieodwracalna.');">
-                                <button type="submit" class="btn btn-danger btn-sm">Usuń</button>
+                                <button type="submit" class="btn btn-outline btn-danger btn-sm">Usuń</button>
                             </form>
                             {% endif %}
                             <form method="post" action="{{ url_for('scheduled_event_done', event_id=event.id) }}" style="display:inline;">
@@ -337,7 +337,7 @@ data-notes="{{ event.notes or '' }}"
                     data-repair-method="{{ event.repair_method or '' }}"
                     data-replaced-parts="{{ event.replaced_parts or '' }}"
                     data-notes="{{ event.notes or '' }}">
-                    <td>{{ event.name }}</td>
+                    <td class="{% if event.event_type|lower == 'awaria' %}event-row-awaria{% elif 'przegl' in event.event_type|lower %}event-row-przeglad{% elif event.event_type|lower == 'modernizacja' %}event-row-modernizacja{% elif event.event_type|lower == 'interwencja' %}event-row-interwencja{% elif event.event_type|lower == 'własne' %}event-row-wlasne{% else %}event-row-inne{% endif %}">{{ event.name }}</td>
                     <td class="text-muted">{{ event.machine_type }}<br>{{ event.serial_number }}</td>
                     <td><span class="badge {{ calendar_event_class(event.event_type) }}">{{ event.event_type }}</span></td>
                     <td>{{ event.planned_at|datetime }}</td>
@@ -354,7 +354,7 @@ data-notes="{{ event.notes or '' }}"
                         {% if user_role == 'admin' or (current_user and current_user.can_delete_records) %}
                         <form method="post" action="{{ url_for('scheduled_event_delete', event_id=event.id) }}" style="display:inline;"
                               onsubmit="return confirm('Czy na pewno usunąć to zaplanowane zdarzenie?\nOperacja jest nieodwracalna.');">
-                            <button type="submit" class="btn btn-danger btn-sm">Usuń</button>
+                            <button type="submit" class="btn btn-outline btn-danger btn-sm">Usuń</button>
                         </form>
                         {% endif %}
                     </td>
@@ -569,7 +569,7 @@ data-notes="{{ event.notes or '' }}"
                 {% if user_role == 'admin' or (current_user and current_user.can_delete_records) %}
                 <form id="scheduled-modal-delete-form" method="post" style="display:inline;"
                       onsubmit="return confirm('Czy na pewno usunąć to zaplanowane zdarzenie?\nOperacja jest nieodwracalna.');">
-                    <button type="submit" class="btn btn-danger btn-sm">Usuń</button>
+                    <button type="submit" class="btn btn-outline btn-danger btn-sm">Usuń</button>
                 </form>
                 {% endif %}
                 <button id="scheduled-modal-edit-button" type="button" class="btn btn-primary btn-sm">Edytuj</button>

@@ -93,12 +93,12 @@
                     <th>Opis</th>
                     <th>Przyczyna</th>
                     <th>Sposób naprawy</th>
-                    <th title="Załączniki">&#128206;</th>
+                    <th title="Załączniki"><svg class="icon-attachment" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.19 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg></th>
                 </tr>
             </thead>
             <tbody>
                 {% for r in filtered_records %}
-                <tr class="record-row" data-id="{{ r.id }}">
+                <tr class="record-row{% if r.event_type|lower == 'awaria' %} event-row-awaria{% elif 'przegl' in r.event_type|lower %} event-row-przeglad{% elif r.event_type|lower == 'modernizacja' %} event-row-modernizacja{% elif r.event_type|lower == 'interwencja' %} event-row-interwencja{% else %} event-row-inne{% endif %}" data-id="{{ r.id }}">
                     <td class="td-id">{{ r.id }}<br><span class="td-week">{{ r.record_year }}/W{{ r.record_week }}/{{ r.week_sequence }}</span></td>
                     <td class="{% if not r.repaired_at %}date-no-repair{% endif %}" style="white-space:pre-line;"{% if not r.repaired_at %} title="Brak daty naprawienia"{% endif %}>{{ r.occurrence_at|datetime|replace(' ', '\n', 1) }}</td>
                     <td>{{ r.name }}</td>
@@ -108,7 +108,7 @@
                     <td class="text-muted"><span class="record-summary">{{ (r.cause or '') | truncate(400, true, '...', 0) }}</span></td>
                     <td class="text-muted"><span class="record-summary">{{ (r.repair_method or '') | truncate(400, true, '...', 0) }}</span></td>
                     <td style="white-space:nowrap;text-align:center;">
-                        {% if r.attachment_count > 0 %}<span style="color:var(--accent);font-size:.8rem;" title="{{ r.attachment_count }} plik(ów)">&#128206; {{ r.attachment_count }}</span>{% endif %}
+                        {% if r.attachment_count > 0 %}<span style="color:var(--accent);font-size:.8rem;" title="{{ r.attachment_count }} plik(ów)"><svg class="icon-attachment" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.19 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg> {{ r.attachment_count }}</span>{% endif %}
                     </td>
                 </tr>
                 {% else %}
@@ -249,7 +249,7 @@ function buildView(r) {
             const url = `/attachments/${r.id}/${encodeURIComponent(a.filename)}`;
             html += a.content_type.startsWith('image/')
                 ? `<a href="${url}" target="_blank"><img src="${url}" alt="${esc(a.original_name)}" title="${esc(a.original_name)}"></a>`
-                : `<a href="${url}" target="_blank" class="btn btn-outline btn-sm">&#128206; ${esc(a.original_name)}</a>`;
+                : `<a href="${url}" target="_blank" class="btn btn-outline btn-sm"><svg class="icon-attachment" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.19 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg> ${esc(a.original_name)}</a>`;
         });
         html += `</div><div style="margin-top:.5rem;"><a href="/record/${r.id}/attachments.zip" class="btn btn-success btn-sm">&#11015; Pobierz</a></div></div>`;
     }

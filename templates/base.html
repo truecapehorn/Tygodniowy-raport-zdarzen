@@ -264,6 +264,8 @@
         .btn-danger:hover   { background: #912018; }
         .btn-outline  { background: transparent; border-color: var(--border); color: var(--text); }
         .btn-outline:hover  { background: rgba(31,41,51,0.04); border-color: var(--muted); }
+        .btn-outline.btn-danger { background: transparent; border-color: var(--red); color: var(--red); }
+        .btn-outline.btn-danger:hover { background: var(--red-dim); border-color: var(--red); }
         .btn-sm { padding: 0.3rem 0.65rem; font-size: 0.8rem; }
         .actions { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; margin-top: 0.85rem; }
 
@@ -283,15 +285,22 @@
         /* ─── Table ─── */
         .table-wrap { overflow-x: auto; border-radius: 8px; border: 1px solid var(--border); }
         table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+        thead {
+            position: sticky;
+            top: 0;
+            z-index: 5;
+            background: var(--bg-th);
+        }
         thead tr { background: var(--bg-th); }
         th {
+            background: var(--bg-th);
             padding: 0.55rem 0.75rem;
             text-align: left;
-            font-size: 0.7rem;
+            font-size: 0.75rem;
             font-weight: 700;
             color: var(--muted);
             text-transform: uppercase;
-            letter-spacing: 0.05em;
+            letter-spacing: 0.03em;
             border-bottom: 1px solid var(--border);
             white-space: nowrap;
         }
@@ -309,7 +318,16 @@
         tbody tr { background: var(--bg-row); }
         tbody tr:nth-child(even) { background: var(--bg-row-alt); }
         tbody tr:hover { background: var(--bg-row-hover); }
+        .event-row-awaria { --event-stripe: var(--red); }
+        .event-row-przeglad { --event-stripe: var(--accent); }
+        .event-row-modernizacja { --event-stripe: var(--purple); }
+        .event-row-interwencja { --event-stripe: var(--yellow); }
+        .event-row-wlasne { --event-stripe: var(--pink); }
+        .event-row-inne { --event-stripe: var(--muted); }
+        tbody tr[class*="event-row-"] > td:first-child,
+        tbody td[class*="event-row-"]:first-child { box-shadow: inset 4px 0 var(--event-stripe); }
         tbody tr:last-child td { border-bottom: none; }
+        .icon-attachment { width: 1em; height: 1em; vertical-align: -0.15em; }
         .td-id   { color: var(--muted); font-size: 0.75rem; white-space: nowrap; }
         .td-week { color: var(--accent); font-size: 0.68rem; }
         .td-cost { color: var(--yellow); font-weight: 600; }
