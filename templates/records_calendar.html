@@ -228,11 +228,11 @@ function setCalendarActionVisibility(mode) {
         save: document.getElementById('calendar-record-save'),
         cancel: document.getElementById('calendar-record-cancel'),
     };
-    if (elements.edit) elements.edit.style.display = viewMode && CALENDAR_CAN_EDIT ? '' : 'none';
-    if (elements.delete) elements.delete.style.display = viewMode && CALENDAR_CAN_DELETE ? '' : 'none';
-    if (elements.pdf) elements.pdf.style.display = viewMode ? '' : 'none';
-    if (elements.save) elements.save.style.display = editMode ? '' : 'none';
-    if (elements.cancel) elements.cancel.style.display = editMode ? '' : 'none';
+    if (elements.edit) elements.edit.classList.toggle('u-display-none', !(viewMode && CALENDAR_CAN_EDIT));
+    if (elements.delete) elements.delete.classList.toggle('u-display-none', !(viewMode && CALENDAR_CAN_DELETE));
+    if (elements.pdf) elements.pdf.classList.toggle('u-display-none', !viewMode);
+    if (elements.save) elements.save.classList.toggle('u-display-none', !editMode);
+    if (elements.cancel) elements.cancel.classList.toggle('u-display-none', !editMode);
 }
 function renderCalendarRecord(record) {
     const fields = [
