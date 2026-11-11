@@ -40,6 +40,11 @@
         gap: 0.75rem;
         width: 100%;
     }
+    .transfer-export-buttons {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
     .transfer-action-label {
         color: var(--muted);
         font-size: 0.73rem;
@@ -62,6 +67,8 @@
         .transfer-control-row { align-items: stretch; flex-direction: column; }
         .transfer-control-row .btn,
         .transfer-action > .btn { width: 100%; }
+        .transfer-export-buttons { flex-direction: column; }
+        .transfer-export-buttons .btn { width: 100%; }
     }
 </style>
 
@@ -88,8 +95,10 @@
             {% if user_role != 'guest' %}
             <div class="transfer-action">
                 <span class="transfer-action-label">Eksport danych</span>
-                <a href="{{ url_for('export_data') }}" class="btn btn-success">Eksportuj zdarzenia (.xlsx)</a>
-                <a href="{{ url_for('export_records_bundle') }}" class="btn btn-outline-secondary">Eksportuj zdarzenia i załączniki (.zip)</a>
+                <div class="transfer-export-buttons">
+                    <a href="{{ url_for('export_data') }}" class="btn btn-success">Eksportuj zdarzenia (.xlsx)</a>
+                    <a href="{{ url_for('export_records_bundle') }}" class="btn btn-success">Eksportuj zdarzenia i załączniki (.zip)</a>
+                </div>
             </div>
             {% endif %}
         </div>
