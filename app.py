@@ -2336,6 +2336,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             "machine_type": request.args.get("machine_type", "").strip(),
             "serial_number": request.args.get("serial_number", "").strip(),
             "event_type": request.args.get("event_type", "").strip(),
+            "task_status": request.args.get("task_status", "").strip(),
             "occurrence_from": format_date(request.args.get("occurrence_from", "").strip()),
             "occurrence_to": format_date(request.args.get("occurrence_to", "").strip()),
             "description_terms": request.args.get("description_terms", "").strip(),
@@ -2537,6 +2538,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             "machine_type": request.args.get("machine_type", "").strip(),
             "serial_number": request.args.get("serial_number", "").strip(),
             "event_type": request.args.get("event_type", "").strip(),
+            "task_status": request.args.get("task_status", "").strip(),
             "occurrence_from": format_date(request.args.get("occurrence_from", "").strip()),
             "occurrence_to": format_date(request.args.get("occurrence_to", "").strip()),
             "description_terms": request.args.get("description_terms", "").strip(),
@@ -3717,6 +3719,10 @@ def query_records(filters: dict[str, str]) -> list[sqlite3.Row]:
     if filters.get("event_type"):
         query += " AND r.event_type = ?"
         params.append(filters["event_type"])
+    if filters.get("task_status") == "completed":
+        query += " AND r.repaired_at IS NOT NULL AND r.repaired_at != ''"
+    elif filters.get("task_status") == "incomplete":
+        query += " AND (r.repaired_at IS NULL OR r.repaired_at = '')"
     if filters.get("occurrence_from"):
         query += " AND date(r.occurrence_at) >= date(?)"
         occurrence_from = parse_datetime(filters["occurrence_from"])

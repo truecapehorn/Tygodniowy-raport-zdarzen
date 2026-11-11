@@ -306,6 +306,38 @@ class RepairReportAppTests(unittest.TestCase):
         self.assertEqual(len(notes_rows), 2)
         self.assertEqual(notes_rows[1][4], "Linia B")
 
+    def test_task_status_filter_includes_completed_and_incomplete_records(self):
+        for index, repaired_at in enumerate(("2026-08-30T09:00", "")):
+            self.client.post(
+                "/",
+                data={
+                    "occurrence_at": f"2026-08-30T08:0{index}",
+                    "repaired_at": repaired_at,
+                    "machine_name": f"Maszyna {index}",
+                    "machine_type": "Testowa",
+                    "serial_number": f"T-{index}",
+                    "event_type": "Awaria",
+                    "description": f"Zadanie {index}",
+                },
+            )
+
+        completed_page = self.client.get("/filter?task_status=completed").get_data(as_text=True)
+        self.assertIn("Zadanie 0", completed_page)
+        self.assertNotIn("Zadanie 1", completed_page)
+        self.assertIn('<option value="completed" selected>', completed_page)
+
+        incomplete_page = self.client.get("/filter?task_status=incomplete").get_data(as_text=True)
+        self.assertIn("Zadanie 1", incomplete_page)
+        self.assertNotIn("Zadanie 0", incomplete_page)
+        self.assertIn('<option value="incomplete" selected>', incomplete_page)
+
+        export_response = self.client.get("/export?task_status=incomplete")
+        self.assertEqual(export_response.status_code, 200)
+        workbook = load_workbook(io.BytesIO(export_response.data))
+        rows = list(workbook.active.iter_rows(values_only=True))
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[1][8], "Zadanie 1")
+
     def test_scheduled_event_form_uses_existing_machine_lookup(self):
         self.client.post(
             "/",

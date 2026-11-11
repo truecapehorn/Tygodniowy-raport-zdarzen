@@ -17,7 +17,7 @@
 <div class="card">
     <div class="card-title">{% if user_role == 'guest' %}Filtrowanie{% else %}Filtrowanie i eksport{% endif %}</div>
     <form method="get" id="filter-form">
-        <div class="form-grid">
+        <div class="form-grid filter-form-grid">
             <div class="field">
                 <label>Maszyna</label>
                 <input list="machine-filter-list" id="filter-machine" name="machine"
@@ -48,6 +48,14 @@
                 </select>
             </div>
             <div class="field">
+                <label>Status zadania</label>
+                <select name="task_status">
+                    <option value="">Wszystkie</option>
+                    <option value="completed" {% if filters.task_status == 'completed' %}selected{% endif %}>Ukończone</option>
+                    <option value="incomplete" {% if filters.task_status == 'incomplete' %}selected{% endif %}>Nieukończone</option>
+                </select>
+            </div>
+            <div class="field">
                 <label>Data od</label>
                 <input type="text" name="occurrence_from" value="{{ filters.occurrence_from }}"
                        placeholder="dd-mm-rrrr" pattern="[0-9]{2}-[0-9]{2}-[0-9]{4}" maxlength="10"
@@ -59,7 +67,7 @@
                        placeholder="dd-mm-rrrr" pattern="[0-9]{2}-[0-9]{2}-[0-9]{4}" maxlength="10"
                        title="Wpisz datę w formacie dd-mm-rrrr">
             </div>
-            <div class="field u-grid-column-span-2">
+            <div class="field filter-search-field">
                 <label>Szukaj w opisie, przyczynie, naprawie, częściach i uwagach (słowa rozdzielone ; )</label>
                 <input type="text" name="description_terms" value="{{ filters.description_terms }}"
                        placeholder="np. silnik;czujnik">
