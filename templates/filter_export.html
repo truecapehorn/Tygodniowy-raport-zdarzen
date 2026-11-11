@@ -218,7 +218,7 @@ function buildExistingAttachList(attachments) {
         + attachments.map(a =>
             `<span class="u-display-inline-flex u-align-items-center u-gap-25rem u-padding-2rem-5rem u-background-var-bg-card-alt-162032 u-border-1px-solid-var-border u-border-radius-4px u-font-size-75rem">`
             + `<span>${esc(a.original_name)}</span>`
-            + `<button type="button" onclick="deleteAttachment(${a.id})" class="u-background-none u-border-none u-color-var-red-f87171 u-cursor-pointer u-padding-0-1rem u-line-height-1 u-font-size-9rem" title="Usu\u0144 plik">\u00d7</button>`
+            + `<button type="button" onclick="deleteAttachment(${a.id})" class="u-background-none u-border-none u-color-var-red u-cursor-pointer u-padding-0-1rem u-line-height-1 u-font-size-9rem" title="Usu\u0144 plik">\u00d7</button>`
             + `</span>`
         ).join('')
         + '</div>';

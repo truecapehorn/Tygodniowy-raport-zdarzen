@@ -4,6 +4,16 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}Tygodniowy raport zdarzen DUR{% endblock %}</title>
+    <script>
+        (() => {
+            let theme;
+            try { theme = localStorage.getItem('dur-theme'); } catch (_) {}
+            if (theme !== 'light' && theme !== 'dark') {
+                theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            }
+            document.documentElement.dataset.theme = theme;
+        })();
+    </script>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
 </head>
 <body>
@@ -31,6 +41,7 @@
             {% if user_role != 'guest' %}
             <li><a href="{{ url_for('change_password') }}" {% if request.endpoint == 'change_password' %}class="active"{% endif %}>Zmień hasło</a></li>
             {% endif %}
+            <li><button class="theme-toggle" id="theme-toggle" type="button" aria-label="Przełącz motyw"><span aria-hidden="true">☾</span><span id="theme-toggle-label">Motyw</span></button></li>
             <li><a class="logout-link" href="{{ url_for('logout') }}"><span>Wyloguj się</span><strong>{{ current_username }}</strong></a></li>
         
         
@@ -50,5 +61,36 @@
         {% endwith %}
         {% block content %}{% endblock %}
     </main>
+    <script>
+        (() => {
+            const themeToggle = document.getElementById('theme-toggle');
+            const themeToggleLabel = document.getElementById('theme-toggle-label');
+            const themePreferenceKey = 'dur-theme';
+            const systemTheme = window.matchMedia('(prefers-color-scheme: dark)');
+
+            const applyTheme = (theme) => {
+                document.documentElement.dataset.theme = theme;
+                const nextTheme = theme === 'dark' ? 'light' : 'dark';
+                themeToggleLabel.textContent = `Tryb ${nextTheme === 'dark' ? 'ciemny' : 'jasny'}`;
+                themeToggle.setAttribute('aria-label', `Przełącz na tryb ${nextTheme === 'dark' ? 'ciemny' : 'jasny'}`);
+                themeToggle.setAttribute('aria-pressed', String(theme === 'dark'));
+                themeToggle.querySelector('[aria-hidden="true"]').textContent = theme === 'dark' ? '☀' : '☾';
+            };
+
+            applyTheme(document.documentElement.dataset.theme || (systemTheme.matches ? 'dark' : 'light'));
+            themeToggle.addEventListener('click', () => {
+                const nextTheme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+                applyTheme(nextTheme);
+                try { localStorage.setItem(themePreferenceKey, nextTheme); } catch (_) {}
+            });
+
+            systemTheme.addEventListener('change', (event) => {
+                try {
+                    if (localStorage.getItem(themePreferenceKey)) return;
+                } catch (_) {}
+                applyTheme(event.matches ? 'dark' : 'light');
+            });
+        })();
+    </script>
 </body>
 </html>

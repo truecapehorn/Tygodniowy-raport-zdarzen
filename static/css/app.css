@@ -43,6 +43,7 @@
 
 /* Extracted from base.html */
 :root {
+            color-scheme: light;
             --bg:           #f3f6f8;
             --bg-nav:       #ffffff;
             --bg-card:      #ffffff;
@@ -70,6 +71,44 @@
             --purple-dim:   #f1eafe;
             --pink:         #d63384;
             --pink-dim:     #fcebf5;
+            --hover-overlay: rgba(31,41,51,0.05);
+            --outline-overlay: rgba(31,41,51,0.04);
+            --row-border: rgba(31,41,51,0.12);
+            --focus-ring: rgba(23,105,170,0.15);
+        }
+        :root[data-theme="dark"] {
+                color-scheme: dark;
+                --bg:           #151a20;
+                --bg-nav:       #1d242c;
+                --bg-card:      #1d242c;
+                --bg-card-alt:  #252e38;
+                --bg-input:     #171d24;
+                --bg-th:        #252e38;
+                --bg-row:       #1d242c;
+                --bg-row-alt:   #222a33;
+                --bg-row-hover: #293744;
+                --border:       #3b4652;
+                --text:         #e5eaf0;
+                --muted:        #a0acb9;
+                --accent:       #70b7f0;
+                --accent-dim:   #203b52;
+                --cyan:         #55c5de;
+                --green:        #5ec787;
+                --green-dim:    #1d3b2c;
+                --red:          #f17c73;
+                --red-dim:      #472825;
+                --orange:       #f0a35f;
+                --orange-dim:   #49311f;
+                --yellow:       #e4bf59;
+                --yellow-dim:   #44391d;
+                --purple:       #b39ae8;
+                --purple-dim:   #34294b;
+                --pink:         #ef83ba;
+                --pink-dim:     #48283a;
+                --hover-overlay: rgba(229,234,240,0.08);
+                --outline-overlay: rgba(229,234,240,0.06);
+                --row-border: rgba(229,234,240,0.12);
+                --focus-ring: rgba(112,183,240,0.25);
         }
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -154,11 +193,27 @@
             transition: color 0.15s, background 0.15s;
         }
         .navbar-links .logout-link { flex-direction: column; line-height: 1.2; color: var(--red); }
-        .navbar-links a:hover { color: var(--text); background: rgba(31,41,51,0.05); }
+        .theme-toggle {
+            display: flex;
+            align-items: center;
+            gap: .35rem;
+            padding: .4rem .65rem;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: transparent;
+            color: var(--muted);
+            font: inherit;
+            font-size: .8rem;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .theme-toggle:hover { color: var(--text); background: var(--hover-overlay); }
+        .theme-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+        .navbar-links a:hover { color: var(--text); background: var(--hover-overlay); }
         .navbar-links a.active { color: var(--accent); background: var(--accent-dim); border: 1px solid var(--accent); }
 
         /* ─── Layout ─── */
-        .container { max-width: 1440px; margin: 0 auto; padding: 1.5rem; }
+        .container { width: min(100%, 1440px); margin: 0 auto; padding: 1.5rem; }
         .page-title {
             font-size: 1.15rem;
             font-weight: 700;
@@ -221,7 +276,7 @@
         .field textarea:focus {
             outline: none;
             border-color: var(--accent);
-            box-shadow: 0 0 0 3px rgba(23,105,170,0.15);
+            box-shadow: 0 0 0 3px var(--focus-ring);
         }
         .datetime-input { position: relative; }
         .datetime-input > input[type="text"] { width: 100%; padding-right: 3.25rem; }
@@ -300,7 +355,7 @@
         .btn-danger   { background: var(--red); border-color: var(--red); color: #fff; }
         .btn-danger:hover   { background: var(--red); filter: brightness(.85); }
         .btn-outline  { background: transparent; border-color: var(--border); color: var(--text); }
-        .btn-outline:hover  { background: rgba(31,41,51,0.04); border-color: var(--muted); }
+        .btn-outline:hover  { background: var(--outline-overlay); border-color: var(--muted); }
         .btn-outline.btn-danger { background: transparent; border-color: var(--red); color: var(--red); }
         .btn-outline.btn-danger:hover { background: var(--red-dim); border-color: var(--red); }
         .btn-sm { padding: 0.3rem 0.65rem; font-size: 0.8rem; }
@@ -343,7 +398,7 @@
         }
         td {
             padding: 0.5rem 0.75rem;
-            border-bottom: 1px solid rgba(31,41,51,0.12);
+            border-bottom: 1px solid var(--row-border);
             vertical-align: top;
             max-width: 220px;
             overflow-wrap: break-word;
@@ -454,7 +509,7 @@
             cursor: pointer; font-size: 1.25rem; padding: .2rem .4rem;
             border-radius: 4px; line-height: 1; flex-shrink: 0;
         }
-        .modal-close:hover { color: var(--text); background: rgba(31,41,51,.05); }
+        .modal-close:hover { color: var(--text); background: var(--hover-overlay); }
         .detail-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -602,7 +657,7 @@ body { font-family: Arial, sans-serif; margin: 2rem; }
             margin-bottom: 1.1rem;
             transition: border-color .15s;
         }
-        .login-page input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(23,105,170,.15); }
+        .login-page input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--focus-ring); }
         .btn-login {
             width: 100%;
             padding: .75rem;
@@ -1005,14 +1060,13 @@ body { font-family: Arial, sans-serif; margin: 2rem; }
 .u-justify-content-flex-start { justify-content: flex-start; }
 .u-font-size-78rem { font-size: .78rem; }
 .u-gap-4rem { gap: .4rem; }
-.u-color-var-red-f87171 { color: var(--red); }
+.u-color-var-red { color: var(--red); }
 
 /* Reusable layout and text helpers */
 .flex-between { display: flex; justify-content: space-between; align-items: center; }
 .text-sm { font-size: .8rem; }
 .nowrap { white-space: nowrap; }
 .ml-auto { margin-left: auto; }
-
 .flex-between { display: flex; justify-content: space-between; align-items: center; }
 .text-sm { font-size: .8rem; }
 .nowrap { white-space: nowrap; }
