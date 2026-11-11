@@ -591,22 +591,6 @@ scheduledModal.addEventListener('click', (event) => {
         scheduledModal.classList.remove('open');
     }
 });
-(() => {
-    const view = document.querySelector('.calendar-week-view');
-    if (!view) return;
-
-    const rows = [...view.querySelectorAll('.calendar-hour-row')];
-    let target = rows.find(row => row.querySelector('.calendar-scheduled-event'));
-    if (!target && view.querySelector('.calendar-weekday[aria-current="date"]')) {
-        target = rows.find(row => Number(row.dataset.calendarHour) === new Date().getHours());
-    }
-
-    if (target) {
-        requestAnimationFrame(() => {
-            const top = target.getBoundingClientRect().top + window.scrollY - 100;
-            window.scrollTo({ top: Math.max(0, top), behavior: 'instant' });
-        });
-    }
-})();
 </script>
+<script src="{{ url_for('static', filename='js/calendar.js') }}"></script>
 {% endblock %}

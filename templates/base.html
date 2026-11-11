@@ -25,7 +25,10 @@
             </svg>
             DUR - Tygodniowy raport zdarzeń
         </a>
-        <ul class="navbar-links">
+        <button class="navbar-menu-toggle" id="navbar-menu-toggle" type="button" aria-expanded="false" aria-controls="navbar-links" aria-label="Otwórz menu nawigacyjne">
+            <span aria-hidden="true">☰</span>
+        </button>
+        <ul class="navbar-links" id="navbar-links">
             <li><a href="{{ url_for('index') }}"           {% if request.endpoint == 'index'           %}class="active"{% endif %}>Strona główna</a></li>
             <li><a href="{{ url_for('filter_page') }}"    {% if request.endpoint == 'filter_page'    %}class="active"{% endif %}>Filtrowanie</a></li>
             {% if user_role == 'admin' or (current_user and current_user.can_create_records) %}
@@ -43,9 +46,6 @@
             {% endif %}
             <li><button class="theme-toggle" id="theme-toggle" type="button" aria-label="Przełącz motyw"><span aria-hidden="true">☾</span><span id="theme-toggle-label">Motyw</span></button></li>
             <li><a class="logout-link" href="{{ url_for('logout') }}"><span>Wyloguj się</span><strong>{{ current_username }}</strong></a></li>
-        
-        
-        
         </ul>
     </nav>
 
@@ -89,6 +89,41 @@
                     if (localStorage.getItem(themePreferenceKey)) return;
                 } catch (_) {}
                 applyTheme(event.matches ? 'dark' : 'light');
+            });
+        })();
+    </script>
+    <script>
+        (() => {
+            const navbar = document.querySelector('.navbar');
+            const menuToggle = document.getElementById('navbar-menu-toggle');
+            const mobileNavigation = window.matchMedia('(max-width: 900px)');
+            if (!navbar || !menuToggle) return;
+            navbar.classList.add('menu-collapsible');
+
+            const setMenuOpen = (open) => {
+                navbar.classList.toggle('menu-open', open);
+                menuToggle.setAttribute('aria-expanded', String(open));
+                menuToggle.setAttribute('aria-label', open ? 'Zamknij menu nawigacyjne' : 'Otwórz menu nawigacyjne');
+                menuToggle.querySelector('[aria-hidden="true"]').textContent = open ? '×' : '☰';
+            };
+
+            menuToggle.addEventListener('click', () => {
+                setMenuOpen(menuToggle.getAttribute('aria-expanded') !== 'true');
+            });
+            navbar.querySelectorAll('.navbar-links a').forEach((link) => {
+                link.addEventListener('click', () => setMenuOpen(false));
+            });
+            document.addEventListener('click', (event) => {
+                if (mobileNavigation.matches && !navbar.contains(event.target)) setMenuOpen(false);
+            });
+            document.addEventListener('keydown', (event) => {
+                if (event.key === 'Escape' && menuToggle.getAttribute('aria-expanded') === 'true') {
+                    setMenuOpen(false);
+                    menuToggle.focus();
+                }
+            });
+            mobileNavigation.addEventListener('change', (event) => {
+                if (!event.matches) setMenuOpen(false);
             });
         })();
     </script>
