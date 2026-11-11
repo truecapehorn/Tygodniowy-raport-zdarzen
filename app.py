@@ -2226,6 +2226,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             latest_records=query_records_latest(None if limit == "all" else limit),
             dashboard_kpis=query_dashboard_kpis() if session.get("role") == "admin" else None,
             event_types=EVENT_TYPES,
+            can_create_records=app.config.get("TESTING") or user_has_permission("can_create_records"),
             limit=limit,
             due_events=due_events,
         )
@@ -2548,6 +2549,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             machine_names=list_machine_names(),
             event_types=EVENT_TYPES,
             filters=filters,
+            can_create_records=app.config.get("TESTING") or user_has_permission("can_create_records"),
         )
 
     @app.route("/api/machines")
@@ -2706,6 +2708,49 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             return jsonify({"ok": True})
         except ValueError as exc:
             return jsonify({"error": str(exc)}), 400
+
+    @app.route("/api/record/<int:record_id>/copy", methods=["POST"])
+    def copy_record_api(record_id: int):
+        if not app.config.get("TESTING") and not user_has_permission("can_create_records"):
+            return jsonify({"error": "Brak uprawnień."}), 403
+        data = request.get_json(force=True)
+        if not data:
+            return jsonify({"error": "Brak danych."}), 400
+        db = get_db()
+        source = db.execute("SELECT id FROM repair_records WHERE id = ?", (record_id,)).fetchone()
+        if not source:
+            return jsonify({"error": "Rekord nie istnieje."}), 404
+        source_attachments = db.execute(
+            "SELECT filename, original_name, content_type, created_at FROM attachments WHERE record_id = ? ORDER BY created_at",
+            (record_id,),
+        ).fetchall()
+        try:
+            new_record_id = save_record(data)
+        except ValueError as exc:
+            return jsonify({"error": str(exc)}), 400
+
+        import shutil
+
+        source_dir = Path(current_app_uploads()) / str(record_id)
+        destination_dir = Path(current_app_uploads()) / str(new_record_id)
+        for attachment in source_attachments:
+            source_path = source_dir / attachment["filename"]
+            if not source_path.is_file():
+                continue
+            destination_dir.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source_path, destination_dir / attachment["filename"])
+            db.execute(
+                "INSERT INTO attachments(record_id, filename, original_name, content_type, created_at) VALUES (?, ?, ?, ?, ?)",
+                (new_record_id, attachment["filename"], attachment["original_name"], attachment["content_type"], datetime.now(UTC).isoformat(timespec="seconds")),
+            )
+        db.commit()
+        log_user_activity(
+            "copy_record",
+            f"Utworzono kopię rekordu #{record_id} jako rekord #{new_record_id}.",
+            target_type="record",
+            target_id=new_record_id,
+        )
+        return jsonify({"ok": True, "id": new_record_id})
 
     @app.route("/api/record/<int:record_id>", methods=["DELETE"])
     def delete_record_api(record_id: int):

@@ -138,6 +138,7 @@
             <div class="u-display-flex u-gap-4rem u-align-items-center u-flex-shrink-0">
                 <button id="modal-btn-delete" class="btn btn-outline btn-danger btn-sm" onclick="deleteRecord()">&#128465; Usu&#324;</button>
                 <button id="modal-btn-edit"   class="btn btn-outline btn-primary btn-sm" onclick="switchToEdit()">&#9998; Edytuj</button>
+                {% if can_create_records %}<button id="modal-btn-copy" class="btn btn-outline btn-primary btn-sm" onclick="switchToCopy()">&#10697; Kopiuj</button>{% endif %}
                 <button id="modal-btn-pdf"    class="btn btn-outline btn-success btn-sm" onclick="exportRecordPdf()"><svg class="icon-pdf" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 1.75h6l4 4v8.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="M9 1.75v4h4M5.5 9h5M5.5 11.5h5"/></svg> PDF</button>
                 <button class="btn btn-outline btn-primary btn-sm u-display-none" id="modal-btn-save" onclick="saveEdit()">&#10004; Zapisz</button>
                 <button class="btn btn-outline btn-sm u-display-none" id="modal-btn-cancel" onclick="switchToView()">Anuluj</button>
@@ -154,7 +155,9 @@ const EVENT_TYPES = {{ event_types | tojson }};
 const USER_ROLE = {{ user_role | tojson }};
 const CAN_EDIT = {{ (current_user and current_user.can_edit_records) | tojson }};
 const CAN_DELETE = {{ (current_user and current_user.can_delete_records) | tojson }};
+const CAN_CREATE = {{ can_create_records | tojson }};
 let currentRecord = null;
+let copyMode = false;
 
 // ── Filter datalists ────────────────────────────────────────────
 const filterMachine    = document.getElementById('filter-machine');
@@ -256,12 +259,17 @@ function buildView(r) {
     return html;
 }
 
-function buildEditForm(r) {
+function buildEditForm(r, isCopy = false) {
+    if (isCopy) {
+        const now = new Date();
+        const localNow = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+        r = { ...r, occurrence_at: localNow, repaired_at: null };
+    }
     const opts = EVENT_TYPES.map(et =>
         `<option value="${et}"${r.event_type===et?' selected':''}>${et}</option>`).join('');
     const existingAttach = (r.attachments && r.attachments.length)
         ? '<p class="u-font-size-75rem u-font-weight-700 u-color-var-muted u-margin-bottom-35rem">Istniej\u0105ce pliki:</p>'
-          + buildExistingAttachList(r.attachments)
+          + (isCopy ? '<p class="u-font-size-75rem u-color-var-muted">Załączniki zostaną skopiowane z oryginalnego rekordu.</p>' : buildExistingAttachList(r.attachments))
         : '';
     return `
     <div class="form-grid u-margin-bottom-75rem">
@@ -293,10 +301,10 @@ function buildEditForm(r) {
     <div>
         <div class="card-title u-margin-bottom-5rem">Za&#322;&#261;czniki &#8212; dodaj nowe pliki</div>
         ${existingAttach}
-        <div id="ef-attach-zone" class="u-border-2px-dashed-var-border u-border-radius-6px u-padding-1rem u-text-align-center u-color-var-muted u-font-size-82rem u-cursor-pointer u-transition-border-color-15s">
+        <div id="ef-attach-zone" style="${isCopy && !CAN_EDIT ? 'display:none' : ''}" class="u-border-2px-dashed-var-border u-border-radius-6px u-padding-1rem u-text-align-center u-color-var-muted u-font-size-82rem u-cursor-pointer u-transition-border-color-15s">
             Przeci&#261;gnij pliki, kliknij lub wklej ze schowka (Ctrl+V)
         </div>
-        <div id="ef-attach-preview" class="u-display-flex u-gap-4rem u-flex-wrap-wrap u-margin-top-4rem"></div>
+        <div id="ef-attach-preview" style="${isCopy && !CAN_EDIT ? 'display:none' : ''}" class="u-display-flex u-gap-4rem u-flex-wrap-wrap u-margin-top-4rem"></div>
     </div>`;
 }
 
@@ -332,11 +340,13 @@ function initEditAttachments() {
 }
 document.addEventListener('paste', e => {
     if (document.getElementById('modal-edit').style.display === 'none') return;
+    if (copyMode && !CAN_EDIT) return;
     if (e.clipboardData && e.clipboardData.files.length) addEditFiles(e.clipboardData.files);
 });
 
 // ── Open / close ────────────────────────────────────────────────
 async function openRecord(id) {
+    copyMode = false;
     currentRecord = null;
     document.getElementById('modal-title').textContent = 'Wczytywanie\u2026';
     document.getElementById('modal-view').innerHTML = '';
@@ -352,6 +362,8 @@ async function openRecord(id) {
     document.getElementById('modal-title').innerHTML =
         `Rekord <span class="u-color-var-accent">#${r.id}</span> \u2014 ${esc(r.name)}`;
     document.getElementById('modal-view').innerHTML = buildView(r);
+    const copyButton = document.getElementById('modal-btn-copy');
+    if (copyButton) copyButton.style.display = CAN_CREATE ? '' : 'none';
 }
 function exportRecordPdf() {
     if (currentRecord && currentRecord.id) window.location.href = `/record/${currentRecord.id}/pdf`;
@@ -363,25 +375,52 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal()
 
 // ── Edit mode ───────────────────────────────────────────────────
 function switchToEdit() {
+    copyMode = false;
     document.getElementById('modal-view').style.display = 'none';
     document.getElementById('modal-edit').style.display = '';
     document.getElementById('modal-edit').classList.remove('u-display-none');
     document.getElementById('modal-btn-edit').style.display   = 'none';
     document.getElementById('modal-btn-delete').style.display = 'none';
     document.getElementById('modal-btn-pdf').style.display = 'none';
+    const copyButton = document.getElementById('modal-btn-copy');
+    if (copyButton) copyButton.style.display = 'none';
     document.getElementById('modal-btn-save').style.display   = '';
     document.getElementById('modal-btn-save').classList.remove('u-display-none');
     document.getElementById('modal-btn-cancel').style.display = '';
     document.getElementById('modal-btn-cancel').classList.remove('u-display-none');
     document.getElementById('modal-edit').innerHTML = buildEditForm(currentRecord);
     initEditAttachments();
+    document.getElementById('modal-btn-save').innerHTML = '&#10004; Zapisz';
+}
+function switchToCopy() {
+    if (!currentRecord || !CAN_CREATE) return;
+    copyMode = true;
+    document.getElementById('modal-title').textContent = `Kopiowanie rekordu #${currentRecord.id}`;
+    document.getElementById('modal-view').style.display = 'none';
+    document.getElementById('modal-edit').style.display = '';
+    document.getElementById('modal-edit').classList.remove('u-display-none');
+    ['modal-btn-edit', 'modal-btn-delete', 'modal-btn-pdf', 'modal-btn-copy'].forEach(id => {
+        const button = document.getElementById(id);
+        if (button) button.style.display = 'none';
+    });
+    document.getElementById('modal-btn-save').style.display = '';
+    document.getElementById('modal-btn-save').classList.remove('u-display-none');
+    document.getElementById('modal-btn-save').innerHTML = '&#10004; Zapisz kopię';
+    document.getElementById('modal-btn-cancel').style.display = '';
+    document.getElementById('modal-btn-cancel').classList.remove('u-display-none');
+    document.getElementById('modal-edit').innerHTML = buildEditForm(currentRecord, true);
+    initEditAttachments();
 }
 function switchToView() {
+    copyMode = false;
+    document.getElementById('modal-title').innerHTML = `Rekord <span class="u-color-var-accent">#${currentRecord.id}</span> — ${esc(currentRecord.name)}`;
     document.getElementById('modal-edit').style.display = 'none';
     document.getElementById('modal-edit').classList.add('u-display-none');
     document.getElementById('modal-view').style.display = '';
     document.getElementById('modal-btn-edit').style.display   = (USER_ROLE === 'admin' || CAN_EDIT) ? '' : 'none';
     document.getElementById('modal-btn-delete').style.display = (USER_ROLE === 'admin' || CAN_DELETE) ? '' : 'none';
+    const copyButton = document.getElementById('modal-btn-copy');
+    if (copyButton) copyButton.style.display = CAN_CREATE ? '' : 'none';
     document.getElementById('modal-btn-pdf').style.display = '';
     document.getElementById('modal-btn-save').style.display   = 'none';
     document.getElementById('modal-btn-save').classList.add('u-display-none');
@@ -412,8 +451,8 @@ async function saveEdit() {
     const btn = document.getElementById('modal-btn-save');
     btn.disabled = true; btn.textContent = 'Zapisywanie\u2026';
     try {
-        const resp = await fetch(`/api/record/${currentRecord.id}`, {
-            method: 'PATCH',
+        const resp = await fetch(copyMode ? `/api/record/${currentRecord.id}/copy` : `/api/record/${currentRecord.id}`, {
+            method: copyMode ? 'POST' : 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data),
         });
@@ -422,12 +461,12 @@ async function saveEdit() {
             if (editFiles.length > 0) {
                 const fd = new FormData();
                 editFiles.forEach(f => fd.append('attachments', f));
-                await fetch(`/api/record/${currentRecord.id}/attachments`, { method: 'POST', body: fd });
+                await fetch(`/api/record/${copyMode ? result.id : currentRecord.id}/attachments`, { method: 'POST', body: fd });
             }
             closeModal(); window.location.reload();
         }
         else alert(result.error || 'B\u0142\u0105d podczas zapisywania.');
-    } finally { btn.disabled = false; btn.textContent = '\u2714 Zapisz'; }
+    } finally { btn.disabled = false; btn.innerHTML = copyMode ? '&#10004; Zapisz kopię' : '&#10004; Zapisz'; }
 }
 
 async function deleteRecord() {

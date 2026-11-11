@@ -90,6 +90,66 @@ class RepairReportAppTests(unittest.TestCase):
         self.assertIn("2.5", page)
         self.assertIn("200.0", page)
 
+    def test_copy_record_creates_new_record_with_submitted_occurrence(self):
+        self.client.post(
+            "/",
+            data={
+                "occurrence_at": "2026-08-30T08:00",
+                "repaired_at": "2026-08-30T10:30",
+                "machine_name": "Prasa 1",
+                "machine_type": "Hydrauliczna",
+                "serial_number": "H-001",
+                "event_type": "Awaria",
+                "description": "Wymiana czujnika",
+                "cause": "Zużycie",
+                "repair_method": "Wymiana",
+                "replaced_parts": "Czujnik",
+                "participants": "Jan",
+                "labor_cost": "1",
+                "material_cost": "20",
+                "spare_parts_cost": "100",
+                "service_cost": "0",
+                "notes": "Test",
+            },
+        )
+        with self.app.app_context():
+            original = get_db().execute("SELECT id FROM repair_records").fetchone()
+            original_id = int(original["id"])
+
+        response = self.client.post(
+            f"/api/record/{original_id}/copy",
+            json={
+                "occurrence_at": "2026-11-11T14:25",
+                "repaired_at": "",
+                "machine_name": "Prasa 1",
+                "machine_type": "Hydrauliczna",
+                "serial_number": "H-001",
+                "event_type": "Awaria",
+                "description": "Wymiana czujnika",
+                "cause": "Zużycie",
+                "repair_method": "Wymiana",
+                "replaced_parts": "Czujnik",
+                "participants": "Jan",
+                "labor_cost": "1",
+                "material_cost": "20",
+                "spare_parts_cost": "100",
+                "service_cost": "0",
+                "notes": "Test",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        copied_id = response.get_json()["id"]
+        self.assertNotEqual(copied_id, original_id)
+        with self.app.app_context():
+            db = get_db()
+            original = db.execute("SELECT occurrence_at FROM repair_records WHERE id = ?", (original_id,)).fetchone()
+            copied = db.execute("SELECT occurrence_at, repaired_at, description FROM repair_records WHERE id = ?", (copied_id,)).fetchone()
+            self.assertEqual(original["occurrence_at"], "2026-08-30 08:00")
+            self.assertEqual(copied["occurrence_at"], "2026-11-11 14:25")
+            self.assertIsNone(copied["repaired_at"])
+            self.assertEqual(copied["description"], "Wymiana czujnika")
+
     def test_guest_can_view_but_cannot_export_or_create_records(self):
         app = create_app(
             {
