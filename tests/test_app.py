@@ -1,9 +1,11 @@
 import io
+import json
+import re
 import sqlite3
 import tempfile
 import unittest
 import zipfile
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from openpyxl import Workbook, load_workbook
@@ -1512,6 +1514,40 @@ class RepairReportAppTests(unittest.TestCase):
         self.assertIn("Opis 0", page)
         self.assertIn("Opis 1", page)
         self.assertIn("Opis 2", page)
+
+    def test_dashboard_kpis_use_all_records_from_current_month_not_visible_limit(self):
+        month_start = datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        records = [
+            (month_start, None, "Miesięczny rekord starszy"),
+            (month_start.replace(hour=2), month_start.replace(hour=3), "Miesięczny rekord widoczny"),
+            (month_start - timedelta(minutes=1), None, "Rekord z poprzedniego miesiąca"),
+        ]
+        for occurrence_at, repaired_at, description in records:
+            form = {
+                "occurrence_at": occurrence_at.strftime("%Y-%m-%dT%H:%M"),
+                "machine_name": description,
+                "machine_type": "Typ",
+                "serial_number": description,
+                "event_type": "Awaria",
+                "description": description,
+                "material_cost": "10",
+            }
+            if repaired_at:
+                form["repaired_at"] = repaired_at.strftime("%Y-%m-%dT%H:%M")
+            self.client.post("/", data=form)
+
+        response = self.client.get("/?limit=1")
+        page = response.get_data(as_text=True)
+        match = re.search(r"const DASHBOARD_KPIS = (\{.*?\});", page)
+        self.assertIsNotNone(match)
+        kpis = json.loads(match.group(1))
+        self.assertEqual(kpis["failures"], 2)
+        self.assertEqual(kpis["downtime"], 1)
+        self.assertEqual(kpis["cost"], 20)
+        self.assertEqual(kpis["unrepaired"], 1)
+        self.assertNotIn("Miesięczny rekord starszy", page)
+        self.assertNotIn("Rekord z poprzedniego miesiąca", page)
+        self.assertIn("Awarie w tym miesiącu", page)
 
     def test_record_summaries_are_limited_in_recent_and_filtered_tables(self):
         description = "Opis z limitem\n" + ("szczegółowy tekst " * 60)

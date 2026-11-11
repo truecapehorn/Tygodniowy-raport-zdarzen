@@ -2181,6 +2181,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         return render_template(
             "index.html",
             latest_records=query_records_latest(None if limit == "all" else limit),
+            dashboard_kpis=query_dashboard_kpis(),
             event_types=EVENT_TYPES,
             limit=limit,
             due_events=due_events,
@@ -3571,6 +3572,35 @@ def query_records_latest(limit: int | str | None = 20) -> list[sqlite3.Row]:
         query += " LIMIT ?"
         params.append(int(limit))
     return list(db.execute(query, params).fetchall())
+
+
+def query_dashboard_kpis() -> dict[str, int | float]:
+    """Summarize records from the current calendar month, independent of the table limit."""
+    now = datetime.now()
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    if month_start.month == 12:
+        next_month = month_start.replace(year=month_start.year + 1, month=1)
+    else:
+        next_month = month_start.replace(month=month_start.month + 1)
+
+    row = get_db().execute(
+        """
+        SELECT
+            SUM(CASE WHEN lower(event_type) = lower('Awaria') THEN 1 ELSE 0 END) AS failures,
+            COALESCE(SUM(downtime_hours), 0) AS downtime,
+            COALESCE(SUM(total_cost), 0) AS cost,
+            SUM(CASE WHEN repaired_at IS NULL OR repaired_at = '' THEN 1 ELSE 0 END) AS unrepaired
+        FROM repair_records
+        WHERE occurrence_at >= ? AND occurrence_at < ?
+        """,
+        (month_start.isoformat(sep=" ", timespec="minutes"), next_month.isoformat(sep=" ", timespec="minutes")),
+    ).fetchone()
+    return {
+        "failures": row["failures"] or 0,
+        "downtime": row["downtime"],
+        "cost": row["cost"],
+        "unrepaired": row["unrepaired"] or 0,
+    }
 
 
 def query_records(filters: dict[str, str]) -> list[sqlite3.Row]:

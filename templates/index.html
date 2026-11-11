@@ -23,21 +23,21 @@
 </div>
 
 <!-- ── Ostatnie N rekordów ─────────────────────────────────────── -->
-<section class="dashboard-kpis" aria-label="Podsumowanie zdarzeń w widocznych rekordach">
+<section class="dashboard-kpis" aria-label="Podsumowanie zdarzeń w bieżącym miesiącu">
     <article class="dashboard-kpi">
-        <span class="dashboard-kpi-label">Awarie w tym tygodniu</span>
+        <span class="dashboard-kpi-label">Awarie w tym miesiącu</span>
         <strong class="dashboard-kpi-value" id="kpi-weekly-failures">0</strong>
     </article>
     <article class="dashboard-kpi">
-        <span class="dashboard-kpi-label">Suma przestojów</span>
+        <span class="dashboard-kpi-label">Przestoje w tym miesiącu</span>
         <strong class="dashboard-kpi-value" id="kpi-downtime">0 h</strong>
     </article>
     <article class="dashboard-kpi">
-        <span class="dashboard-kpi-label">Suma kosztów</span>
+        <span class="dashboard-kpi-label">Koszty w tym miesiącu</span>
         <strong class="dashboard-kpi-value" id="kpi-cost">0 zł</strong>
     </article>
     <article class="dashboard-kpi dashboard-kpi-warning">
-        <span class="dashboard-kpi-label">Bez daty naprawy</span>
+        <span class="dashboard-kpi-label">Bez daty naprawy w tym miesiącu</span>
         <strong class="dashboard-kpi-value" id="kpi-unrepaired">0</strong>
     </article>
 </section>
@@ -131,26 +131,14 @@ const CAN_EDIT = {{ (current_user and current_user.can_edit_records) | tojson }}
 const CAN_DELETE = {{ (current_user and current_user.can_delete_records) | tojson }};
 let currentRecord = null;
 
-// ── Dashboard KPIs (visible records) ────────────────────────────
-function currentIsoWeek(date) {
-    const utcDate = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-    const day = utcDate.getUTCDay() || 7;
-    utcDate.setUTCDate(utcDate.getUTCDate() + 4 - day);
-    const yearStart = new Date(Date.UTC(utcDate.getUTCFullYear(), 0, 1));
-    return { year: utcDate.getUTCFullYear(), week: Math.ceil((((utcDate - yearStart) / 86400000) + 1) / 7) };
-}
+// ── Dashboard KPIs (all records from the current month) ─────────
+const DASHBOARD_KPIS = {{ dashboard_kpis | tojson }};
 function updateDashboardKpis() {
-    const rows = [...document.querySelectorAll('tr.record-row')];
-    const week = currentIsoWeek(new Date());
-    const weeklyFailures = rows.filter(row => row.dataset.eventType.toLocaleLowerCase('pl-PL') === 'awaria'
-        && Number(row.dataset.year) === week.year && Number(row.dataset.week) === week.week).length;
-    const downtime = rows.reduce((sum, row) => sum + (Number.parseFloat(row.dataset.downtime) || 0), 0);
-    const cost = rows.reduce((sum, row) => sum + (Number.parseFloat(row.dataset.cost) || 0), 0);
-    const unrepaired = rows.filter(row => row.querySelector('.date-no-repair')).length;
-    document.getElementById('kpi-weekly-failures').textContent = weeklyFailures;
-    document.getElementById('kpi-downtime').textContent = `${new Intl.NumberFormat('pl-PL', { maximumFractionDigits: 2 }).format(downtime)} h`;
-    document.getElementById('kpi-cost').textContent = `${new Intl.NumberFormat('pl-PL', { maximumFractionDigits: 2 }).format(cost)} zł`;
-    document.getElementById('kpi-unrepaired').textContent = unrepaired;
+    const numberFormat = new Intl.NumberFormat('pl-PL', { maximumFractionDigits: 2 });
+    document.getElementById('kpi-weekly-failures').textContent = DASHBOARD_KPIS.failures;
+    document.getElementById('kpi-downtime').textContent = `${numberFormat.format(DASHBOARD_KPIS.downtime)} h`;
+    document.getElementById('kpi-cost').textContent = `${numberFormat.format(DASHBOARD_KPIS.cost)} zł`;
+    document.getElementById('kpi-unrepaired').textContent = DASHBOARD_KPIS.unrepaired;
 }
 updateDashboardKpis();
 
