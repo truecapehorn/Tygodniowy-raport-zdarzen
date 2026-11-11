@@ -83,14 +83,23 @@
         <a href="{{ url_for('export_user_activity') }}" class="btn btn-success btn-sm" style="margin-left:auto;">Eksportuj do Excel</a>
     </div>
     <div class="table-wrap">
-        <table>
+        {% macro activity_sort_heading(label, column, active_sort, active_direction) -%}
+            {% set active = active_sort == column %}
+            {% set next_direction = 'asc' if not active or active_direction == 'desc' else 'desc' %}
+            <th aria-sort="{{ ('ascending' if active_direction == 'asc' else 'descending') if active else 'none' }}">
+                <a class="activity-sort-button" href="{{ url_for('admin_users', page=1, sort=column, direction=next_direction) }}">
+                    {{ label }} <span aria-hidden="true">{{ ('↑' if active_direction == 'asc' else '↓') if active else '↕' }}</span>
+                </a>
+            </th>
+        {%- endmacro %}
+        <table class="activity-table">
             <thead>
                 <tr>
-                    <th>Data</th>
-                    <th>Użytkownik</th>
-                    <th>Adres IP</th>
-                    <th>Akcja</th>
-                    <th>Szczegóły</th>
+                    {{ activity_sort_heading('DATA', 'created_at', activity_sort, activity_direction) }}
+                    {{ activity_sort_heading('UŻYTKOWNIK', 'username', activity_sort, activity_direction) }}
+                    {{ activity_sort_heading('ADRES IP', 'ip_address', activity_sort, activity_direction) }}
+                    {{ activity_sort_heading('AKCJA', 'action', activity_sort, activity_direction) }}
+                    {{ activity_sort_heading('SZCZEGÓŁY', 'details', activity_sort, activity_direction) }}
                 </tr>
             </thead>
             <tbody>
@@ -111,17 +120,30 @@
     {% if activity_pages > 1 %}
     <div class="actions" style="justify-content:space-between;align-items:center;margin-top:.75rem;">
         {% if activity_page > 1 %}
-        <a href="{{ url_for('admin_users', page=activity_page - 1) }}" class="btn btn-outline btn-sm">&laquo; Nowsze</a>
+        <a href="{{ url_for('admin_users', page=activity_page - 1, sort=activity_sort, direction=activity_direction) }}" class="btn btn-outline btn-sm">&laquo; Nowsze</a>
         {% else %}
         <span></span>
         {% endif %}
         <span style="color:var(--muted);font-size:.8rem;">Strona {{ activity_page }} z {{ activity_pages }}</span>
         {% if activity_page < activity_pages %}
-        <a href="{{ url_for('admin_users', page=activity_page + 1) }}" class="btn btn-outline btn-sm">Starsze &raquo;</a>
+        <a href="{{ url_for('admin_users', page=activity_page + 1, sort=activity_sort, direction=activity_direction) }}" class="btn btn-outline btn-sm">Starsze &raquo;</a>
         {% else %}
         <span></span>
         {% endif %}
     </div>
     {% endif %}
 </div>
+<style>
+    .activity-table { min-width: 700px; }
+    .activity-sort-button {
+        display: inline-block;
+        color: inherit;
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+        text-decoration: none;
+    }
+    .activity-sort-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .activity-sort-button span { margin-left: .25rem; }
+</style>
 {% endblock %}

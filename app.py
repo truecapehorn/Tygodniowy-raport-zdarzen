@@ -883,11 +883,26 @@ def ensure_default_admin_user() -> None:
     db.commit()
 
 
-def get_user_history(limit: int = 20, offset: int = 0) -> list[sqlite3.Row]:
+def get_user_history(
+    limit: int = 20,
+    offset: int = 0,
+    sort_by: str = "created_at",
+    sort_direction: str = "desc",
+) -> list[sqlite3.Row]:
     db = get_db()
+    sort_columns = {
+        "created_at": "created_at",
+        "username": "username",
+        "ip_address": "ip_address",
+        "action": "action",
+        "details": "details",
+    }
+    column = sort_columns.get(sort_by, "created_at")
+    direction = "ASC" if sort_direction == "asc" else "DESC"
+    tie_breaker_direction = "ASC" if sort_direction == "asc" else "DESC"
     return list(
         db.execute(
-            "SELECT * FROM user_activity_log ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?",
+            f"SELECT * FROM user_activity_log ORDER BY {column} {direction}, created_at DESC, id {tie_breaker_direction} LIMIT ? OFFSET ?",
             (limit, offset),
         ).fetchall()
     )
@@ -1158,6 +1173,12 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         if edit_user_id:
             edit_user = db.execute("SELECT * FROM users WHERE id = ?", (edit_user_id,)).fetchone()
         activity_page = max(1, request.args.get("page", 1, type=int) or 1)
+        activity_sort = request.args.get("sort", "created_at")
+        if activity_sort not in {"created_at", "username", "ip_address", "action", "details"}:
+            activity_sort = "created_at"
+        activity_direction = request.args.get("direction", "desc")
+        if activity_direction not in {"asc", "desc"}:
+            activity_direction = "desc"
         activity_per_page = 20
         activity_total = db.execute("SELECT COUNT(*) AS total FROM user_activity_log").fetchone()["total"]
         activity_pages = max(1, (int(activity_total) + activity_per_page - 1) // activity_per_page)
@@ -1166,9 +1187,16 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             "admin_users.html",
             users=users,
             edit_user=edit_user,
-            recent_activity=get_user_history(activity_per_page, (activity_page - 1) * activity_per_page),
+            recent_activity=get_user_history(
+                activity_per_page,
+                (activity_page - 1) * activity_per_page,
+                activity_sort,
+                activity_direction,
+            ),
             activity_page=activity_page,
             activity_pages=activity_pages,
+            activity_sort=activity_sort,
+            activity_direction=activity_direction,
         )
 
     @app.route("/admin/machines")

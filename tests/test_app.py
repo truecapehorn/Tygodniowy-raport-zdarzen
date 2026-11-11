@@ -1788,6 +1788,49 @@ class RepairReportAppTests(unittest.TestCase):
             rows,
         )
 
+    def test_admin_user_activity_sort_is_preserved_across_pages(self):
+        with self.app.app_context():
+            for index in range(21):
+                get_db().execute(
+                    """
+                    INSERT INTO user_activity_log(
+                        user_id, username, action, target_type, target_id, details, ip_address, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        1,
+                        f"user-{index:02d}",
+                        "login",
+                        None,
+                        None,
+                        f"Zdarzenie {index:02d}",
+                        "203.0.113.10",
+                        "2026-09-21T11:50:00+00:00",
+                    ),
+                )
+            get_db().commit()
+
+        with self.client.session_transaction() as session:
+            session["logged_in"] = True
+            session["role"] = "admin"
+            session["user_id"] = 1
+            session["username"] = "admin"
+
+        response = self.client.get("/admin/users?sort=username&direction=asc")
+        self.assertEqual(response.status_code, 200)
+        page = response.get_data(as_text=True)
+        self.assertEqual(page.count('class="activity-sort-button"'), 5)
+        self.assertIn('aria-sort="ascending"', page)
+        self.assertIn("page=2&amp;sort=username&amp;direction=asc", page)
+        self.assertLess(page.index("user-00"), page.index("user-19"))
+        self.assertNotIn("user-20", page)
+
+        second_page_response = self.client.get("/admin/users?page=2&sort=username&direction=asc")
+        self.assertEqual(second_page_response.status_code, 200)
+        second_page = second_page_response.get_data(as_text=True)
+        self.assertIn("user-20", second_page)
+        self.assertIn("page=1&amp;sort=username&amp;direction=asc", second_page)
+
     def test_activity_log_records_request_ip(self):
         with self.app.test_request_context(
             "/admin/users",
