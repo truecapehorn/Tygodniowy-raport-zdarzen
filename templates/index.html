@@ -23,6 +23,24 @@
 </div>
 
 <!-- ── Ostatnie N rekordów ─────────────────────────────────────── -->
+<section class="dashboard-kpis" aria-label="Podsumowanie zdarzeń w widocznych rekordach">
+    <article class="dashboard-kpi">
+        <span class="dashboard-kpi-label">Awarie w tym tygodniu</span>
+        <strong class="dashboard-kpi-value" id="kpi-weekly-failures">0</strong>
+    </article>
+    <article class="dashboard-kpi">
+        <span class="dashboard-kpi-label">Suma przestojów</span>
+        <strong class="dashboard-kpi-value" id="kpi-downtime">0 h</strong>
+    </article>
+    <article class="dashboard-kpi">
+        <span class="dashboard-kpi-label">Suma kosztów</span>
+        <strong class="dashboard-kpi-value" id="kpi-cost">0 zł</strong>
+    </article>
+    <article class="dashboard-kpi dashboard-kpi-warning">
+        <span class="dashboard-kpi-label">Bez daty naprawy</span>
+        <strong class="dashboard-kpi-value" id="kpi-unrepaired">0</strong>
+    </article>
+</section>
 <div class="card">
     <div class="card-title u-justify-content-flex-start u-gap-6rem">
         {% if latest_records %}
@@ -59,7 +77,7 @@
             </thead>
             <tbody>
                 {% for r in latest_records %}
-                <tr class="record-row{% if r.event_type|lower == 'awaria' %} event-row-awaria{% elif 'przegl' in r.event_type|lower %} event-row-przeglad{% elif r.event_type|lower == 'modernizacja' %} event-row-modernizacja{% elif r.event_type|lower == 'interwencja' %} event-row-interwencja{% else %} event-row-inne{% endif %}" data-id="{{ r.id }}" data-downtime="{{ r.downtime_hours }}" data-cost="{{ r.total_cost }}">
+                <tr class="record-row{% if r.event_type|lower == 'awaria' %} event-row-awaria{% elif 'przegl' in r.event_type|lower %} event-row-przeglad{% elif r.event_type|lower == 'modernizacja' %} event-row-modernizacja{% elif r.event_type|lower == 'interwencja' %} event-row-interwencja{% else %} event-row-inne{% endif %}" data-id="{{ r.id }}" data-downtime="{{ r.downtime_hours }}" data-cost="{{ r.total_cost }}" data-event-type="{{ r.event_type }}" data-year="{{ r.record_year }}" data-week="{{ r.record_week }}">
                     <td class="td-id">{{ r.id }}<br><span class="td-week">{{ r.record_year }}/W{{ r.record_week }}/{{ r.week_sequence }}</span></td>
                     <td class="{% if not r.repaired_at %}date-no-repair{% endif %} u-white-space-pre-line"{% if not r.repaired_at %} title="Brak daty naprawienia"{% endif %}>{{ r.occurrence_at|datetime|replace(' ', '\n', 1) }}</td>
                     <td>{{ r.name }}</td>
@@ -112,6 +130,29 @@ const USER_ROLE = {{ user_role | tojson }};
 const CAN_EDIT = {{ (current_user and current_user.can_edit_records) | tojson }};
 const CAN_DELETE = {{ (current_user and current_user.can_delete_records) | tojson }};
 let currentRecord = null;
+
+// ── Dashboard KPIs (visible records) ────────────────────────────
+function currentIsoWeek(date) {
+    const utcDate = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    const day = utcDate.getUTCDay() || 7;
+    utcDate.setUTCDate(utcDate.getUTCDate() + 4 - day);
+    const yearStart = new Date(Date.UTC(utcDate.getUTCFullYear(), 0, 1));
+    return { year: utcDate.getUTCFullYear(), week: Math.ceil((((utcDate - yearStart) / 86400000) + 1) / 7) };
+}
+function updateDashboardKpis() {
+    const rows = [...document.querySelectorAll('tr.record-row')];
+    const week = currentIsoWeek(new Date());
+    const weeklyFailures = rows.filter(row => row.dataset.eventType.toLocaleLowerCase('pl-PL') === 'awaria'
+        && Number(row.dataset.year) === week.year && Number(row.dataset.week) === week.week).length;
+    const downtime = rows.reduce((sum, row) => sum + (Number.parseFloat(row.dataset.downtime) || 0), 0);
+    const cost = rows.reduce((sum, row) => sum + (Number.parseFloat(row.dataset.cost) || 0), 0);
+    const unrepaired = rows.filter(row => row.querySelector('.date-no-repair')).length;
+    document.getElementById('kpi-weekly-failures').textContent = weeklyFailures;
+    document.getElementById('kpi-downtime').textContent = `${new Intl.NumberFormat('pl-PL', { maximumFractionDigits: 2 }).format(downtime)} h`;
+    document.getElementById('kpi-cost').textContent = `${new Intl.NumberFormat('pl-PL', { maximumFractionDigits: 2 }).format(cost)} zł`;
+    document.getElementById('kpi-unrepaired').textContent = unrepaired;
+}
+updateDashboardKpis();
 
 // ── Limit selector ─────────────────────────────────────────────
 document.getElementById('limit-select').addEventListener('change', function() {
