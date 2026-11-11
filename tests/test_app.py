@@ -1520,6 +1520,8 @@ class RepairReportAppTests(unittest.TestCase):
         self.assertIn("Opis 2", page)
 
     def test_dashboard_kpis_use_all_records_from_current_month_not_visible_limit(self):
+        with self.client.session_transaction() as session:
+            session["role"] = "admin"
         month_start = datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         records = [
             (month_start, None, "Miesięczny rekord starszy"),
@@ -1552,6 +1554,14 @@ class RepairReportAppTests(unittest.TestCase):
         self.assertNotIn("Miesięczny rekord starszy", page)
         self.assertNotIn("Rekord z poprzedniego miesiąca", page)
         self.assertIn("Awarie w tym miesiącu", page)
+
+    def test_dashboard_kpis_are_hidden_from_non_admin_users(self):
+        response = self.client.get("/")
+        page = response.get_data(as_text=True)
+
+        self.assertNotIn("dashboard-kpis", page)
+        self.assertNotIn("DASHBOARD_KPIS", page)
+        self.assertNotIn("Awarie w tym miesiącu", page)
 
     def test_record_summaries_are_limited_in_recent_and_filtered_tables(self):
         description = "Opis z limitem\n" + ("szczegółowy tekst " * 60)

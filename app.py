@@ -2224,7 +2224,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         return render_template(
             "index.html",
             latest_records=query_records_latest(None if limit == "all" else limit),
-            dashboard_kpis=query_dashboard_kpis(),
+            dashboard_kpis=query_dashboard_kpis() if session.get("role") == "admin" else None,
             event_types=EVENT_TYPES,
             limit=limit,
             due_events=due_events,

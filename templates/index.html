@@ -23,6 +23,7 @@
 </div>
 
 <!-- ── Ostatnie N rekordów ─────────────────────────────────────── -->
+{% if user_role == 'admin' %}
 <section class="dashboard-kpis" aria-label="Podsumowanie zdarzeń w bieżącym miesiącu">
     <article class="dashboard-kpi">
         <span class="dashboard-kpi-label">Awarie w tym miesiącu</span>
@@ -41,6 +42,7 @@
         <strong class="dashboard-kpi-value" id="kpi-unrepaired">0</strong>
     </article>
 </section>
+{% endif %}
 <div class="card">
     <div class="card-title u-justify-content-flex-start u-gap-6rem">
         {% if latest_records %}
@@ -131,6 +133,7 @@ const CAN_EDIT = {{ (current_user and current_user.can_edit_records) | tojson }}
 const CAN_DELETE = {{ (current_user and current_user.can_delete_records) | tojson }};
 let currentRecord = null;
 
+{% if user_role == 'admin' %}
 // ── Dashboard KPIs (all records from the current month) ─────────
 const DASHBOARD_KPIS = {{ dashboard_kpis | tojson }};
 function updateDashboardKpis() {
@@ -141,6 +144,7 @@ function updateDashboardKpis() {
     document.getElementById('kpi-unrepaired').textContent = DASHBOARD_KPIS.unrepaired;
 }
 updateDashboardKpis();
+{% endif %}
 
 // ── Limit selector ─────────────────────────────────────────────
 document.getElementById('limit-select').addEventListener('change', function() {
