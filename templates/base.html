@@ -63,13 +63,13 @@
             gap: 0.5rem;
             font-size: 1rem;
             font-weight: 700;
-            color: var(--pink);
+            color: var(--accent);
             white-space: nowrap;
             text-decoration: none;
             flex-shrink: 0;
         }
         .navbar-brand .gort { 
-            color: var(--pink); 
+            color: var(--accent);
             font-weight: 700; 
             display: flex; 
             align-items: center; 
@@ -118,7 +118,7 @@
         }
         .navbar-links .logout-link { flex-direction: column; line-height: 1.2; color: var(--red); }
         .navbar-links a:hover { color: var(--text); background: rgba(31,41,51,0.05); }
-        .navbar-links a.active { color: var(--text); background: rgba(79,156,249,0.15); border: 1px solid rgba(79,156,249,0.25); }
+        .navbar-links a.active { color: var(--accent); background: var(--accent-dim); border: 1px solid var(--accent); }
 
         /* ─── Layout ─── */
         .container { max-width: 1440px; margin: 0 auto; padding: 1.5rem; }
@@ -330,7 +330,7 @@
         .badge-przeglad     { background: var(--accent-dim); color: var(--accent); }
         .badge-modernizacja { background: var(--purple-dim); color: var(--purple); }
         .badge-interwencja  { background: var(--yellow-dim); color: var(--yellow); }
-        .badge-inne         { background: rgba(51,65,85,.5); color: var(--muted);  }
+        .badge-inne         { background: var(--bg-th);      color: var(--text);   }
         .badge-wlasne       { background: var(--pink-dim);   color: var(--pink);   }
         .count-badge {
             background: var(--accent-dim);
