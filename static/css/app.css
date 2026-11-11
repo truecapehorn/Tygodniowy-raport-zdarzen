@@ -953,6 +953,10 @@ body { font-family: Arial, sans-serif; margin: 2rem; }
     .calendar-hour-row:nth-child(even) .calendar-hour-cell.calendar-day-today {
         background: color-mix(in srgb, var(--accent) 10%, var(--bg-row-alt));
     }
+    .calendar-hour-row .calendar-hour-cell:hover,
+    .calendar-hour-row:nth-child(even) .calendar-hour-cell:hover {
+        background: var(--accent-dim);
+    }
     .calendar-hour-cell.calendar-day-today { position: relative; }
     .calendar-now-indicator {
         position: absolute;
@@ -978,7 +982,8 @@ body { font-family: Arial, sans-serif; margin: 2rem; }
     .calendar-day-slot { display: grid; grid-template-columns: 4rem minmax(0, 1fr); min-height: 2.5rem; border: 1px solid var(--border); background: var(--bg-card); }
     .calendar-day-slot:nth-child(even) { background: var(--bg-row-alt); }
     .calendar-create-slot { cursor: pointer; }
-    .calendar-create-slot:hover { background: var(--accent-dim); }
+    .calendar-day-slot:hover { background: var(--accent-dim); }
+    .calendar-day:hover { background: var(--accent-dim); }
     .calendar-day-time { padding: .35rem; border-right: 1px solid var(--border); color: var(--muted); font-size: .72rem; text-align: center; }
     .calendar-day-slot-events { position: relative; display: flex; flex-direction: column; gap: .15rem; padding: .15rem; }
     .calendar-dot-link { display: inline-flex; align-items: center; justify-content: center; }
@@ -1011,7 +1016,7 @@ body { font-family: Arial, sans-serif; margin: 2rem; }
     text-decoration: none;
     cursor: pointer;
 }
-.calendar-slot-link:hover { background: var(--bg-card-alt); }
+.calendar-slot-link:hover { background: var(--accent-dim); }
 .calendar-slot-link:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .calendar-day-number { color: var(--text); font-size: .75rem; }
 .calendar-day-outside .calendar-day-number { color: var(--muted); }
