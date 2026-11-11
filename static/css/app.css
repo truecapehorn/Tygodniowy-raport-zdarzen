@@ -68,6 +68,113 @@
     --focus-ring: rgba(112,183,240,0.25);
 }
 
+/* ─── Print ─── */
+@media print {
+    :root,
+    :root[data-theme="dark"] {
+        color-scheme: light;
+        --bg: #ffffff;
+        --bg-nav: #ffffff;
+        --bg-card: #ffffff;
+        --bg-card-alt: #f7f9fb;
+        --bg-input: #ffffff;
+        --bg-th: #edf2f6;
+        --bg-row: #ffffff;
+        --bg-row-alt: #f8fafb;
+        --bg-row-hover: #ffffff;
+        --border: #c8d0d8;
+        --text: #1f2933;
+        --muted: #475467;
+        --accent: #1769aa;
+        --accent-dim: #e6f1fa;
+        --cyan: #007f9e;
+        --green: #167a45;
+        --green-dim: #e7f4ec;
+        --red: #b42318;
+        --red-dim: #fef0ef;
+        --orange: #b54708;
+        --orange-dim: #fff3e8;
+        --yellow: #8a6100;
+        --yellow-dim: #fff7d6;
+        --purple: #6941a5;
+        --purple-dim: #f1eafe;
+        --pink: #d63384;
+        --pink-dim: #fcebf5;
+        --hover-overlay: transparent;
+        --outline-overlay: transparent;
+        --row-border: rgba(31,41,51,0.12);
+        --focus-ring: transparent;
+    }
+
+    html,
+    body {
+        background: #ffffff !important;
+        color: #1f2933 !important;
+        min-height: 0;
+        print-color-adjust: exact;
+        -webkit-print-color-adjust: exact;
+    }
+
+    .navbar,
+    button,
+    .btn,
+    form,
+    input,
+    select,
+    textarea,
+    .modal-backdrop,
+    .page-heading-row > a,
+    .calendar-toolbar,
+    .alerts {
+        display: none !important;
+    }
+
+    .container {
+        width: 100%;
+        max-width: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    .card,
+    .dashboard-kpi {
+        background: #ffffff !important;
+        color: #1f2933 !important;
+        border-color: #c8d0d8 !important;
+        box-shadow: none !important;
+        break-inside: avoid;
+    }
+
+    .table-wrap {
+        overflow: visible !important;
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    thead {
+        display: table-header-group;
+    }
+
+    th,
+    td {
+        background: #ffffff !important;
+        color: #1f2933 !important;
+        border-color: #c8d0d8 !important;
+    }
+
+    th {
+        background: #edf2f6 !important;
+    }
+
+    a {
+        color: #1f2933 !important;
+        text-decoration: none;
+    }
+}
+
 
 /* ─── Admin pages ─── */
 /* Extracted from admin_machines.html */
