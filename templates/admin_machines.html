@@ -56,19 +56,19 @@
 <div class="modal-backdrop" id="machine-modal" aria-hidden="true">
     <div class="modal-box machine-modal-box" role="dialog" aria-modal="true" aria-labelledby="machine-modal-title">
         <div class="modal-header">
-            <strong id="machine-modal-title" style="font-size:1rem;color:var(--text);">Szczegóły maszyny</strong>
+            <strong id="machine-modal-title" class="u-font-size-1rem u-color-var-text">Szczegóły maszyny</strong>
             <div class="machine-modal-actions">
                 {% if can_manage_machines %}
                 <button id="machine-modal-delete" type="button" class="btn btn-danger btn-sm">Usuń</button>
                 <button id="machine-modal-edit" type="button" class="btn btn-primary btn-sm">Edytuj</button>
-                <button id="machine-modal-save" type="submit" form="machine-modal-form" class="btn btn-primary btn-sm" style="display:none;">Zapisz</button>
-                <button id="machine-modal-cancel" type="button" class="btn btn-outline btn-sm" style="display:none;">Anuluj</button>
+                <button id="machine-modal-save" type="submit" form="machine-modal-form" class="btn btn-primary btn-sm u-display-none">Zapisz</button>
+                <button id="machine-modal-cancel" type="button" class="btn btn-outline btn-sm u-display-none">Anuluj</button>
                 {% endif %}
                 <button id="machine-modal-close" type="button" class="modal-close" title="Zamknij" aria-label="Zamknij">&#10005;</button>
             </div>
         </div>
         <div id="machine-modal-view" class="detail-grid"></div>
-        <form id="machine-modal-form" method="post" style="display:none;">
+        <form id="machine-modal-form" method="post" class="u-display-none">
             <div class="machine-form-grid">
                 <div class="field">
                     <label for="machine-name">Nazwa / firma</label>
@@ -120,40 +120,11 @@
                 </div>
             </div>
         </form>
-        <form id="machine-modal-delete-form" method="post" style="display:none;"></form>
+        <form id="machine-modal-delete-form" method="post" class="u-display-none"></form>
     </div>
 </div>
 
-<style>
-    .machine-page-title { align-items: center; }
-    .machine-table { min-width: 700px; }
-    .machine-sort-button {
-        padding: 0;
-        border: 0;
-        background: none;
-        color: inherit;
-        font: inherit;
-        text-align: left;
-        cursor: pointer;
-    }
-    .machine-sort-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-    .machine-sort-button span { margin-left: .25rem; }
-    .machine-row { cursor: pointer; }
-    .machine-row:hover { background: var(--bg-card-alt); }
-    .machine-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-    .machine-modal-box { width: min(1050px, calc(100vw - 2rem)); }
-    .machine-modal-actions { display: flex; align-items: center; flex-wrap: wrap; gap: .4rem; flex-shrink: 0; }
-    .machine-form-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-        gap: .75rem;
-    }
-    .machine-notes-field { grid-column: 1 / -1; }
-    @media (max-width: 620px) {
-        .machine-modal-actions { gap: .25rem; }
-        .machine-modal-actions .btn { padding: .25rem .4rem; }
-    }
-</style>
+
 
 <script>
 const CAN_MANAGE_MACHINES = {{ can_manage_machines | tojson }};

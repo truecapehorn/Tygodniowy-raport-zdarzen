@@ -23,7 +23,7 @@
                 </select>
             </div>
         </div>
-        <div class="form-grid3" style="margin-top: 0.75rem;">
+        <div class="form-grid3 u-margin-top-0-75rem">
             <label class="field permission-field"><input type="checkbox" name="can_view_records"{% if not edit_user or edit_user.can_view_records %} checked{% endif %}> Przeglądanie rekordów</label>
             <label class="field permission-field"><input type="checkbox" name="can_create_records"{% if edit_user and edit_user.can_create_records %} checked{% endif %}> Tworzenie rekordów</label>
             <label class="field permission-field"><input type="checkbox" name="can_edit_records"{% if edit_user and edit_user.can_edit_records %} checked{% endif %}> Edycja rekordów</label>
@@ -64,7 +64,7 @@
                     <td>{% if user.can_delete_records %}✅{% else %}—{% endif %}</td>
                     <td>
                         <a href="{{ url_for('admin_users', edit=user.id) }}" class="btn btn-outline btn-sm">Edytuj</a>
-                        <form method="post" action="{{ url_for('admin_delete_user', user_id=user.id) }}" style="display:inline;">
+                        <form method="post" action="{{ url_for('admin_delete_user', user_id=user.id) }}" class="u-display-inline">
                             <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Usunąć użytkownika?');">Usuń</button>
                         </form>
                     </td>
@@ -80,7 +80,7 @@
 <div class="card">
     <div class="card-title">
         Ostatnie zdarzenia
-        <a href="{{ url_for('export_user_activity') }}" class="btn btn-success btn-sm" style="margin-left:auto;">Eksportuj do Excel</a>
+        <a href="{{ url_for('export_user_activity') }}" class="btn btn-success btn-sm ml-auto">Eksportuj do Excel</a>
     </div>
     <div class="table-wrap">
         {% macro activity_sort_heading(label, column, active_sort, active_direction) -%}
@@ -118,13 +118,13 @@
         </table>
     </div>
     {% if activity_pages > 1 %}
-    <div class="actions" style="justify-content:space-between;align-items:center;margin-top:.75rem;">
+    <div class="actions flex-between u-margin-top-75rem">
         {% if activity_page > 1 %}
         <a href="{{ url_for('admin_users', page=activity_page - 1, sort=activity_sort, direction=activity_direction) }}" class="btn btn-outline btn-sm">&laquo; Nowsze</a>
         {% else %}
         <span></span>
         {% endif %}
-        <span style="color:var(--muted);font-size:.8rem;">Strona {{ activity_page }} z {{ activity_pages }}</span>
+        <span class="u-color-var-muted text-sm">Strona {{ activity_page }} z {{ activity_pages }}</span>
         {% if activity_page < activity_pages %}
         <a href="{{ url_for('admin_users', page=activity_page + 1, sort=activity_sort, direction=activity_direction) }}" class="btn btn-outline btn-sm">Starsze &raquo;</a>
         {% else %}
@@ -133,17 +133,5 @@
     </div>
     {% endif %}
 </div>
-<style>
-    .activity-table { min-width: 700px; }
-    .activity-sort-button {
-        display: inline-block;
-        color: inherit;
-        font: inherit;
-        text-align: left;
-        cursor: pointer;
-        text-decoration: none;
-    }
-    .activity-sort-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-    .activity-sort-button span { margin-left: .25rem; }
-</style>
+
 {% endblock %}

@@ -2,75 +2,7 @@
 {% block title %}Import / Eksport – Tygodniowy raport zdarzen DUR{% endblock %}
 {% block content %}
 
-<style>
-    .transfer-grid {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr);
-        gap: 1.25rem;
-        align-items: stretch;
-    }
-    .transfer-card {
-        display: flex;
-        flex-direction: column;
-        margin-bottom: 0;
-    }
-    .transfer-description {
-        color: var(--muted);
-        font-size: 0.875rem;
-        line-height: 1.6;
-        margin-bottom: 1.25rem;
-        min-height: 4.2rem;
-    }
-    .transfer-actions {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 0.75rem;
-        margin-top: auto;
-    }
-    .transfer-action {
-        display: flex;
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 0.55rem;
-        min-width: 0;
-    }
-    .transfer-control-row {
-        display: flex;
-        align-items: stretch;
-        gap: 0.75rem;
-        width: 100%;
-    }
-    .transfer-export-buttons {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-    }
-    .transfer-action-label {
-        color: var(--muted);
-        font-size: 0.73rem;
-        font-weight: 700;
-        letter-spacing: 0.04em;
-        text-transform: uppercase;
-    }
-    .transfer-control-row input[type="file"] { flex: 1; min-width: 0; height: 42px; }
-    .transfer-action .btn {
-        justify-content: center;
-        align-items: center;
-        height: 42px;
-        min-height: 42px;
-    }
-    @media (max-width: 760px) {
-        .transfer-description { min-height: 0; }
-    }
-    @media (max-width: 520px) {
-        .transfer-actions { grid-template-columns: 1fr; }
-        .transfer-control-row { align-items: stretch; flex-direction: column; }
-        .transfer-control-row .btn,
-        .transfer-action > .btn { width: 100%; }
-        .transfer-export-buttons { flex-direction: column; }
-        .transfer-export-buttons .btn { width: 100%; }
-    }
-</style>
+
 
 <div class="page-title">Import / Eksport <small>Zarządzanie danymi bazy</small></div>
 

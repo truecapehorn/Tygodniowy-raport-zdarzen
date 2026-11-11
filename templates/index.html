@@ -24,15 +24,15 @@
 
 <!-- ── Ostatnie N rekordów ─────────────────────────────────────── -->
 <div class="card">
-    <div class="card-title" style="justify-content:flex-start;gap:.6rem;">
+    <div class="card-title u-justify-content-flex-start u-gap-6rem">
         {% if latest_records %}
             Ostatnie {{ (latest_records | length) if limit == 'all' else limit }} rekordów
         {% else %}
             Brak rekordów
         {% endif %}
-        <span style="margin-left:auto;display:flex;align-items:center;gap:.4rem;font-size:.78rem;color:var(--muted);text-transform:none;letter-spacing:0;">
+        <span class="ml-auto u-display-flex u-align-items-center u-gap-4rem u-font-size-78rem u-color-var-muted u-text-transform-none u-letter-spacing-0">
             Pokaż:
-            <select id="limit-select" style="background:var(--bg-input);border:1px solid var(--border);border-radius:4px;color:var(--text);font:inherit;padding:.2rem .4rem;font-size:.78rem;">
+            <select id="limit-select" class="u-background-var-bg-input u-border-1px-solid-var-border u-border-radius-4px u-color-var-text u-font-inherit u-padding-2rem-4rem u-font-size-78rem">
                 {% for n in [10, 20, 50, 100, 'all'] %}
                 <option value="{{ 'all' if n == 'all' else n }}"
                     {% if (limit == 'all' and n == 'all') or (limit != 'all' and limit == n) %}selected{% endif %}>
@@ -61,15 +61,15 @@
                 {% for r in latest_records %}
                 <tr class="record-row{% if r.event_type|lower == 'awaria' %} event-row-awaria{% elif 'przegl' in r.event_type|lower %} event-row-przeglad{% elif r.event_type|lower == 'modernizacja' %} event-row-modernizacja{% elif r.event_type|lower == 'interwencja' %} event-row-interwencja{% else %} event-row-inne{% endif %}" data-id="{{ r.id }}" data-downtime="{{ r.downtime_hours }}" data-cost="{{ r.total_cost }}">
                     <td class="td-id">{{ r.id }}<br><span class="td-week">{{ r.record_year }}/W{{ r.record_week }}/{{ r.week_sequence }}</span></td>
-                    <td class="{% if not r.repaired_at %}date-no-repair{% endif %}" style="white-space:pre-line;"{% if not r.repaired_at %} title="Brak daty naprawienia"{% endif %}>{{ r.occurrence_at|datetime|replace(' ', '\n', 1) }}</td>
+                    <td class="{% if not r.repaired_at %}date-no-repair{% endif %} u-white-space-pre-line"{% if not r.repaired_at %} title="Brak daty naprawienia"{% endif %}>{{ r.occurrence_at|datetime|replace(' ', '\n', 1) }}</td>
                     <td>{{ r.name }}</td>
                     <td class="text-muted">{{ r.machine_type }}<br>{{ r.serial_number }}</td>
                     <td>{{ event_badge(r.event_type) }}</td>
                     <td><span class="record-summary">{{ (r.description or '') | truncate(400, true, '...', 0) }}</span></td>
                     <td class="text-muted"><span class="record-summary">{{ (r.cause or '') | truncate(400, true, '...', 0) }}</span></td>
                     <td class="text-muted"><span class="record-summary">{{ (r.repair_method or '') | truncate(400, true, '...', 0) }}</span></td>
-                    <td style="white-space:nowrap;text-align:center;">
-                        {% if r.attachment_count > 0 %}<span style="color:var(--accent);font-size:.8rem;" title="{{ r.attachment_count }} plik(ów)"><svg class="icon-attachment" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.19 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg> {{ r.attachment_count }}</span>{% endif %}
+                    <td class="nowrap u-text-align-center">
+                        {% if r.attachment_count > 0 %}<span class="u-color-var-accent text-sm" title="{{ r.attachment_count }} plik(ów)"><svg class="icon-attachment" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.19 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg> {{ r.attachment_count }}</span>{% endif %}
                     </td>
                 </tr>
                 {% else %}
@@ -80,36 +80,29 @@
     </div>
 </div>
 
-<style>
-    .page-heading-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1.25rem; }
-    .page-heading-main { display: flex; align-items: center; gap: 1rem; }
-    .page-heading-row .page-title { margin: 0; }
-    @media (max-width: 700px) {
-        .page-heading-row, .page-heading-main { align-items: flex-start; flex-wrap: wrap; }
-    }
-</style>
+
 
 <!-- static file input reused by the edit popup (dynamic innerHTML inputs don't open picker reliably) -->
 <input type="file" id="edit-file-input" multiple
        accept="image/*,.pdf,.doc,.docx,.txt,.xls,.xlsx,.csv,.zip,.rar"
-       style="display:none;">
+      class="u-display-none">
 
 <!-- ── Record detail popup ─────────────────────────────────────── -->
 <div class="modal-backdrop" id="record-modal">
     <div class="modal-box">
         <div class="modal-header">
-            <strong id="modal-title" style="font-size:1rem;color:var(--text);"></strong>
-            <div style="display:flex;gap:.4rem;align-items:center;flex-shrink:0;">
+            <strong id="modal-title" class="u-font-size-1rem u-color-var-text"></strong>
+            <div class="u-display-flex u-gap-4rem u-align-items-center u-flex-shrink-0">
                 <button id="modal-btn-delete" class="btn btn-danger  btn-sm" onclick="deleteRecord()">&#128465; Usu&#324;</button>
                 <button id="modal-btn-edit"   class="btn btn-primary btn-sm" onclick="switchToEdit()">&#9998; Edytuj</button>
                 <button id="modal-btn-pdf"    class="btn btn-success btn-sm" onclick="exportRecordPdf()">&#128196; PDF</button>
-                <button id="modal-btn-save"   class="btn btn-primary btn-sm" onclick="saveEdit()" style="display:none;">&#10004; Zapisz</button>
-                <button id="modal-btn-cancel" class="btn btn-outline btn-sm" onclick="switchToView()" style="display:none;">Anuluj</button>
+                <button class="btn btn-primary btn-sm u-display-none" id="modal-btn-save" onclick="saveEdit()">&#10004; Zapisz</button>
+                <button class="btn btn-outline btn-sm u-display-none" id="modal-btn-cancel" onclick="switchToView()">Anuluj</button>
                 <button class="modal-close" onclick="closeModal()" title="Zamknij">&#10005;</button>
             </div>
         </div>
         <div id="modal-view"></div>
-        <div id="modal-edit" style="display:none;"></div>
+        <div id="modal-edit" class="u-display-none"></div>
     </div>
 </div>
 
@@ -181,26 +174,26 @@ function buildView(r) {
     });
     html += '</div>';
     if (r.attachments && r.attachments.length) {
-        html += `<div style="margin-top:1rem;"><div class="card-title" style="margin-bottom:.5rem;">Za&#322;&#261;czniki</div><div class="attach-list">`;
+        html += `<div class="u-margin-top-1rem"><div class="card-title u-margin-bottom-5rem">Za&#322;&#261;czniki</div><div class="attach-list">`;
         r.attachments.forEach(a => {
             const url = `/attachments/${r.id}/${encodeURIComponent(a.filename)}`;
             html += a.content_type.startsWith('image/')
                 ? `<a href="${url}" target="_blank"><img src="${url}" alt="${esc(a.original_name)}" title="${esc(a.original_name)}"></a>`
                 : `<a href="${url}" target="_blank" class="btn btn-outline btn-sm"><svg class="icon-attachment" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.19 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg> ${esc(a.original_name)}</a>`;
         });
-        html += `</div><div style="margin-top:.5rem;"><a href="/record/${r.id}/attachments.zip" class="btn btn-success btn-sm">&#11015; Pobierz</a></div></div>`;
+        html += `</div><div class="u-margin-top-5rem"><a href="/record/${r.id}/attachments.zip" class="btn btn-success btn-sm">&#11015; Pobierz</a></div></div>`;
     }
     return html;
 }
 
 function buildExistingAttachList(attachments) {
     if (!attachments || !attachments.length)
-        return '<p id="ef-existing-attach" style="font-size:.75rem;color:var(--muted);margin-bottom:.5rem;">Brak za\u0142\u0105cznik\u00f3w.</p>';
-    return '<div id="ef-existing-attach" style="display:flex;flex-wrap:wrap;gap:.35rem;margin-bottom:.5rem;">'
+        return '<p id="ef-existing-attach" class="u-font-size-75rem u-color-var-muted u-margin-bottom-5rem">Brak za\u0142\u0105cznik\u00f3w.</p>';
+    return '<div id="ef-existing-attach" class="u-display-flex u-flex-wrap-wrap u-gap-35rem u-margin-bottom-5rem">'
         + attachments.map(a =>
-            `<span style="display:inline-flex;align-items:center;gap:.25rem;padding:.2rem .5rem;background:var(--bg-card-alt,#162032);border:1px solid var(--border);border-radius:4px;font-size:.75rem;">`
+            `<span class="u-display-inline-flex u-align-items-center u-gap-25rem u-padding-2rem-5rem u-background-var-bg-card-alt-162032 u-border-1px-solid-var-border u-border-radius-4px u-font-size-75rem">`
             + `<span>${esc(a.original_name)}</span>`
-            + `<button type="button" onclick="deleteAttachment(${a.id})" style="background:none;border:none;color:var(--red,#f87171);cursor:pointer;padding:0 .1rem;line-height:1;font-size:.9rem;" title="Usu\u0144 plik">\u00d7</button>`
+            + `<button type="button" onclick="deleteAttachment(${a.id})" class="u-background-none u-border-none u-color-var-red-f87171 u-cursor-pointer u-padding-0-1rem u-line-height-1 u-font-size-9rem" title="Usu\u0144 plik">\u00d7</button>`
             + `</span>`
         ).join('')
         + '</div>';
@@ -210,11 +203,11 @@ function buildEditForm(r) {
     const opts = EVENT_TYPES.map(et =>
         `<option value="${et}"${r.event_type===et?' selected':''}>${et}</option>`).join('');
     const existingAttach = (r.attachments && r.attachments.length)
-        ? '<p style="font-size:.75rem;font-weight:700;color:var(--muted);margin-bottom:.35rem;">Istniej\u0105ce pliki:</p>'
+        ? '<p class="u-font-size-75rem u-font-weight-700 u-color-var-muted u-margin-bottom-35rem">Istniej\u0105ce pliki:</p>'
           + buildExistingAttachList(r.attachments)
         : '';
     return `
-    <div class="form-grid" style="margin-bottom:.75rem;">
+    <div class="form-grid u-margin-bottom-75rem">
         <div class="field"><label>Maszyna *</label><input id="ef-machine" value="${esc(r.name)}"></div>
         <div class="field"><label>Typ *</label><input id="ef-mtype" value="${esc(r.machine_type)}"></div>
         <div class="field"><label>Numer *</label><input id="ef-serial" value="${esc(r.serial_number)}"></div>
@@ -223,7 +216,7 @@ function buildEditForm(r) {
         <div class="field"><label>Data naprawienia</label><div class="datetime-input"><input type="text" id="ef-rep" value="${esc(formatDateTime(r.repaired_at))}" placeholder="dd-mm-rrrr gg:mm" pattern="[0-9]{2}-[0-9]{2}-[0-9]{4} [0-9]{2}:[0-9]{2}" maxlength="16" oninput="syncNativeDateTime(this)" title="Wpisz datę i godzinę w formacie dd-mm-rrrr gg:mm"><button type="button" class="datetime-picker" onclick="openDateTimePicker(this)" aria-label="Wybierz datę i godzinę naprawienia"><svg class="datetime-picker-icon" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M4 1a1 1 0 0 1 1 1v1h6V2a1 1 0 1 1 2 0v1h1a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h1V2a1 1 0 0 1 1-1ZM3 6v7h10V6H3Zm2 2h2v2H5V8Z"/></svg></button><input type="datetime-local" class="datetime-picker-input" value="${nativeDateTime(r.repaired_at)}" oninput="syncDisplayDateTime(this)" onchange="syncDisplayDateTime(this)" tabindex="-1" aria-hidden="true"></div></div>
         <div class="field"><label>MTG maszyny</label><input id="ef-mtg" value="${esc(r.machine_mtg)}"></div>
     </div>
-    <div class="form-grid3" style="margin-bottom:.75rem;">
+    <div class="form-grid3 u-margin-bottom-75rem">
         <div class="field"><label>Opis *</label><textarea id="ef-desc">${esc(r.description)}</textarea></div>
         <div class="field"><label>Przyczyna</label><textarea id="ef-cause">${esc(r.cause)}</textarea></div>
         <div class="field"><label>Spos&#243;b naprawy</label><textarea id="ef-repair">${esc(r.repair_method)}</textarea></div>
@@ -236,17 +229,17 @@ function buildEditForm(r) {
         <div class="field"><label>Cz&#281;&#347;ci zamienne PLN</label><input type="number" step="0.01" min="0" id="ef-sparts" value="${r.spare_parts_cost??0}"></div>
         <div class="field"><label>Serwis PLN</label><input type="number" step="0.01" min="0" id="ef-service" value="${r.service_cost??0}"></div>
     </div>
-    <div class="form-grid3" style="margin-bottom:.75rem;">
+    <div class="form-grid3 u-margin-bottom-75rem">
         <div class="field"><label>Uwagi</label><textarea id="ef-notes">${esc(r.notes??'')}</textarea></div>
     </div>
-    <hr style="border:none;border-top:1px solid var(--border);margin:.75rem 0;">
+    <hr class="u-border-none u-border-top-1px-solid-var-border u-margin-75rem-0">
     <div>
-        <div class="card-title" style="margin-bottom:.5rem;">Za&#322;&#261;czniki &#8212; dodaj nowe pliki</div>
+        <div class="card-title u-margin-bottom-5rem">Za&#322;&#261;czniki &#8212; dodaj nowe pliki</div>
         ${existingAttach}
-        <div id="ef-attach-zone" style="border:2px dashed var(--border);border-radius:6px;padding:1rem;text-align:center;color:var(--muted);font-size:.82rem;cursor:pointer;transition:border-color .15s;">
+        <div id="ef-attach-zone" class="u-border-2px-dashed-var-border u-border-radius-6px u-padding-1rem u-text-align-center u-color-var-muted u-font-size-82rem u-cursor-pointer u-transition-border-color-15s">
             Przeci&#261;gnij pliki, kliknij lub wklej ze schowka (Ctrl+V)
         </div>
-        <div id="ef-attach-preview" style="display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.4rem;"></div>
+        <div id="ef-attach-preview" class="u-display-flex u-gap-4rem u-flex-wrap-wrap u-margin-top-4rem"></div>
     </div>`;
 }
 
@@ -258,8 +251,8 @@ function renderEditPreview() {
     p.innerHTML = '';
     editFiles.forEach((f, i) => {
         const el = document.createElement('div');
-        el.style.cssText = 'padding:.2rem .5rem;background:var(--bg-card-alt,#162032);border:1px solid var(--border);border-radius:4px;font-size:.75rem;display:flex;gap:.35rem;align-items:center;';
-        el.innerHTML = `<span>${f.name}</span><span style="color:var(--muted);">${(f.size/1024).toFixed(0)} KB</span><button type="button" onclick="removeEditFile(${i})" style="background:none;border:none;color:var(--muted);cursor:pointer;padding:0 .15rem;line-height:1;font-size:.95rem;" title="Usu\u0144">\u00d7</button>`;
+        el.className = 'attachment-preview-item';
+        el.innerHTML = `<span>${f.name}</span><span class="u-color-var-muted">${(f.size/1024).toFixed(0)} KB</span><button type="button" onclick="removeEditFile(${i})" class="u-background-none u-border-none u-color-var-muted u-cursor-pointer u-padding-0-15rem u-line-height-1 u-font-size-95rem" title="Usu\u0144">\u00d7</button>`;
         p.appendChild(el);
     });
 }
@@ -303,7 +296,7 @@ async function openRecord(id) {
     const r = await fetch(`/api/record/${id}`).then(res => res.json());
     currentRecord = r;
     document.getElementById('modal-title').innerHTML =
-        `Rekord <span style="color:var(--accent)">#${r.id}</span> \u2014 ${esc(r.name)}`;
+        `Rekord <span class="u-color-var-accent">#${r.id}</span> \u2014 ${esc(r.name)}`;
     document.getElementById('modal-view').innerHTML = buildView(r);
     document.getElementById('modal-btn-edit').style.display = (USER_ROLE === 'admin' || CAN_EDIT) ? '' : 'none';
     document.getElementById('modal-btn-delete').style.display = (USER_ROLE === 'admin' || CAN_DELETE) ? '' : 'none';

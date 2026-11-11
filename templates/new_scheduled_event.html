@@ -1,24 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Nowe zdarzenie planowane – Tygodniowy raport zdarzeń DUR{% endblock %}
 {% block content %}
-<style>
-    .scheduled-form-grid {
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 0.75rem;
-    }
-    .scheduled-form-grid > .field[hidden] { display: none; }
-    .scheduled-form-grid textarea { min-height: 120px; }
-    .scheduled-third-row-start { grid-column: 1; }
-    .scheduled-notes-field { grid-column: 1 / -1; }
-    @media (max-width: 900px) {
-        .scheduled-form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    }
-    @media (max-width: 560px) {
-        .scheduled-form-grid { grid-template-columns: minmax(0, 1fr); }
-        .scheduled-notes-field { grid-column: auto; }
-    }
-</style>
+
 <div class="page-title">Nowe zdarzenie planowane <small>Wprowadź dane zaplanowanego przeglądu lub interwencji</small></div>
 
 <div class="card">

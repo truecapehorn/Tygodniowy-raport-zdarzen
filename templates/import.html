@@ -3,12 +3,9 @@
 <head>
     <meta charset="utf-8">
     <title>Import danych</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 2rem; }
-        form { display: grid; gap: 1rem; max-width: 480px; }
-    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
 </head>
-<body>
+<body class="import-page">
     <h1>Import danych z Excel</h1>
     <p>Załaduj plik XLSX z kolumnami zgodnymi z obecnym raportem. Daty i koszty zostaną przeliczone podczas importu.</p>
     <form method="post" enctype="multipart/form-data">
