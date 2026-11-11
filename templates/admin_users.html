@@ -65,7 +65,7 @@
                     <td>
                         <a href="{{ url_for('admin_users', edit=user.id) }}" class="btn btn-outline btn-sm">Edytuj</a>
                         <form method="post" action="{{ url_for('admin_delete_user', user_id=user.id) }}" class="u-display-inline">
-                            <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Usunąć użytkownika?');">Usuń</button>
+                            <button type="submit" class="btn btn-outline btn-danger btn-sm" onclick="return confirm('Usunąć użytkownika?');">Usuń</button>
                         </form>
                     </td>
                 </tr>

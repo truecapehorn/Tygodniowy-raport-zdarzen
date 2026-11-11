@@ -136,10 +136,10 @@
         <div class="modal-header">
             <strong id="modal-title" class="u-font-size-1rem u-color-var-text"></strong>
             <div class="u-display-flex u-gap-4rem u-align-items-center u-flex-shrink-0">
-                <button id="modal-btn-delete" class="btn btn-danger  btn-sm" onclick="deleteRecord()">&#128465; Usu&#324;</button>
-                <button id="modal-btn-edit"   class="btn btn-primary btn-sm" onclick="switchToEdit()">&#9998; Edytuj</button>
-                <button id="modal-btn-pdf"    class="btn btn-success btn-sm" onclick="exportRecordPdf()">&#128196; PDF</button>
-                <button class="btn btn-primary btn-sm u-display-none" id="modal-btn-save" onclick="saveEdit()">&#10004; Zapisz</button>
+                <button id="modal-btn-delete" class="btn btn-outline btn-danger btn-sm" onclick="deleteRecord()">&#128465; Usu&#324;</button>
+                <button id="modal-btn-edit"   class="btn btn-outline btn-primary btn-sm" onclick="switchToEdit()">&#9998; Edytuj</button>
+                <button id="modal-btn-pdf"    class="btn btn-outline btn-success btn-sm" onclick="exportRecordPdf()"><svg class="icon-pdf" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 1.75h6l4 4v8.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="M9 1.75v4h4M5.5 9h5M5.5 11.5h5"/></svg> PDF</button>
+                <button class="btn btn-outline btn-primary btn-sm u-display-none" id="modal-btn-save" onclick="saveEdit()">&#10004; Zapisz</button>
                 <button class="btn btn-outline btn-sm u-display-none" id="modal-btn-cancel" onclick="switchToView()">Anuluj</button>
                 <button class="modal-close" onclick="closeModal()" title="Zamknij">&#10005;</button>
             </div>
@@ -251,7 +251,7 @@ function buildView(r) {
                 ? `<a href="${url}" target="_blank"><img src="${url}" alt="${esc(a.original_name)}" title="${esc(a.original_name)}"></a>`
                 : `<a href="${url}" target="_blank" class="btn btn-outline btn-sm"><svg class="icon-attachment" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.19 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg> ${esc(a.original_name)}</a>`;
         });
-        html += `</div><div class="u-margin-top-5rem"><a href="/record/${r.id}/attachments.zip" class="btn btn-success btn-sm">&#11015; Pobierz</a></div></div>`;
+        html += `</div><div class="u-margin-top-5rem"><a href="/record/${r.id}/attachments.zip" class="btn btn-outline btn-success btn-sm">&#11015; Pobierz</a></div></div>`;
     }
     return html;
 }

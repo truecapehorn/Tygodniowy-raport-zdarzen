@@ -379,7 +379,7 @@ data-notes="{{ event.notes or '' }}"
                 {% if user_role == 'admin' or (current_user and current_user.can_edit_records) %}
                 <form id="scheduled-modal-complete-form" method="post" class="u-display-none">
                     <input type="hidden" name="expected_planned_at">
-                    <button type="submit" class="btn btn-success btn-sm">Wykonano</button>
+                    <button type="submit" class="btn btn-outline btn-success btn-sm">Wykonano</button>
                 </form>
                 <form id="scheduled-modal-undo-form" method="post" class="u-display-none"
                       onsubmit="return confirm('Cofnąć wykonanie tego zdarzenia? Powiązany wpis rejestru utworzony przez realizację (jeśli istnieje), jego załączniki oraz następny termin cykliczny mogą zostać usunięte.');">
@@ -393,8 +393,8 @@ data-notes="{{ event.notes or '' }}"
                     <button type="submit" class="btn btn-outline btn-danger btn-sm">Usuń</button>
                 </form>
                 {% endif %}
-                <button id="scheduled-modal-edit-button" type="button" class="btn btn-primary btn-sm">Edytuj</button>
-                <button id="scheduled-modal-save-button" type="submit" form="scheduled-modal-edit-form" class="btn btn-success btn-sm u-display-none">Zapisz</button>
+                <button id="scheduled-modal-edit-button" type="button" class="btn btn-outline btn-primary btn-sm">Edytuj</button>
+                <button id="scheduled-modal-save-button" type="submit" form="scheduled-modal-edit-form" class="btn btn-outline btn-success btn-sm u-display-none">Zapisz</button>
                 <button id="scheduled-modal-cancel-button" type="button" class="btn btn-outline btn-sm u-display-none">Anuluj</button>
                 <button id="scheduled-modal-close" class="modal-close" title="Zamknij">&#10005;</button>
             </div>

@@ -489,6 +489,7 @@ class RepairReportAppTests(unittest.TestCase):
         ).get_data(as_text=True)
         self.assertIn('data-calendar-view="day"', day_html)
         self.assertIn('id="calendar-record-delete"', day_html)
+        self.assertIn('class="btn btn-outline btn-danger btn-sm u-display-none" type="button" id="calendar-record-delete"', day_html)
         self.assertIn('id="calendar-record-edit"', day_html)
         self.assertIn('id="calendar-record-pdf"', day_html)
         self.assertIn("elements.edit.classList.toggle('u-display-none'", day_html)

@@ -496,8 +496,13 @@
         .btn-danger:hover   { background: var(--red); filter: brightness(.85); }
         .btn-outline  { background: transparent; border-color: var(--border); color: var(--text); }
         .btn-outline:hover  { background: var(--outline-overlay); border-color: var(--muted); }
+        .btn-outline.btn-primary { background: transparent; border-color: var(--accent); color: var(--accent); }
+        .btn-outline.btn-primary:hover { background: var(--accent-dim); border-color: var(--accent); }
+        .btn-outline.btn-success { background: transparent; border-color: var(--green); color: var(--green); }
+        .btn-outline.btn-success:hover { background: var(--green-dim); border-color: var(--green); }
         .btn-outline.btn-danger { background: transparent; border-color: var(--red); color: var(--red); }
         .btn-outline.btn-danger:hover { background: var(--red-dim); border-color: var(--red); }
+        .icon-pdf { width: 0.95em; height: 0.95em; vertical-align: -0.12em; }
         .btn-sm { padding: 0.3rem 0.65rem; font-size: 0.8rem; }
         .actions { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; margin-top: 0.85rem; }
 
