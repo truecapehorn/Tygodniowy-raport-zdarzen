@@ -1755,6 +1755,22 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             calendar_weekdays=("Pon", "Wt", "Śr", "Czw", "Pt", "Sob", "Niedz"),
             previous_calendar_url=previous_url,
             next_calendar_url=next_url,
+            today_calendar_url=(
+                url_for(
+                    "scheduled_events",
+                    calendar_view="week",
+                    iso_week=f"{current_iso_year:04d}-W{current_iso_week:02d}",
+                )
+                if calendar_view == "week"
+                else url_for(
+                    "scheduled_events",
+                    calendar_view="month",
+                    year=current_date.year,
+                    month=current_date.month,
+                )
+                if calendar_view == "month"
+                else url_for("scheduled_events", calendar_view="year", year=current_date.year)
+            ),
             month_names=month_names,
         )
 
@@ -2144,6 +2160,28 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             calendar_weekdays=("Pon", "Wt", "Śr", "Czw", "Pt", "Sob", "Niedz"),
             previous_calendar_url=previous_url,
             next_calendar_url=next_url,
+            today_calendar_url=(
+                url_for(
+                    "records_calendar",
+                    calendar_view="day",
+                    calendar_date=current_date.date().isoformat(),
+                )
+                if calendar_view == "day"
+                else url_for(
+                    "records_calendar",
+                    calendar_view="week",
+                    iso_week=f"{current_iso_year:04d}-W{current_iso_week:02d}",
+                )
+                if calendar_view == "week"
+                else url_for(
+                    "records_calendar",
+                    calendar_view="month",
+                    year=current_date.year,
+                    month=current_date.month,
+                )
+                if calendar_view == "month"
+                else url_for("records_calendar", calendar_view="year", year=current_date.year)
+            ),
             month_names=month_names,
             event_types=EVENT_TYPES,
             can_create_records=app.config.get("TESTING") or user_has_permission("can_create_records"),
