@@ -474,9 +474,12 @@ editRepeatUnitInput.addEventListener('change', updateEditRepeatIntervalVisibilit
 function setScheduledEditMode(editing) {
     scheduledModal.classList.toggle('editing', editing);
     scheduledModalContent.style.display = editing ? 'none' : '';
+    scheduledModalEditForm.classList.toggle('u-display-none', !editing);
     scheduledModalEditForm.style.display = editing ? '' : 'none';
     scheduledModalEditButton.style.display = editing ? 'none' : '';
+    scheduledModalSaveButton.classList.toggle('u-display-none', !editing);
     scheduledModalSaveButton.style.display = editing ? '' : 'none';
+    scheduledModalCancelButton.classList.toggle('u-display-none', !editing);
     scheduledModalCancelButton.style.display = editing ? '' : 'none';
 }
 

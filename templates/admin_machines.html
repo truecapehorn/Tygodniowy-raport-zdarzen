@@ -216,10 +216,13 @@ function machineDetails(row) {
 function setMachineEditMode(editing) {
     if (!CAN_MANAGE_MACHINES) return;
     machineModalView.style.display = editing ? 'none' : '';
+    machineModalForm.classList.toggle('u-display-none', !editing);
     machineModalForm.style.display = editing ? '' : 'none';
     machineEditButton.style.display = editing ? 'none' : '';
     machineDeleteButton.style.display = editing || !currentMachineRow ? 'none' : '';
+    machineSaveButton.classList.toggle('u-display-none', !editing);
     machineSaveButton.style.display = editing ? '' : 'none';
+    machineCancelButton.classList.toggle('u-display-none', !editing);
     machineCancelButton.style.display = editing ? '' : 'none';
 }
 

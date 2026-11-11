@@ -356,22 +356,28 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal()
 function switchToEdit() {
     document.getElementById('modal-view').style.display = 'none';
     document.getElementById('modal-edit').style.display = '';
+    document.getElementById('modal-edit').classList.remove('u-display-none');
     document.getElementById('modal-btn-edit').style.display   = 'none';
     document.getElementById('modal-btn-delete').style.display = 'none';
     document.getElementById('modal-btn-pdf').style.display = 'none';
-    document.getElementById('modal-btn-save').style.display   = '';
+    document.getElementById('modal-btn-save').style.display = '';
+    document.getElementById('modal-btn-save').classList.remove('u-display-none');
     document.getElementById('modal-btn-cancel').style.display = '';
+    document.getElementById('modal-btn-cancel').classList.remove('u-display-none');
     document.getElementById('modal-edit').innerHTML = buildEditForm(currentRecord);
     initEditAttachments();
 }
 function switchToView() {
     document.getElementById('modal-edit').style.display = 'none';
+    document.getElementById('modal-edit').classList.add('u-display-none');
     document.getElementById('modal-view').style.display = '';
     document.getElementById('modal-btn-edit').style.display   = (USER_ROLE === 'admin' || CAN_EDIT) ? '' : 'none';
     document.getElementById('modal-btn-delete').style.display = (USER_ROLE === 'admin' || CAN_DELETE) ? '' : 'none';
     document.getElementById('modal-btn-pdf').style.display = '';
-    document.getElementById('modal-btn-save').style.display   = 'none';
+    document.getElementById('modal-btn-save').style.display = 'none';
+    document.getElementById('modal-btn-save').classList.add('u-display-none');
     document.getElementById('modal-btn-cancel').style.display = 'none';
+    document.getElementById('modal-btn-cancel').classList.add('u-display-none');
 }
 
 async function saveEdit() {
