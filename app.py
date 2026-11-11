@@ -2194,13 +2194,16 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         if not upload or not upload.filename:
             flash("Wybierz plik Excel do importu.", "error")
             return redirect(url_for("data_page"))
-        imported = import_workbook(upload.read(), upload.filename or "")
+        imported, skipped, attachments_added, attachments_skipped = import_workbook(upload.read(), upload.filename or "")
         log_user_activity(
             "import_records",
-            f"Zaimportowano {imported} rekordów z pliku {upload.filename or 'bez nazwy'}.",
+            f"Zaimportowano {imported}, pominięto {skipped} rekordów z pliku {upload.filename or 'bez nazwy'}.",
             target_type="import",
         )
-        flash(f"Zaimportowano {imported} rekordów.", "success")
+        message = f"Zaimportowano {imported} rekordów, pominięto {skipped}."
+        if attachments_added or attachments_skipped:
+            message += f" Załączniki: dodano {attachments_added}, pominięto {attachments_skipped}."
+        flash(message, "success")
         return redirect(url_for("index"))
 
     @app.route("/data", methods=["GET", "POST"])
@@ -2213,13 +2216,16 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             if not upload or not upload.filename:
                 flash("Wybierz plik Excel do importu.", "error")
                 return redirect(url_for("data_page"))
-            imported = import_workbook(upload.read(), upload.filename or "")
+            imported, skipped, attachments_added, attachments_skipped = import_workbook(upload.read(), upload.filename or "")
             log_user_activity(
                 "import_records",
-                f"Zaimportowano {imported} rekordów z pliku {upload.filename or 'bez nazwy'}.",
+                f"Zaimportowano {imported}, pominięto {skipped} rekordów z pliku {upload.filename or 'bez nazwy'}.",
                 target_type="import",
             )
-            flash(f"Zaimportowano {imported} rekordów.", "success")
+            message = f"Zaimportowano {imported} rekordów, pominięto {skipped}."
+            if attachments_added or attachments_skipped:
+                message += f" Załączniki: dodano {attachments_added}, pominięto {attachments_skipped}."
+            flash(message, "success")
             return redirect(url_for("index"))
         return render_template("import_export.html")
 
@@ -2283,6 +2289,73 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             as_attachment=True,
             download_name="tygodniowy_raport_napraw.xlsx",
             mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
+    @app.route("/export/bundle")
+    def export_records_bundle():
+        if not app.config.get("TESTING") and session.get("role") == "guest":
+            flash("Konto gościa nie ma uprawnień do eksportu danych.", "error")
+            return redirect(url_for("filter_page"))
+
+        records = query_records({
+            "machine": "", "machine_type": "", "serial_number": "", "event_type": "",
+            "occurrence_from": "", "occurrence_to": "", "description_terms": "",
+        })
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = "ZBIORCZE"
+        sheet.append(EXPORT_COLUMNS)
+        for record in records:
+            sheet.append([
+                record["id"], record["record_year"], record["record_week"], record["week_sequence"],
+                record["name"], record["machine_type"], record["serial_number"], record["event_type"],
+                record["description"], record["cause"], record["repair_method"], record["replaced_parts"],
+                record["participants"], format_datetime(record["occurrence_at"]),
+                format_datetime(record["repaired_at"]), record["machine_mtg"], record["downtime_hours"],
+                record["labor_cost"], record["material_cost"], record["spare_parts_cost"],
+                record["service_cost"], record["total_cost"], record["notes"],
+            ])
+        workbook_output = io.BytesIO()
+        workbook.save(workbook_output)
+
+        manifest = {"format": "repair-records-bundle", "version": 1, "attachments": []}
+        upload_root = Path(current_app_uploads())
+        record_ids = [int(record["id"]) for record in records]
+        if record_ids:
+            placeholders = ",".join("?" for _ in record_ids)
+            attachments = get_db().execute(
+                f"SELECT record_id, filename, original_name, content_type FROM attachments "
+                f"WHERE record_id IN ({placeholders}) ORDER BY id",
+                record_ids,
+            ).fetchall()
+        else:
+            attachments = []
+
+        bundle_output = io.BytesIO()
+        with zipfile.ZipFile(bundle_output, "w", zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("records.xlsx", workbook_output.getvalue())
+            for attachment in attachments:
+                member_name = f"attachments/{int(attachment['record_id'])}/{Path(attachment['filename']).name}"
+                file_path = upload_root / str(attachment["record_id"]) / Path(attachment["filename"]).name
+                if not file_path.is_file():
+                    continue
+                archive.write(file_path, member_name)
+                manifest["attachments"].append({
+                    "record_id": int(attachment["record_id"]),
+                    "filename": Path(attachment["filename"]).name,
+                    "original_name": attachment["original_name"],
+                    "content_type": attachment["content_type"],
+                    "path": member_name,
+                })
+            archive.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2))
+
+        bundle_output.seek(0)
+        log_user_activity("export_records", "Wyeksportowano zdarzenia wraz z załącznikami.", target_type="export")
+        return send_file(
+            bundle_output,
+            as_attachment=True,
+            download_name="zdarzenia_z_zalacznikami.zip",
+            mimetype="application/zip",
         )
 
     @app.route("/filter")
@@ -3559,25 +3632,93 @@ def update_record(record_id: int, data: dict[str, Any]) -> None:
     db.commit()
 
 
-def import_workbook(binary_content: bytes, filename: str = "") -> int:
-    """Detect format (XLS vs XLSX) and dispatch to the appropriate importer."""
+def import_workbook(binary_content: bytes, filename: str = "") -> tuple[int, int, int, int]:
+    """Import an Excel file or an application bundle with its attachments."""
     if binary_content[:2] == b"PK":
-        return _import_xlsx_bytes(binary_content)
+        try:
+            with zipfile.ZipFile(io.BytesIO(binary_content)) as archive:
+                names = set(archive.namelist())
+                if "manifest.json" in names and "records.xlsx" in names:
+                    return _import_records_bundle(archive)
+        except zipfile.BadZipFile:
+            pass
+        imported, skipped = _import_xlsx_bytes(binary_content)
+        return imported, skipped, 0, 0
     if binary_content[:4] == b"\xd0\xcf\x11\xe0":
-        return _import_xls_bytes(binary_content)
+        imported, skipped = _import_xls_bytes(binary_content)
+        return imported, skipped, 0, 0
     # Fall back to file extension when magic bytes are ambiguous
     if filename.lower().endswith(".xls"):
-        return _import_xls_bytes(binary_content)
-    return _import_xlsx_bytes(binary_content)
+        imported, skipped = _import_xls_bytes(binary_content)
+    else:
+        imported, skipped = _import_xlsx_bytes(binary_content)
+    return imported, skipped, 0, 0
 
 
-def _import_xlsx_bytes(binary_content: bytes) -> int:
+def _import_records_bundle(archive: zipfile.ZipFile) -> tuple[int, int, int, int]:
+    from pathlib import PurePosixPath
+
+    try:
+        manifest = json.loads(archive.read("manifest.json").decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError, KeyError) as exc:
+        raise ValueError("Nieprawidłowy manifest paczki importu.") from exc
+    if manifest.get("format") != "repair-records-bundle" or manifest.get("version") != 1:
+        raise ValueError("Nieobsługiwany format paczki importu.")
+    manifest_attachments = manifest.get("attachments", [])
+    if not isinstance(manifest_attachments, list):
+        raise ValueError("Nieprawidłowa lista załączników w paczce importu.")
+
+    attachment_data = []
+    archive_names = set(archive.namelist())
+    for item in manifest_attachments:
+        if not isinstance(item, dict):
+            raise ValueError("Nieprawidłowy wpis załącznika w paczce importu.")
+        try:
+            source_record_id = int(item["record_id"])
+            member_name = str(item["path"])
+            pure_path = PurePosixPath(member_name)
+            if (pure_path.is_absolute() or ".." in pure_path.parts or len(pure_path.parts) != 3
+                    or pure_path.parts[0] != "attachments"):
+                raise ValueError
+            if member_name not in archive_names:
+                raise ValueError
+            content = archive.read(member_name)
+            attachment_data.append((source_record_id, item, content))
+        except (KeyError, TypeError, ValueError, zipfile.BadZipFile) as exc:
+            raise ValueError("Paczka zawiera nieprawidłowy lub brakujący załącznik.") from exc
+
+    workbook = load_workbook(io.BytesIO(archive.read("records.xlsx")), data_only=True)
+    sheet = workbook["ZBIORCZE"] if "ZBIORCZE" in workbook.sheetnames else workbook.active
+    record_mapping: dict[int, int] = {}
+    imported, skipped = _process_import_rows(
+        list(sheet.iter_rows(values_only=True)), source_record_mapping=record_mapping
+    )
+    attachments_added = 0
+    attachments_skipped = 0
+    for source_record_id, item, content in attachment_data:
+        target_record_id = record_mapping.get(source_record_id)
+        if target_record_id is None:
+            attachments_skipped += 1
+            continue
+        if save_imported_attachment(
+            target_record_id,
+            content,
+            str(item.get("original_name") or item.get("filename") or "file"),
+            str(item.get("content_type") or "application/octet-stream"),
+        ):
+            attachments_added += 1
+        else:
+            attachments_skipped += 1
+    return imported, skipped, attachments_added, attachments_skipped
+
+
+def _import_xlsx_bytes(binary_content: bytes) -> tuple[int, int]:
     workbook = load_workbook(io.BytesIO(binary_content), data_only=True)
     sheet = workbook["ZBIORCZE"] if "ZBIORCZE" in workbook.sheetnames else workbook.active
     return _process_import_rows(list(sheet.iter_rows(values_only=True)))
 
 
-def _import_xls_bytes(binary_content: bytes) -> int:
+def _import_xls_bytes(binary_content: bytes) -> tuple[int, int]:
     try:
         import xlrd
     except ImportError as exc:
@@ -3620,9 +3761,12 @@ def _import_xls_bytes(binary_content: bytes) -> int:
     return _process_import_rows(rows)
 
 
-def _process_import_rows(rows: list[tuple[Any, ...]]) -> int:
+def _process_import_rows(
+    rows: list[tuple[Any, ...]],
+    source_record_mapping: dict[int, int] | None = None,
+) -> tuple[int, int]:
     if not rows:
-        return 0
+        return 0, 0
     # Find first row that contains at least 3 recognised column headers
     header_row_index = 0
     for i, row in enumerate(rows[:10]):
@@ -3643,11 +3787,13 @@ def _process_import_rows(rows: list[tuple[Any, ...]]) -> int:
             header_map[canonical_name] = index
 
     imported = 0
+    skipped = 0
     for values in rows[header_row_index + 1:]:
         if not any(value not in (None, "") for value in values):
             continue
         occurrence_at = parse_datetime(row_value(values, header_map, "Data wystąpienia", None))
         if not occurrence_at:
+            skipped += 1
             continue
         record = {
             "machine_name": row_value(values, header_map, "Maszyna", "") or "",
@@ -3669,14 +3815,23 @@ def _process_import_rows(rows: list[tuple[Any, ...]]) -> int:
             "notes": row_value(values, header_map, "Uwagi", "") or "",
         }
         try:
-            save_imported_record(record)
-            imported += 1
+            record_id, created = save_imported_record(record)
+            source_record_id = row_value(values, header_map, "Nr", None)
+            try:
+                if source_record_mapping is not None and source_record_id not in (None, ""):
+                    source_record_mapping[int(float(source_record_id))] = record_id
+            except (TypeError, ValueError, OverflowError):
+                pass
+            if created:
+                imported += 1
+            else:
+                skipped += 1
         except ValueError:
-            continue
-    return imported
+            skipped += 1
+    return imported, skipped
 
 
-def save_imported_record(record: dict[str, Any]) -> int:
+def save_imported_record(record: dict[str, Any]) -> tuple[int, bool]:
     occurrence_at = record["occurrence_at"]
     repaired_at = record.get("repaired_at")
     if not isinstance(occurrence_at, datetime):
@@ -3693,6 +3848,39 @@ def save_imported_record(record: dict[str, Any]) -> int:
     service_cost = as_float(record.get("service_cost"))
     total_cost = round((labor_cost * get_labor_rate()) + material_cost + spare_parts_cost + service_cost, 2)
     db = get_db()
+    occurrence_value = occurrence_at.isoformat(sep=" ", timespec="minutes")
+    repaired_value = repaired_at.isoformat(sep=" ", timespec="minutes") if repaired_at else None
+    event_type = str(record.get("event_type", "Inne")).strip() or "Inne"
+    description = str(record.get("description", "")).strip()
+    cause = str(record.get("cause", "")).strip()
+    repair_method = str(record.get("repair_method", "")).strip()
+    replaced_parts = str(record.get("replaced_parts", "")).strip()
+    participants = str(record.get("participants", "")).strip() or None
+    machine_mtg = str(record.get("machine_mtg", "")).strip()
+    notes = str(record.get("notes", "")).strip() or None
+
+    duplicate = db.execute(
+        """
+        SELECT id FROM repair_records
+        WHERE machine_id = ? AND occurrence_at = ? AND event_type = ?
+          AND description = ? AND COALESCE(cause, '') = ?
+          AND COALESCE(repair_method, '') = ? AND COALESCE(replaced_parts, '') = ?
+          AND COALESCE(participants, '') = ? AND COALESCE(repaired_at, '') = ?
+          AND COALESCE(machine_mtg, '') = ? AND COALESCE(notes, '') = ?
+          AND labor_cost = ? AND material_cost = ? AND spare_parts_cost = ?
+          AND service_cost = ?
+        LIMIT 1
+        """,
+        (
+            machine_id, occurrence_value, event_type, description, cause,
+            repair_method, replaced_parts, participants or "", repaired_value or "",
+            machine_mtg, notes or "", labor_cost, material_cost, spare_parts_cost,
+            service_cost,
+        ),
+    ).fetchone()
+    if duplicate:
+        return int(duplicate["id"]), False
+
     cursor = db.execute(
         """
         INSERT INTO repair_records(
@@ -3708,22 +3896,22 @@ def save_imported_record(record: dict[str, Any]) -> int:
             record_week,
             next_week_sequence(record_year, record_week),
             machine_id,
-            str(record.get("event_type", "Inne")).strip() or "Inne",
-            str(record.get("description", "")).strip(),
-            str(record.get("cause", "")).strip(),
-            str(record.get("repair_method", "")).strip(),
-            str(record.get("replaced_parts", "")).strip(),
-            str(record.get("participants", "")).strip() or None,
-            occurrence_at.isoformat(sep=" ", timespec="minutes"),
-            repaired_at.isoformat(sep=" ", timespec="minutes") if repaired_at else None,
-            str(record.get("machine_mtg", "")).strip(),
+            event_type,
+            description,
+            cause,
+            repair_method,
+            replaced_parts,
+            participants,
+            occurrence_value,
+            repaired_value,
+            machine_mtg,
             calculate_downtime_hours(occurrence_at, repaired_at),
             labor_cost,
             material_cost,
             spare_parts_cost,
             service_cost,
             total_cost,
-            str(record.get("notes", "")).strip() or None,
+            notes,
             datetime.now(UTC).isoformat(timespec="seconds"),
         ),
     )
@@ -3734,7 +3922,45 @@ def save_imported_record(record: dict[str, Any]) -> int:
         target_type="record",
         target_id=int(cursor.lastrowid),
     )
-    return int(cursor.lastrowid)
+    return int(cursor.lastrowid), True
+
+
+def save_imported_attachment(record_id: int, content: bytes, original_name: str, content_type: str) -> bool:
+    from werkzeug.utils import secure_filename
+
+    safe_name = secure_filename(original_name) or "file"
+    db = get_db()
+    upload_dir = Path(current_app_uploads()) / str(record_id)
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    for existing in db.execute(
+        "SELECT filename, original_name FROM attachments WHERE record_id = ?",
+        (record_id,),
+    ).fetchall():
+        if existing["original_name"] != original_name:
+            continue
+        existing_path = upload_dir / existing["filename"]
+        if existing_path.is_file() and existing_path.read_bytes() == content:
+            return False
+
+    destination = upload_dir / safe_name
+    stem, suffix = Path(safe_name).stem, Path(safe_name).suffix
+    counter = 1
+    while destination.exists():
+        destination = upload_dir / f"{stem}_{counter}{suffix}"
+        counter += 1
+    destination.write_bytes(content)
+    try:
+        db.execute(
+            "INSERT INTO attachments(record_id, filename, original_name, content_type, created_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (record_id, destination.name, original_name, content_type,
+             datetime.now(UTC).isoformat(timespec="seconds")),
+        )
+        db.commit()
+    except Exception:
+        destination.unlink(missing_ok=True)
+        raise
+    return True
 
 
 if __name__ == "__main__":

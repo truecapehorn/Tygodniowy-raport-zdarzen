@@ -1601,7 +1601,7 @@ class RepairReportAppTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         page = response.get_data(as_text=True)
-        self.assertIn("Zaimportowano 1 rekordów.", page)
+        self.assertIn("Zaimportowano 1 rekordów, pominięto 1.", page)
         self.assertIn("Gilotyna", page)
         with self.app.app_context():
             participants = get_db().execute(
@@ -1609,6 +1609,126 @@ class RepairReportAppTests(unittest.TestCase):
                 ("Wymiana noża",),
             ).fetchone()["participants"]
         self.assertEqual(participants, "Marek Nowak, Piotr Kowalski")
+
+    def test_importing_exported_records_again_skips_duplicates(self):
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.append(
+            [
+                "Maszyna", "Typ", "Numer", "Rodzaj zdarzenia", "Opis", "Przyczyna",
+                "Sposób naprawy", "Data wystąpienia", "Data naprawienia/ interwencji",
+                "MTG maszyny", "Praco chłonność [80PLN/h]", "Materiał własny PLN",
+                "Części zamienne PLN", "Serwis PLN", "Uwagi",
+            ]
+        )
+        sheet.append(
+            [
+                "Tokarka", "CNC", "T-7", "Awaria", "Wymiana łożyska", "Zużycie",
+                "Wymiana", "2026-08-20 07:00", "2026-08-20 08:30", "1250", 1.5,
+                10, 20, 5, "Test importu",
+            ]
+        )
+        source = io.BytesIO()
+        workbook.save(source)
+
+        first_import = self.client.post(
+            "/import",
+            data={"file": (io.BytesIO(source.getvalue()), "zdarzenia.xlsx")},
+            content_type="multipart/form-data",
+            follow_redirects=True,
+        )
+        self.assertIn("Zaimportowano 1 rekordów, pominięto 0.", first_import.get_data(as_text=True))
+
+        exported = self.client.get("/export")
+        second_import = self.client.post(
+            "/import",
+            data={"file": (io.BytesIO(exported.data), "eksport.xlsx")},
+            content_type="multipart/form-data",
+            follow_redirects=True,
+        )
+        self.assertIn("Zaimportowano 0 rekordów, pominięto 1.", second_import.get_data(as_text=True))
+        with self.app.app_context():
+            count = get_db().execute("SELECT COUNT(*) FROM repair_records").fetchone()[0]
+        self.assertEqual(count, 1)
+
+    def test_records_bundle_restores_attachments_for_imported_and_duplicate_records(self):
+        self.client.post(
+            "/",
+            data={
+                "occurrence_at": "2026-08-30T08:00",
+                "machine_name": "Maszyna paczki",
+                "machine_type": "Testowa",
+                "serial_number": "BUNDLE-1",
+                "event_type": "Awaria",
+                "description": "Zdarzenie z załącznikiem",
+            },
+        )
+        with self.app.app_context():
+            source_record_id = get_db().execute(
+                "SELECT id FROM repair_records WHERE description = ?", ("Zdarzenie z załącznikiem",)
+            ).fetchone()["id"]
+        self.client.post(
+            f"/api/record/{source_record_id}/attachments",
+            data={"attachments": (io.BytesIO(b"plik do odzyskania"), "raport.txt")},
+            content_type="multipart/form-data",
+        )
+        bundle_response = self.client.get("/export/bundle")
+        self.assertEqual(bundle_response.status_code, 200)
+        bundle_bytes = bundle_response.data
+
+        target_app = create_app(
+            {
+                "TESTING": True,
+                "DATABASE": str(Path(self.temp_dir.name) / "target.sqlite3"),
+                "UPLOAD_DIR": str(Path(self.temp_dir.name) / "target_uploads"),
+                "SECRET_KEY": "test",
+            }
+        )
+        target_client = target_app.test_client()
+        target_client.post(
+            "/",
+            data={
+                "occurrence_at": "2026-08-29T08:00",
+                "machine_name": "Inna maszyna",
+                "machine_type": "Testowa",
+                "serial_number": "OTHER-1",
+                "event_type": "Awaria",
+                "description": "Rekord przesuwający numer ID",
+            },
+        )
+
+        first_import = target_client.post(
+            "/data",
+            data={"file": (io.BytesIO(bundle_bytes), "zdarzenia.zip")},
+            content_type="multipart/form-data",
+            follow_redirects=True,
+        )
+        self.assertIn("Załączniki: dodano 1, pominięto 0.", first_import.get_data(as_text=True))
+        with target_app.app_context():
+            target_record_id = get_db().execute(
+                "SELECT id FROM repair_records WHERE description = ?", ("Zdarzenie z załącznikiem",)
+            ).fetchone()["id"]
+            self.assertNotEqual(target_record_id, source_record_id)
+            self.assertEqual(
+                get_db().execute(
+                    "SELECT COUNT(*) FROM attachments WHERE record_id = ?", (target_record_id,)
+                ).fetchone()[0],
+                1,
+            )
+        second_import = target_client.post(
+            "/data",
+            data={"file": (io.BytesIO(bundle_bytes), "zdarzenia.zip")},
+            content_type="multipart/form-data",
+            follow_redirects=True,
+        )
+        self.assertIn("Załączniki: dodano 0, pominięto 1.", second_import.get_data(as_text=True))
+        with target_app.app_context():
+            self.assertEqual(
+                get_db().execute(
+                    "SELECT COUNT(*) FROM attachments WHERE record_id = ?", (target_record_id,)
+                ).fetchone()[0],
+                1,
+            )
 
     def test_user_login_and_create_permission(self):
         app = create_app(
