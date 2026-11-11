@@ -635,8 +635,8 @@ class RepairReportAppTests(unittest.TestCase):
         self.assertIn('id="scheduled-modal-undo-form" method="post" class="u-display-none"', html)
         self.assertIn('class="btn btn-success btn-sm">Wykonano</button>', html)
         self.assertIn('class="btn btn-outline btn-sm">Cofnij Wykonanie</button>', html)
-        self.assertIn("scheduledModalCompleteForm.style.display = status === 'planned' ? '' : 'none';", html)
-        self.assertIn("scheduledModalUndoForm.style.display = status === 'done' ? '' : 'none';", html)
+        self.assertIn("scheduledModalCompleteForm.classList.toggle('u-display-none', status !== 'planned');", html)
+        self.assertIn("scheduledModalUndoForm.classList.toggle('u-display-none', status !== 'done');", html)
         self.assertEqual(
             html.count("onsubmit=\"return confirm('Czy na pewno usunąć to zaplanowane zdarzenie?"),
             2,

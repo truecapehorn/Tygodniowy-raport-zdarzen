@@ -532,12 +532,12 @@ function openScheduledModal(row) {
     if (scheduledModalCompleteForm) {
         scheduledModalCompleteForm.action = `/scheduled/${id}/done`;
         scheduledModalCompleteForm.querySelector('input[name="expected_planned_at"]').value = date;
-        scheduledModalCompleteForm.style.display = status === 'planned' ? '' : 'none';
+        scheduledModalCompleteForm.classList.toggle('u-display-none', status !== 'planned');
     }
     if (scheduledModalUndoForm) {
         scheduledModalUndoForm.action = `/scheduled/${id}/undo`;
         scheduledModalUndoForm.querySelector('input[name="expected_planned_at"]').value = date;
-        scheduledModalUndoForm.style.display = status === 'done' ? '' : 'none';
+        scheduledModalUndoForm.classList.toggle('u-display-none', status !== 'done');
     }
     scheduledModalEditForm.action = `/scheduled/${id}/edit`;
     document.getElementById('edit-machine-name').value = machine;
