@@ -74,6 +74,7 @@
         <div class="calendar-day-view" data-calendar-view="day">
             {% for slot in calendar_slots %}
             <div class="calendar-day-slot{% if can_create_records %} calendar-create-slot{% endif %}"
+                 data-calendar-hour="{{ slot.time[:2] }}"
                  {% if can_create_records %}data-create-url="{{ url_for('new_record', occurrence_at=slot.occurrence_at, return_calendar_date=calendar_date) }}" role="link" tabindex="0" aria-label="Dodaj zdarzenie: {{ slot.time }}"{% endif %}>
                 <span class="calendar-day-time">{{ slot.time }}</span>
                 <div class="calendar-day-slot-events">
@@ -103,7 +104,7 @@
                 {% endfor %}
             </div>
             {% for hour in calendar_hours %}
-            <div class="calendar-week-grid calendar-hour-row">
+            <div class="calendar-week-grid calendar-hour-row" data-calendar-hour="{{ hour }}">
                 <div class="calendar-hour-label">{{ "%02d:00"|format(hour) }}</div>
                 {% for day in weekly_days %}
                 <div class="calendar-hour-cell{% if day.is_today %} calendar-day-today{% endif %}">
@@ -522,5 +523,32 @@ calendarRecordModal.addEventListener('click', event => {
 document.addEventListener('keydown', event => {
     if (event.key === 'Escape') closeCalendarRecord();
 });
+(() => {
+    const view = document.querySelector('.calendar-day-view, .calendar-week-view');
+    if (!view) return;
+
+    const isDayView = view.classList.contains('calendar-day-view');
+    const rows = [...view.querySelectorAll(isDayView ? '.calendar-day-slot' : '.calendar-hour-row')];
+    const eventSelector = '.calendar-event-link, .calendar-scheduled-event';
+    let target = rows.find(row => row.querySelector(eventSelector));
+
+    if (!target) {
+        const now = new Date();
+        const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        const shouldUseCurrentHour = isDayView
+            ? document.getElementById('calendar-date')?.value === today
+            : Boolean(view.querySelector('.calendar-weekday[aria-current="date"]'));
+        if (shouldUseCurrentHour) {
+            target = rows.find(row => Number(row.dataset.calendarHour) === now.getHours());
+        }
+    }
+
+    if (target) {
+        requestAnimationFrame(() => {
+            const top = target.getBoundingClientRect().top + window.scrollY - 100;
+            window.scrollTo({ top: Math.max(0, top), behavior: 'instant' });
+        });
+    }
+})();
 </script>
 {% endblock %}

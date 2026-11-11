@@ -136,7 +136,7 @@ data-notes="{{ event.notes or '' }}"
                 {% endfor %}
             </div>
             {% for hour in calendar_hours %}
-            <div class="calendar-week-grid calendar-hour-row">
+            <div class="calendar-week-grid calendar-hour-row" data-calendar-hour="{{ hour }}">
                 <div class="calendar-hour-label">{{ "%02d:00"|format(hour) }}</div>
                 {% for day in weekly_days %}
                 {% if day.date and (user_role == 'admin' or (current_user and current_user.can_create_records)) %}
@@ -591,5 +591,22 @@ scheduledModal.addEventListener('click', (event) => {
         scheduledModal.classList.remove('open');
     }
 });
+(() => {
+    const view = document.querySelector('.calendar-week-view');
+    if (!view) return;
+
+    const rows = [...view.querySelectorAll('.calendar-hour-row')];
+    let target = rows.find(row => row.querySelector('.calendar-scheduled-event'));
+    if (!target && view.querySelector('.calendar-weekday[aria-current="date"]')) {
+        target = rows.find(row => Number(row.dataset.calendarHour) === new Date().getHours());
+    }
+
+    if (target) {
+        requestAnimationFrame(() => {
+            const top = target.getBoundingClientRect().top + window.scrollY - 100;
+            window.scrollTo({ top: Math.max(0, top), behavior: 'instant' });
+        });
+    }
+})();
 </script>
 {% endblock %}
