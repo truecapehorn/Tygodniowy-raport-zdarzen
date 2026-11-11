@@ -3,6 +3,16 @@
 <head>
     <meta charset="utf-8">
     <title>Import danych</title>
+    <script>
+        (() => {
+            let theme;
+            try { theme = localStorage.getItem('dur-theme'); } catch (_) {}
+            if (theme !== 'light' && theme !== 'dark') {
+                theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            }
+            document.documentElement.dataset.theme = theme;
+        })();
+    </script>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
 </head>
 <body class="import-page">

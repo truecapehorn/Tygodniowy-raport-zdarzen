@@ -55,6 +55,7 @@ Aplikacja obsługuje plik `config.json` do elastycznego konfigurowania:
 - **LABOR_RATE_PLN_PER_HOUR** - stawka godzinowa dla obliczeń
 - **MAX_UPLOAD_SIZE_MB** - maksymalny rozmiar pliku
 - **REQUIRE_LOGIN** - czy logowanie jest wymagane
+- **TIMEZONE** - strefa czasowa IANA używana przy wyświetlaniu dat (domyślnie `Europe/Warsaw`)
 
 **Przykład dla dysku sieciowego (Windows UNC):**
 ```json

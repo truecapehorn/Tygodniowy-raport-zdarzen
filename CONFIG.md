@@ -18,7 +18,8 @@ Jeśli plik `config.json` nie istnieje, aplikacja będzie używać wartości dom
   "LABOR_RATE_PLN_PER_HOUR": 80,
   "MAX_UPLOAD_SIZE_MB": 500,
   "REQUIRE_LOGIN": true,
-  "AUTH_FILE": "auth.json"
+  "AUTH_FILE": "auth.json",
+  "TIMEZONE": "Europe/Warsaw"
 }
 ```
 
@@ -80,6 +81,11 @@ Jeśli plik `config.json` nie istnieje, aplikacja będzie używać wartości dom
 - **Typ:** string (ścieżka)
 - **Domyślnie:** `auth.json`
 - **Opis:** Ścieżka do pliku z hasłami i ustawieniami uwierzytelniania
+
+### TIMEZONE
+- **Typ:** string (nazwa strefy IANA)
+- **Domyślnie:** `Europe/Warsaw`
+- **Opis:** Strefa używana do wyświetlania dat w eksporcie i dzienniku aktywności, niezależnie od strefy systemu operacyjnego
 
 ## Przykłady konfiguracji
 

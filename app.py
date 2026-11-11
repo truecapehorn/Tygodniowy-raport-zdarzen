@@ -17,10 +17,12 @@ import zipfile
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from flask import (
     Flask,
     Response,
+    current_app,
     flash,
     g,
     jsonify,
@@ -359,7 +361,7 @@ def format_date(value: str | None) -> str:
 
 
 def format_activity_datetime(value: str | None) -> str:
-    """Display UTC audit timestamps in the application's local timezone."""
+    """Display UTC audit timestamps in the configured application timezone."""
     if not value:
         return ""
     try:
@@ -368,7 +370,8 @@ def format_activity_datetime(value: str | None) -> str:
         return str(value)
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=UTC)
-    return parsed.astimezone().strftime("%d-%m-%Y %H:%M")
+    timezone_name = current_app.config.get("TIMEZONE", "Europe/Warsaw")
+    return parsed.astimezone(ZoneInfo(timezone_name)).strftime("%d-%m-%Y %H:%M")
 
 
 def as_float(value: Any) -> float:
@@ -762,6 +765,7 @@ def _load_config() -> dict[str, Any]:
         "MAX_UPLOAD_SIZE_MB": 500,
         "REQUIRE_LOGIN": True,
         "AUTH_FILE": "auth.json",
+        "TIMEZONE": "Europe/Warsaw",
     }
     
     if CONFIG_FILE.exists():
@@ -1043,6 +1047,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
     # Store config values for access in routes
     app.config["LABOR_RATE_PLN_PER_HOUR"] = config["LABOR_RATE_PLN_PER_HOUR"]
     app.config["REQUIRE_LOGIN"] = config["REQUIRE_LOGIN"]
+    app.config["TIMEZONE"] = config["TIMEZONE"]
     
     if test_config:
         app.config.update(test_config)

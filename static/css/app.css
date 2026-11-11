@@ -943,7 +943,7 @@ body { font-family: Arial, sans-serif; margin: 2rem; }
 }
 
 /* Scheduled event editor */
-#scheduled-modal.editing #scheduled-modal-complete-form { display: none !important; }
+#scheduled-modal.editing #scheduled-modal-complete-form { display: none; }
     .scheduled-edit-grid {
         display: grid;
         grid-template-columns: repeat(12, minmax(0, 1fr));
@@ -966,7 +966,10 @@ body { font-family: Arial, sans-serif; margin: 2rem; }
     }
     @media (max-width: 520px) {
         .scheduled-edit-grid { grid-template-columns: minmax(0, 1fr); }
-        .scheduled-edit-grid > .field { grid-column: 1 / -1 !important; }
+        .scheduled-edit-grid > .field:not(.scheduled-edit-description):not(.scheduled-edit-notes):not(.scheduled-edit-third) {
+            grid-column: 1 / -1;
+        }
+        .scheduled-edit-grid > .field.scheduled-edit-third { grid-column: 1 / -1; }
     }
 
 /* Inline style utilities */
