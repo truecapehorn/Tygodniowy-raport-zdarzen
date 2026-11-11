@@ -310,6 +310,19 @@
         .datetime-picker-icon { pointer-events: none; width: 16px; height: 16px; }
         .field textarea { min-height: 78px; resize: vertical; }
         .field select option { background: var(--bg-card); }
+        .record-description-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.75rem; }
+        .record-field-wide { grid-column: span 2; }
+        .field-error { color: var(--red); font-size: 0.78rem; min-height: 0; }
+        .field [aria-invalid="true"] { border-color: var(--red); }
+        .record-total-cost output { display: flex; align-items: center; min-height: 2.4rem; font-size: 1.05rem; font-weight: 700; color: var(--accent); }
+        .new-record-actions { position: sticky; bottom: 0; z-index: 20; margin: 0 -1rem; padding: 0.75rem 1rem; border-top: 1px solid var(--border); background: var(--bg-card); box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.12); }
+        .new-record-form-error { margin: 0 0 0.75rem; padding: 0.65rem 0.85rem; border-left: 4px solid var(--red); border-radius: 6px; background: var(--red-dim); color: var(--red); }
+        @media (max-width: 900px) { .record-description-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+        @media (max-width: 620px) {
+            .record-description-grid { grid-template-columns: minmax(0, 1fr); }
+            .record-field-wide { grid-column: auto; }
+            .new-record-actions { margin: 0 -0.5rem; padding: 0.65rem 0.5rem; }
+        }
         input[type="file"] {
             background: var(--bg-input);
             border: 1px solid var(--border);

@@ -2196,6 +2196,9 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             return_calendar_date = date.fromisoformat(return_calendar_date).isoformat()
         except ValueError:
             return_calendar_date = ""
+        form_error = ""
+        field_errors: dict[str, str] = {}
+        form_values = request.form if request.method == "POST" else {}
         if request.method == "POST":
             try:
                 record_id = save_record(request.form)
@@ -2211,13 +2214,24 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
                     ))
                 return redirect(url_for("index"))
             except ValueError as exc:
-                flash(str(exc), "error")
+                form_error = str(exc)
+                if "Data wystąpienia" in form_error:
+                    field_errors["occurrence_at"] = form_error
+                elif "Data naprawienia" in form_error:
+                    field_errors["repaired_at"] = form_error
+                elif "Maszyna, typ i numer" in form_error:
+                    for field_name in ("machine_name", "machine_type", "serial_number"):
+                        field_errors[field_name] = form_error
         return render_template(
             "new_record.html",
             machine_names=list_machine_names(),
             event_types=EVENT_TYPES,
             initial_occurrence_at=format_datetime(request.args.get("occurrence_at")),
             return_calendar_date=return_calendar_date,
+            form_error=form_error,
+            field_errors=field_errors,
+            form_values=form_values,
+            labor_rate=get_labor_rate(),
         )
 
     @app.route("/import", methods=["GET", "POST"])
