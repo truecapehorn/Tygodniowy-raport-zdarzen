@@ -16,7 +16,7 @@ Jeśli plik `config.json` nie istnieje, aplikacja będzie używać wartości dom
   "HOST": "0.0.0.0",
   "PORT": 5001,
   "LABOR_RATE_PLN_PER_HOUR": 80,
-  "MAX_UPLOAD_SIZE_MB": 50,
+  "MAX_UPLOAD_SIZE_MB": 500,
   "REQUIRE_LOGIN": true,
   "AUTH_FILE": "auth.json"
 }
@@ -66,7 +66,7 @@ Jeśli plik `config.json` nie istnieje, aplikacja będzie używać wartości dom
 
 ### MAX_UPLOAD_SIZE_MB
 - **Typ:** integer
-- **Domyślnie:** `50`
+- **Domyślnie:** `500`
 - **Opis:** Maksymalny rozmiar pojedynczego przesyłanego pliku w megabajtach
 
 ### REQUIRE_LOGIN

@@ -1730,6 +1730,46 @@ class RepairReportAppTests(unittest.TestCase):
                 1,
             )
 
+    def test_admin_can_download_full_instance_backup_with_database_and_uploads(self):
+        self.client.post(
+            "/",
+            data={
+                "occurrence_at": "2026-08-30T08:00",
+                "machine_name": "Maszyna backup",
+                "machine_type": "Testowa",
+                "serial_number": "BACKUP-1",
+                "event_type": "Awaria",
+                "description": "Rekord kopii pełnej",
+            },
+        )
+        with self.app.app_context():
+            record_id = get_db().execute(
+                "SELECT id FROM repair_records WHERE description = ?", ("Rekord kopii pełnej",)
+            ).fetchone()["id"]
+        self.client.post(
+            f"/api/record/{record_id}/attachments",
+            data={"attachments": (io.BytesIO(b"zawartosc zalacznika"), "plik.txt")},
+            content_type="multipart/form-data",
+        )
+        with self.client.session_transaction() as session:
+            session["logged_in"] = True
+            session["role"] = "admin"
+
+        response = self.client.get("/admin/export/full-instance-backup")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("instance_backup_", response.headers["Content-Disposition"])
+        with zipfile.ZipFile(io.BytesIO(response.data)) as archive:
+            self.assertIn("instance/repair_reports.sqlite3", archive.namelist())
+            self.assertIn(f"instance/uploads/{record_id}/plik.txt", archive.namelist())
+            self.assertEqual(archive.read(f"instance/uploads/{record_id}/plik.txt"), b"zawartosc zalacznika")
+            snapshot = sqlite3.connect(":memory:")
+            snapshot.deserialize(archive.read("instance/repair_reports.sqlite3"))
+            self.assertEqual(
+                snapshot.execute("SELECT COUNT(*) FROM repair_records WHERE description = ?", ("Rekord kopii pełnej",)).fetchone()[0],
+                1,
+            )
+            snapshot.close()
+
     def test_user_login_and_create_permission(self):
         app = create_app(
             {

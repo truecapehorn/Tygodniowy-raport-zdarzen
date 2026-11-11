@@ -6,9 +6,12 @@ import calendar
 import io
 import json
 import math
+import queue
 import re
 import secrets
 import sqlite3
+import tempfile
+import threading
 import unicodedata
 import zipfile
 from datetime import date, datetime, timedelta, timezone
@@ -17,6 +20,7 @@ from typing import Any
 
 from flask import (
     Flask,
+    Response,
     flash,
     g,
     jsonify,
@@ -701,6 +705,39 @@ def calculate_downtime_hours(occurrence_at: datetime, repaired_at: datetime | No
     return round((repaired_at - occurrence_at).total_seconds() / 3600, 2)
 
 
+class _QueueZipWriter:
+    """Non-seekable ZIP target that yields bounded chunks to an HTTP response."""
+
+    def __init__(self, chunks: queue.Queue, cancelled: threading.Event):
+        self.chunks = chunks
+        self.cancelled = cancelled
+        self.position = 0
+
+    def write(self, data: bytes) -> int:
+        written = len(data)
+        for offset in range(0, written, 64 * 1024):
+            chunk = data[offset:offset + 64 * 1024]
+            while not self.cancelled.is_set():
+                try:
+                    self.chunks.put(chunk, timeout=0.1)
+                    self.position += len(chunk)
+                    break
+                except queue.Full:
+                    continue
+            if self.cancelled.is_set():
+                raise BrokenPipeError("Klient przerwał pobieranie kopii.")
+        return written
+
+    def tell(self) -> int:
+        return self.position
+
+    def seekable(self) -> bool:
+        return False
+
+    def flush(self) -> None:
+        return None
+
+
 def machine_key_from_form(form: dict[str, Any]) -> tuple[str, str, str]:
     return (
         str(form.get("machine_name", "")).strip(),
@@ -722,7 +759,7 @@ def _load_config() -> dict[str, Any]:
         "HOST": "0.0.0.0",
         "PORT": 5001,
         "LABOR_RATE_PLN_PER_HOUR": 80,
-        "MAX_UPLOAD_SIZE_MB": 50,
+        "MAX_UPLOAD_SIZE_MB": 500,
         "REQUIRE_LOGIN": True,
         "AUTH_FILE": "auth.json",
     }
@@ -2357,6 +2394,82 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             download_name="zdarzenia_z_zalacznikami.zip",
             mimetype="application/zip",
         )
+
+    @app.route("/admin/export/full-instance-backup")
+    def export_full_instance_backup():
+        if not app.config.get("TESTING") and session.get("role") != "admin":
+            flash("Pełną kopię bazy może pobrać tylko administrator.", "error")
+            return redirect(url_for("data_page"))
+
+        snapshot_directory = tempfile.TemporaryDirectory(prefix="instance-backup-")
+        snapshot_path = Path(snapshot_directory.name) / "repair_reports.sqlite3"
+        source_db = sqlite3.connect(current_app_database(), timeout=60)
+        snapshot_db = sqlite3.connect(str(snapshot_path))
+        try:
+            source_db.backup(snapshot_db, pages=256, sleep=0.1)
+        finally:
+            snapshot_db.close()
+            source_db.close()
+
+        chunks: queue.Queue = queue.Queue(maxsize=8)
+        cancelled = threading.Event()
+        errors: list[BaseException] = []
+        zip_writer = _QueueZipWriter(chunks, cancelled)
+        uploads_root = Path(current_app_uploads())
+
+        def produce_archive() -> None:
+            try:
+                with zipfile.ZipFile(zip_writer, "w", compression=zipfile.ZIP_STORED, allowZip64=True) as archive:
+                    archive.write(snapshot_path, "instance/repair_reports.sqlite3")
+                    if uploads_root.is_dir():
+                        for file_path in uploads_root.rglob("*"):
+                            if cancelled.is_set():
+                                break
+                            if file_path.is_file():
+                                relative_path = file_path.relative_to(uploads_root).as_posix()
+                                archive.write(file_path, f"instance/uploads/{relative_path}")
+            except BaseException as exc:
+                errors.append(exc)
+            finally:
+                if not cancelled.is_set():
+                    try:
+                        chunks.put(None, timeout=1)
+                    except queue.Full:
+                        pass
+
+        producer = threading.Thread(target=produce_archive, name="instance-backup-zip", daemon=True)
+        producer.start()
+
+        def stream_archive():
+            try:
+                while True:
+                    try:
+                        chunk = chunks.get(timeout=0.1)
+                    except queue.Empty:
+                        if not producer.is_alive():
+                            break
+                        continue
+                    if chunk is None:
+                        break
+                    yield chunk
+                if errors:
+                    raise errors[0]
+            finally:
+                cancelled.set()
+                producer.join(timeout=2)
+                snapshot_directory.cleanup()
+
+        log_user_activity(
+            "export_full_backup",
+            "Rozpoczęto pobieranie pełnej kopii bazy i załączników.",
+            target_type="backup",
+        )
+        response = Response(stream_archive(), mimetype="application/zip")
+        response.headers["Content-Disposition"] = (
+            f'attachment; filename="instance_backup_{datetime.now().strftime("%Y%m%d_%H%M%S")}.zip"'
+        )
+        response.headers["X-Accel-Buffering"] = "no"
+        return response
 
     @app.route("/filter")
     def filter_page():

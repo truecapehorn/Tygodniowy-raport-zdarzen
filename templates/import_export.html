@@ -79,8 +79,9 @@
     <section class="card transfer-card">
         <div class="card-title">Baza zdarzeń</div>
         <p class="transfer-description">
-            Importuj zdarzenia z Excela albo paczkę ZIP wyeksportowaną z załącznikami. Paczka ZIP
-            odtwarza też załączniki i przypina je do właściwych zdarzeń. Import nie usuwa istniejących rekordów.
+            Importuj zdarzenia z Excela albo pobierz pełną kopię do ręcznego odtworzenia folderu
+            <strong>instance</strong> na docelowym komputerze. Pełna kopia zawiera bazę i załączniki.
+            Import zdarzeń nie usuwa istniejących rekordów.
         </p>
         <div class="transfer-actions">
             {% if user_role == 'admin' or (current_user and current_user.can_create_records) %}
@@ -97,7 +98,9 @@
                 <span class="transfer-action-label">Eksport danych</span>
                 <div class="transfer-export-buttons">
                     <a href="{{ url_for('export_data') }}" class="btn btn-success">Eksportuj zdarzenia (.xlsx)</a>
-                    <a href="{{ url_for('export_records_bundle') }}" class="btn btn-success">Eksportuj zdarzenia i załączniki (.zip)</a>
+                    {% if user_role == 'admin' %}
+                    <a href="{{ url_for('export_full_instance_backup') }}" class="btn btn-success">Pobierz pełną kopię bazy (.zip)</a>
+                    {% endif %}
                 </div>
             </div>
             {% endif %}
