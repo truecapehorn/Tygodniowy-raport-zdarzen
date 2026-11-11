@@ -145,12 +145,12 @@ HEADER_ALIASES = {
 }
 
 MACHINE_EXPORT_COLUMNS = [
-    "Firma",
-    "Nazwa",
-    "Nr fab.",
-    "Rodzaj",
+    "Nazwa / firma",
+    "Typ / model",
+    "Numer seryjny",
+    "Rodzaj maszyny",
     "Data uruchomienia",
-    "Okres gwarancji [mies.]",
+    "Okres gwarancji (miesiące)",
     "Data końca gwarancji",
     "Moc",
     "Jednostka mocy",
@@ -160,8 +160,10 @@ MACHINE_EXPORT_COLUMNS = [
 ]
 
 MACHINE_IMPORT_HEADER_ALIASES = {
+    "nazwa firma": "name",
     "firma": "name",
     "maszyna": "name",
+    "typ model": "machine_type",
     "nazwa": "machine_type",
     "model": "machine_type",
     "typ": "machine_type",
@@ -172,6 +174,7 @@ MACHINE_IMPORT_HEADER_ALIASES = {
     "rodzaj maszyny": "machine_category",
     "data uruchomienia": "commissioning_date",
     "okres gwarancji mies": "warranty_period_months",
+    "okres gwarancji miesiace": "warranty_period_months",
     "okres gwarancji": "warranty_period_months",
     "data konca gwarancji": "warranty_end_date",
     "moc": "power",

@@ -2019,16 +2019,17 @@ class RepairReportAppTests(unittest.TestCase):
         sheet.title = "MASZYNY"
         sheet.append(
             [
-                "Firma",
-                "Nazwa",
-                "Nr fab.",
-                "Rodzaj",
+                "Nazwa / firma",
+                "Typ / model",
+                "Numer seryjny",
+                "Rodzaj maszyny",
                 "Data uruchomienia",
-                "Okres gwarancji [mies.]",
+                "Okres gwarancji (miesiące)",
+                "Data końca gwarancji",
                 "Moc",
-                "Jednostka",
+                "Jednostka mocy",
                 "Zabezpieczenie [A]",
-                "Sprzedawca",
+                "Dane sprzedawcy",
                 "Uwagi",
             ]
         )
@@ -2040,6 +2041,7 @@ class RepairReportAppTests(unittest.TestCase):
                 "Tokarka",
                 datetime(2023, 1, 31),
                 12,
+                datetime(2024, 1, 31),
                 7.5,
                 "kW",
                 16,
@@ -2055,6 +2057,7 @@ class RepairReportAppTests(unittest.TestCase):
                 "Frezarka",
                 datetime(2024, 3, 1),
                 24,
+                datetime(2026, 3, 1),
                 11,
                 "kW",
                 20,
@@ -2100,8 +2103,23 @@ class RepairReportAppTests(unittest.TestCase):
         self.assertEqual(exported.status_code, 200)
         exported_workbook = load_workbook(io.BytesIO(exported.data), data_only=True)
         exported_rows = list(exported_workbook.active.iter_rows(values_only=True))
-        self.assertEqual(exported_rows[0][0:3], ("Firma", "Nazwa", "Nr fab."))
-        self.assertIn("Data końca gwarancji", exported_rows[0])
+        self.assertEqual(
+            exported_rows[0],
+            (
+                "Nazwa / firma",
+                "Typ / model",
+                "Numer seryjny",
+                "Rodzaj maszyny",
+                "Data uruchomienia",
+                "Okres gwarancji (miesiące)",
+                "Data końca gwarancji",
+                "Moc",
+                "Jednostka mocy",
+                "Zabezpieczenie [A]",
+                "Dane sprzedawcy",
+                "Uwagi",
+            ),
+        )
         self.assertEqual(exported_workbook.active.title, "MASZYNY")
 
     def test_existing_machine_database_is_migrated_without_losing_rows(self):
