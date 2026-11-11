@@ -15,7 +15,7 @@
             <thead>
                 <tr>
                     <th aria-sort="none"><button type="button" class="machine-sort-button">NAZWA / FIRMA <span aria-hidden="true">↕</span></button></th>
-                    <th aria-sort="none"><button type="button" class="machine-sort-button">NAZWA / MODEL <span aria-hidden="true">↕</span></button></th>
+                    <th aria-sort="none"><button type="button" class="machine-sort-button">TYP / MODEL <span aria-hidden="true">↕</span></button></th>
                     <th aria-sort="none"><button type="button" class="machine-sort-button">NUMER SERYJNY <span aria-hidden="true">↕</span></button></th>
                     <th aria-sort="none"><button type="button" class="machine-sort-button">RODZAJ <span aria-hidden="true">↕</span></button></th>
                     <th aria-sort="none"><button type="button" class="machine-sort-button">POWIĄZANE WPISY <span aria-hidden="true">↕</span></button></th>
@@ -75,7 +75,7 @@
                     <input id="machine-name" name="name" required>
                 </div>
                 <div class="field">
-                    <label for="machine-type">Nazwa / model</label>
+                    <label for="machine-type">Typ / model</label>
                     <input id="machine-type" name="machine_type" required>
                 </div>
                 <div class="field">
@@ -221,7 +221,7 @@ function machineDetails(row) {
     const data = row.dataset;
     const items = [
         ['Nazwa / firma', data.name],
-        ['Nazwa / model', data.machineType],
+        ['Typ / model', data.machineType],
         ['Numer seryjny', data.serialNumber],
         ['Rodzaj maszyny', data.machineCategory],
         ['Data uruchomienia', data.commissioningDate],

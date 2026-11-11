@@ -1937,7 +1937,7 @@ class RepairReportAppTests(unittest.TestCase):
         self.assertEqual(page_html.count('class="machine-sort-button"'), 5)
         for heading in (
             "NAZWA / FIRMA",
-            "NAZWA / MODEL",
+            "TYP / MODEL",
             "NUMER SERYJNY",
             "RODZAJ",
             "POWIĄZANE WPISY",
