@@ -2757,7 +2757,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         # --- nagłówek dokumentu ---
         record_number = f'{record["record_year"]} / W{record["record_week"]} / {record["week_sequence"]}'
         header = Table(
-            [[Paragraph("TYGODNIOWY RAPORT NAPRAW  ·  DUR", label),
+            [[Paragraph("RAPORT", label),
               Paragraph(f"NR <b>{text(record_number)}</b>", right_label)]],
             colWidths=[content_width * 0.6, content_width * 0.4],
         )
