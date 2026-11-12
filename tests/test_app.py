@@ -24,6 +24,14 @@ from app import (
 )
 
 
+def get_static_css(client):
+    response = client.get("/static/css/app.css")
+    try:
+        return response.get_data(as_text=True)
+    finally:
+        response.close()
+
+
 class RepairReportAppTests(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
@@ -354,7 +362,7 @@ class RepairReportAppTests(unittest.TestCase):
         page = self.client.get("/scheduled/new")
         self.assertEqual(page.status_code, 200)
         html = page.get_data(as_text=True)
-        css = self.client.get("/static/css/app.css").get_data(as_text=True)
+        css = get_static_css(self.client)
         self.assertIn('id="scheduled-machine-list"', html)
         self.assertIn('id="scheduled-machine-type-list"', html)
         self.assertIn('id="scheduled-serial-number-list"', html)
@@ -413,7 +421,7 @@ class RepairReportAppTests(unittest.TestCase):
         self.assertEqual(response.status_code, 302)
 
         year_page = self.client.get("/scheduled?calendar_view=year&year=2026")
-        css = self.client.get("/static/css/app.css").get_data(as_text=True)
+        css = get_static_css(self.client)
         self.assertEqual(year_page.status_code, 200)
         year_html = year_page.get_data(as_text=True)
         self.assertIn('data-calendar-view="year"', year_html)
@@ -490,7 +498,7 @@ class RepairReportAppTests(unittest.TestCase):
         selected_week = self.client.get("/scheduled?calendar_view=week&iso_week=2026-W20")
         self.assertEqual(selected_week.status_code, 200)
         selected_week_html = selected_week.get_data(as_text=True)
-        css = self.client.get("/static/css/app.css").get_data(as_text=True)
+        css = get_static_css(self.client)
         self.assertIn(target_week.strftime("%d.%m"), selected_week_html)
         self.assertIn("10:30 · Interwencja · Prasa Yellow", selected_week_html)
         self.assertIn('class="calendar-event badge badge-interwencja calendar-scheduled-event"', selected_week_html)
@@ -699,7 +707,7 @@ class RepairReportAppTests(unittest.TestCase):
 
         page = self.client.get("/scheduled")
         html = page.get_data(as_text=True)
-        css = self.client.get("/static/css/app.css").get_data(as_text=True)
+        css = get_static_css(self.client)
         self.assertIn("Zaplanuj nowe zdarzenie", html)
         self.assertIn("15-12-2020 13:45", html)
         form_page = self.client.get("/scheduled/new").get_data(as_text=True)
@@ -871,7 +879,7 @@ class RepairReportAppTests(unittest.TestCase):
         owner_page = self.client.get("/scheduled").get_data(as_text=True)
         self.assertIn("Prywatny przegląd", owner_page)
         self.assertIn('class="badge badge-wlasne">Własne</span>', owner_page)
-        css = self.client.get("/static/css/app.css").get_data(as_text=True)
+        css = get_static_css(self.client)
         self.assertIn(".badge-wlasne       { background: var(--pink-dim);", css)
         self.assertEqual(
             self.client.get("/api/scheduled-events").get_json()[0]["description"],
@@ -1702,7 +1710,7 @@ class RepairReportAppTests(unittest.TestCase):
                 self.assertEqual(response.status_code, 200)
                 self.assertIn("date-no-repair", page)
                 self.assertIn('title="Brak daty naprawienia"', page)
-        css = self.client.get("/static/css/app.css").get_data(as_text=True)
+        css = get_static_css(self.client)
         self.assertIn(".date-no-repair { color: var(--orange); }", css)
 
     def test_import_excel_file(self):
