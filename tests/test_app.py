@@ -1967,6 +1967,7 @@ class RepairReportAppTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertIn("Strona główna", response.get_data(as_text=True))
+        self.assertIn(">Rejestr zdarzeń</a>", response.get_data(as_text=True))
         page = response.get_data(as_text=True)
         self.assertIn('class="logout-link"', page)
         self.assertIn("<strong>operator</strong>", page)
