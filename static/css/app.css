@@ -1223,6 +1223,16 @@ body { font-family: Arial, sans-serif; margin: 2rem; }
 .u-gap-4rem { gap: .4rem; }
 .u-color-var-red { color: var(--red); }
 
+/* Account page */
+.account-page { max-width: 440px; margin: 1.5rem auto 0; }
+.account-page-title { justify-content: center; margin-bottom: 1.25rem; }
+.account-card { margin-bottom: 1.25rem; }
+.account-logout { margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+.account-logout .btn { width: 100%; justify-content: center; min-height: 2.75rem; }
+@media (max-width: 520px) {
+    .account-page { margin-top: .75rem; }
+}
+
 /* Reusable layout and text helpers */
 .flex-between { display: flex; justify-content: space-between; align-items: center; }
 .text-sm { font-size: .8rem; }

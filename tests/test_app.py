@@ -1969,8 +1969,13 @@ class RepairReportAppTests(unittest.TestCase):
         self.assertIn("Strona główna", response.get_data(as_text=True))
         self.assertIn(">Rejestr zdarzeń</a>", response.get_data(as_text=True))
         page = response.get_data(as_text=True)
-        self.assertIn('class="logout-link"', page)
-        self.assertIn("<strong>operator</strong>", page)
+        self.assertIn('href="/change-password"', page)
+        self.assertIn(">operator</a>", page)
+        self.assertNotIn(">Zmień hasło</a>", page)
+
+        account_page = client.get("/change-password").get_data(as_text=True)
+        self.assertIn("Zmiana hasła", account_page)
+        self.assertIn('href="/logout"', account_page)
 
         response = client.get("/new")
         self.assertEqual(response.status_code, 200)

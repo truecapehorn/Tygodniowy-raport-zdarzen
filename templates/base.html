@@ -41,11 +41,8 @@
             <li><a href="{{ url_for('data_page') }}"      {% if request.endpoint == 'data_page'      %}class="active"{% endif %}>Import / Eksport</a></li>
             <li><a href="{{ url_for('admin_users') }}"    {% if request.endpoint == 'admin_users'    %}class="active"{% endif %}>Użytkownicy</a></li>
             {% endif %}
-            {% if user_role != 'guest' %}
-            <li><a href="{{ url_for('change_password') }}" {% if request.endpoint == 'change_password' %}class="active"{% endif %}>Zmień hasło</a></li>
-            {% endif %}
             <li><button class="theme-toggle" id="theme-toggle" type="button" aria-label="Przełącz motyw"><span aria-hidden="true">☾</span><span id="theme-toggle-label">Motyw</span></button></li>
-            <li><a class="logout-link" href="{{ url_for('logout') }}"><span>Wyloguj się</span><strong>{{ current_username }}</strong></a></li>
+            <li><a href="{{ url_for('change_password') }}" {% if request.endpoint == 'change_password' %}class="active"{% endif %}>{{ current_username }}</a></li>
         </ul>
     </nav>
 
