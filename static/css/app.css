@@ -220,6 +220,19 @@
     .activity-sort-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     .activity-sort-button span { margin-left: .25rem; }
 
+.scheduled-events-table { min-width: 900px; }
+.scheduled-sort-button {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+.scheduled-sort-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.scheduled-sort-button span { margin-left: .25rem; }
+
 /* ─── Base: extracted from base.html ─── */
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         body {

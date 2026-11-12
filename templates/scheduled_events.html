@@ -224,7 +224,7 @@ data-notes="{{ event.notes or '' }}"
     <div class="card-title">Zaplanowane zdarzenia</div>
     {% if scheduled_events %}
     <div class="table-wrap">
-        <table class="scheduled-events-table">
+        <table class="scheduled-events-table" data-default-sort-column="3" data-default-sort-direction="asc">
             <colgroup>
                 <col class="u-width-10">
                 <col class="u-width-12">
@@ -236,13 +236,13 @@ data-notes="{{ event.notes or '' }}"
             </colgroup>
             <thead>
                 <tr>
-                    <th>Maszyna</th>
-                    <th>Typ / numer</th>
-                    <th>Rodzaj</th>
-                    <th>Planowana data</th>
-                    <th>Powtarzanie</th>
-                    <th>Opis</th>
-                    <th>Akcje</th>
+                    <th aria-sort="none"><button type="button" class="scheduled-sort-button">Maszyna <span aria-hidden="true">↕</span></button></th>
+                    <th aria-sort="none"><button type="button" class="scheduled-sort-button">Typ / numer <span aria-hidden="true">↕</span></button></th>
+                    <th aria-sort="none"><button type="button" class="scheduled-sort-button">Rodzaj <span aria-hidden="true">↕</span></button></th>
+                    <th aria-sort="none"><button type="button" class="scheduled-sort-button">Planowana data <span aria-hidden="true">↕</span></button></th>
+                    <th aria-sort="none"><button type="button" class="scheduled-sort-button">Powtarzanie <span aria-hidden="true">↕</span></button></th>
+                    <th aria-sort="none"><button type="button" class="scheduled-sort-button">Opis <span aria-hidden="true">↕</span></button></th>
+                    <th aria-sort="none"><button type="button" class="scheduled-sort-button">Akcje <span aria-hidden="true">↕</span></button></th>
                 </tr>
             </thead>
             <tbody>
@@ -298,7 +298,7 @@ data-notes="{{ event.notes or '' }}"
     <div class="card-title">Wykonane zdarzenia</div>
     {% if completed_events %}
     <div class="table-wrap">
-        <table class="scheduled-events-table">
+        <table class="scheduled-events-table" data-default-sort-column="3" data-default-sort-direction="desc">
             <colgroup>
                 <col class="u-width-10">
                 <col class="u-width-12">
@@ -310,13 +310,13 @@ data-notes="{{ event.notes or '' }}"
             </colgroup>
             <thead>
                 <tr>
-                    <th>Maszyna</th>
-                    <th>Typ / numer</th>
-                    <th>Rodzaj</th>
-                    <th>Planowana data</th>
-                    <th>Powtarzanie</th>
-                    <th>Opis</th>
-                    <th>Akcje</th>
+                    <th aria-sort="none"><button type="button" class="scheduled-sort-button">Maszyna <span aria-hidden="true">↕</span></button></th>
+                    <th aria-sort="none"><button type="button" class="scheduled-sort-button">Typ / numer <span aria-hidden="true">↕</span></button></th>
+                    <th aria-sort="none"><button type="button" class="scheduled-sort-button">Rodzaj <span aria-hidden="true">↕</span></button></th>
+                    <th aria-sort="none"><button type="button" class="scheduled-sort-button">Planowana data <span aria-hidden="true">↕</span></button></th>
+                    <th aria-sort="none"><button type="button" class="scheduled-sort-button">Powtarzanie <span aria-hidden="true">↕</span></button></th>
+                    <th aria-sort="none"><button type="button" class="scheduled-sort-button">Opis <span aria-hidden="true">↕</span></button></th>
+                    <th aria-sort="none"><button type="button" class="scheduled-sort-button">Akcje <span aria-hidden="true">↕</span></button></th>
                 </tr>
             </thead>
             <tbody>
@@ -452,6 +452,46 @@ data-notes="{{ event.notes or '' }}"
 
 
 <script>
+function sortScheduledTable(table, columnIndex, direction) {
+    const body = table.tBodies[0];
+    const rows = Array.from(body.rows);
+    rows.sort((left, right) => {
+        let leftValue;
+        let rightValue;
+        if (columnIndex === 3) {
+            leftValue = left.dataset.date || '';
+            rightValue = right.dataset.date || '';
+        } else {
+            leftValue = left.cells[columnIndex]?.innerText.trim() || '';
+            rightValue = right.cells[columnIndex]?.innerText.trim() || '';
+        }
+        const comparison = leftValue.localeCompare(rightValue, 'pl', {numeric: true, sensitivity: 'base'});
+        return comparison * (direction === 'asc' ? 1 : -1);
+    });
+    rows.forEach((row) => body.appendChild(row));
+    table.dataset.sortColumn = String(columnIndex);
+    table.dataset.sortDirection = direction;
+    table.querySelectorAll('thead th').forEach((header, index) => {
+        const active = index === columnIndex;
+        header.setAttribute('aria-sort', active ? (direction === 'asc' ? 'ascending' : 'descending') : 'none');
+        const indicator = header.querySelector('.scheduled-sort-button span');
+        if (indicator) indicator.textContent = active ? (direction === 'asc' ? '↑' : '↓') : '↕';
+    });
+}
+
+document.querySelectorAll('.scheduled-events-table').forEach((table) => {
+    const defaultColumn = Number(table.dataset.defaultSortColumn || 0);
+    const defaultDirection = table.dataset.defaultSortDirection || 'asc';
+    sortScheduledTable(table, defaultColumn, defaultDirection);
+    table.querySelectorAll('.scheduled-sort-button').forEach((button, columnIndex) => {
+        button.addEventListener('click', () => {
+            const isCurrentColumn = Number(table.dataset.sortColumn) === columnIndex;
+            const direction = isCurrentColumn && table.dataset.sortDirection === 'asc' ? 'desc' : 'asc';
+            sortScheduledTable(table, columnIndex, direction);
+        });
+    });
+});
+
 const scheduledModal = document.getElementById('scheduled-modal');
 const scheduledModalTitle = document.getElementById('scheduled-modal-title');
 const scheduledModalContent = document.getElementById('scheduled-modal-content');
