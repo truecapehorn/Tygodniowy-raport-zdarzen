@@ -2878,8 +2878,13 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
                 Paragraph("Załączniki — zdjęcia", heading),
                 HRFlowable(width="100%", thickness=1.2, color=accent, spaceBefore=2, spaceAfter=3 * mm),
             ]
+            image_max_width = A4[0] - 20 * mm
+            image_max_height = 220 * mm
             for index, (path, original_name) in enumerate(image_files, start=1):
-                image = PdfImage(str(path), width=170 * mm, height=105 * mm, kind="proportional", hAlign="LEFT")
+                image = PdfImage(
+                    str(path), width=image_max_width, height=image_max_height,
+                    kind="proportional", hAlign="CENTER",
+                )
                 caption = f'<font name="{bold_font}">Zdjęcie {index} z {len(image_files)}</font>  <font size="7.5" color="#667085">{text(original_name)}</font>'
                 story += [Paragraph(caption, normal), Spacer(1, 2 * mm), image, Spacer(1, 7 * mm)]
 
