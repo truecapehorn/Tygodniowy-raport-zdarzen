@@ -51,23 +51,23 @@ data-replaced-parts="{{ event.replaced_parts or '' }}"
 data-notes="{{ event.notes or '' }}"
 {%- endmacro %}
 
-<div class="page-title">Planowanie zdarzeń <small>Harmonogram przeglądów, interwencji i działań utrzymania ruchu</small></div>
-
-<div class="form-grid">
-    <div class="card u-text-align-center">
-        <div class="text-muted">Zaplanowane zdarzenia</div>
-        <strong class="u-display-block u-font-size-2rem u-color-var-accent">{{ planned_count }}</strong>
-    </div>
-    <div class="card u-text-align-center">
-        <div class="text-muted">Zrealizowane zdarzenia</div>
-        <strong class="u-display-block u-font-size-2rem u-color-var-green">{{ completed_count }}</strong>
-    </div>
-</div>
-<div class="actions u-margin-0-0-1-25rem">
+<div class="scheduled-page-heading">
+    <div class="page-title scheduled-page-title">Planowanie zdarzeń <small>Harmonogram przeglądów, interwencji i działań utrzymania ruchu</small>
     {% if user_role == 'admin' or (current_user and current_user.can_create_records) %}
-    <a href="{{ url_for('new_scheduled_event') }}" class="btn btn-primary">+ Zaplanuj nowe zdarzenie</a>
+    <a href="{{ url_for('new_scheduled_event') }}" class="btn btn-primary btn-sm">+ Zaplanuj nowe zdarzenie</a>
     {% endif %}
+    </div>
 </div>
+<section class="scheduled-summary" aria-label="Podsumowanie zdarzeń">
+    <div class="scheduled-summary-item">
+        <span class="text-muted">Zaplanowane</span>
+        <strong class="u-color-var-accent">{{ planned_count }}</strong>
+    </div>
+    <div class="scheduled-summary-item">
+        <span class="text-muted">Zrealizowane</span>
+        <strong class="u-color-var-green">{{ completed_count }}</strong>
+    </div>
+</section>
 
 <div class="card">
     <div class="calendar-toolbar">

@@ -16,7 +16,7 @@
     <div class="page-heading-main">
         <div class="page-title">Rejestr działań utrzymania ruchu <small>Zestawienie ostatnich zdarzeń</small></div>
         {% if user_role == 'admin' or (current_user and current_user.can_create_records) %}
-        <a href="{{ url_for('new_record') }}" class="btn btn-primary">+ Dodaj zdarzenie</a>
+        <a href="{{ url_for('new_record') }}" class="btn btn-primary btn-sm">+ Dodaj zdarzenie</a>
         {% endif %}
     </div>
     <a href="{{ url_for('records_calendar', calendar_view='day') }}" class="btn btn-outline">Kalendarz wszystkich zdarzeń</a>

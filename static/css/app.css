@@ -1022,6 +1022,40 @@ body { font-family: Arial, sans-serif; margin: 2rem; }
     @media (max-width: 600px) { .calendar-year-view { grid-template-columns: 1fr; } }
 
 /* Scheduled events calendar additions and layout differences */
+.scheduled-page-heading {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: .75rem;
+    margin-bottom: .75rem;
+}
+.scheduled-page-heading .page-title { margin: 0; }
+.scheduled-page-title { flex-wrap: wrap; align-items: center; }
+.scheduled-summary {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: .75rem;
+    margin-bottom: .75rem;
+}
+.scheduled-summary-item {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: .55rem;
+    min-width: 0;
+    min-height: 2.75rem;
+    padding: .35rem .75rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg-card);
+}
+.scheduled-summary-item strong { font-size: 1.2rem; line-height: 1; }
+@media (max-width: 760px) {
+    .scheduled-page-heading { align-items: flex-start; flex-direction: column; }
+}
+@media (max-width: 420px) {
+    .scheduled-summary-item { justify-content: space-between; gap: .25rem; padding-inline: .5rem; font-size: .8rem; }
+}
 .scheduled-events-table {
     table-layout: fixed;
     min-width: 1000px;
