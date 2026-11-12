@@ -37,12 +37,21 @@ from flask import (
 from openpyxl import Workbook, load_workbook
 from openpyxl.utils.exceptions import InvalidFileException
 from reportlab.lib import colors
-from reportlab.lib.enums import TA_LEFT
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.platypus import Image as PdfImage
-from reportlab.platypus import KeepTogether, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import (
+    HRFlowable,
+    KeepTogether,
+    PageBreak,
+    Paragraph,
+    SimpleDocTemplate,
+    Spacer,
+    Table,
+    TableStyle,
+)
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen.canvas import Canvas
@@ -68,6 +77,96 @@ class PageNumberCanvas(Canvas):
             self.drawCentredString(A4[0] / 2, 8 * mm, f"{self._pageNumber}/{page_count}")
             super().showPage()
         super().save()
+
+
+# Kolory eksportu PDF rekordu: (kolor główny, jasne tło) – spójne z plakietkami w aplikacji.
+RECORD_PDF_EVENT_COLORS = {
+    "Awaria": ("#b42318", "#fef0ef"),
+    "Przegląd": ("#1769aa", "#e6f1fa"),
+    "Modernizacja": ("#6941a5", "#f1eafe"),
+    "Interwencja": ("#8a6100", "#fff7d6"),
+    "Inne": ("#475467", "#eef1f4"),
+}
+
+# Pary (zwykła, pogrubiona) czcionek z polskimi znakami; pierwsza znaleziona wygrywa.
+RECORD_PDF_FONT_CANDIDATES = (
+    (r"C:\Windows\Fonts\arial.ttf", r"C:\Windows\Fonts\arialbd.ttf"),
+    (r"C:\Windows\Fonts\segoeui.ttf", r"C:\Windows\Fonts\segoeuib.ttf"),
+    ("/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+     "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"),
+    ("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
+)
+
+
+def register_record_pdf_fonts() -> tuple[str, str]:
+    """Register a regular/bold font pair that supports Polish characters.
+
+    Falls back to Helvetica (no Polish diacritics) when no TTF pair is installed.
+    """
+    registered = pdfmetrics.getRegisteredFontNames()
+    if "ReportFont" in registered and "ReportFont-Bold" in registered:
+        return "ReportFont", "ReportFont-Bold"
+    for regular, bold in RECORD_PDF_FONT_CANDIDATES:
+        if Path(regular).exists() and Path(bold).exists():
+            pdfmetrics.registerFont(TTFont("ReportFont", regular))
+            pdfmetrics.registerFont(TTFont("ReportFont-Bold", bold))
+            pdfmetrics.registerFontFamily(
+                "ReportFont", normal="ReportFont", bold="ReportFont-Bold",
+                italic="ReportFont", boldItalic="ReportFont-Bold",
+            )
+            return "ReportFont", "ReportFont-Bold"
+    return "Helvetica", "Helvetica-Bold"
+
+
+def pdf_number(value: Any, decimals: int = 2) -> str:
+    """Polish number format for reports: 1 234,50."""
+    try:
+        number = float(value or 0)
+    except (TypeError, ValueError):
+        number = 0.0
+    return f"{number:,.{decimals}f}".replace(",", "\u00a0").replace(".", ",")
+
+
+def pdf_duration(hours: Any) -> str:
+    """Human readable duration for a number of hours, e.g. 0.98 -> '59 min'."""
+    try:
+        minutes = round(float(hours or 0) * 60)
+    except (TypeError, ValueError):
+        return ""
+    if minutes <= 0:
+        return ""
+    if minutes < 60:
+        return f"{minutes} min"
+    return f"{minutes // 60} h {minutes % 60:02d} min"
+
+
+def make_record_pdf_canvas(font_name: str, footer_text: str):
+    """Canvas with a footer (generation info) and 'Strona x z y'."""
+
+    class RecordPdfCanvas(Canvas):
+        def __init__(self, *args: Any, **kwargs: Any):
+            super().__init__(*args, **kwargs)
+            self._saved_page_states: list[dict[str, Any]] = []
+
+        def showPage(self) -> None:
+            self._saved_page_states.append(dict(self.__dict__))
+            self._startPage()
+
+        def save(self) -> None:
+            page_count = len(self._saved_page_states)
+            for page_state in self._saved_page_states:
+                self.__dict__.update(page_state)
+                self.setStrokeColor(colors.HexColor("#d5dde5"))
+                self.setLineWidth(0.5)
+                self.line(16 * mm, 14 * mm, A4[0] - 16 * mm, 14 * mm)
+                self.setFillColor(colors.HexColor("#667085"))
+                self.setFont(font_name, 7.5)
+                self.drawString(16 * mm, 10 * mm, footer_text)
+                self.drawRightString(A4[0] - 16 * mm, 10 * mm, f"Strona {self._pageNumber} z {page_count}")
+                super().showPage()
+            super().save()
+
+    return RecordPdfCanvas
 
 
 EVENT_TYPES = [
@@ -2597,7 +2696,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
 
     @app.route("/record/<int:record_id>/pdf")
     def record_pdf(record_id: int):
-        """Export one record as a monochrome PDF, including image attachments."""
+        """Export one record as a colour PDF: data on page 1, image attachments on the next pages."""
         db = get_db()
         row = db.execute(
             """
@@ -2617,72 +2716,186 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         record = dict(row)
         output = io.BytesIO()
 
-        # Prefer an installed Windows font so Polish characters are preserved.
-        font_path = next((Path(p) for p in (
-            r"C:\Windows\Fonts\arial.ttf",
-            r"C:\Windows\Fonts\segoeui.ttf",
-            r"/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        ) if Path(p).exists()), None)
-        font_name = "Helvetica"
-        if font_path:
-            font_name = "ReportFont"
-            pdfmetrics.registerFont(TTFont(font_name, str(font_path)))
+        font_name, bold_font = register_record_pdf_fonts()
+        accent_hex, tint_hex = RECORD_PDF_EVENT_COLORS.get(record["event_type"], RECORD_PDF_EVENT_COLORS["Inne"])
+        accent, tint = colors.HexColor(accent_hex), colors.HexColor(tint_hex)
+        ink, muted, rule = colors.HexColor("#1f2933"), colors.HexColor("#667085"), colors.HexColor("#d5dde5")
+        content_width = A4[0] - 32 * mm
 
-        styles = getSampleStyleSheet()
-        normal = ParagraphStyle("record-normal", parent=styles["Normal"], fontName=font_name,
-                                fontSize=8.5, leading=11, textColor=colors.black)
-        heading = ParagraphStyle("record-heading", parent=normal, fontSize=15, leading=18,
-                                 spaceAfter=5, alignment=TA_LEFT)
-        label = ParagraphStyle("record-label", parent=normal, fontName=font_name,
-                       fontSize=8, leading=10, textColor=colors.black)
+        def style(name: str, **kwargs: Any) -> ParagraphStyle:
+            options: dict[str, Any] = dict(fontName=font_name, fontSize=9.5, leading=13, textColor=ink)
+            options.update(kwargs)
+            return ParagraphStyle(name, **options)
+
+        normal = style("record-normal")
+        small = style("record-small", fontSize=7.5, leading=9.5, textColor=muted)
+        label = style("record-label", fontName=bold_font, fontSize=7.5, leading=9.5, textColor=muted)
+        section_label = style("record-section", fontName=bold_font, fontSize=7.5, leading=9.5, textColor=accent)
+        title_style = style("record-title", fontName=bold_font, fontSize=20, leading=23)
+        subtitle = style("record-subtitle", fontSize=10.5, leading=14, textColor=muted)
+        big = style("record-big", fontName=bold_font, fontSize=13, leading=16)
+        badge = style("record-badge", fontName=bold_font, fontSize=9, leading=11, textColor=colors.white, alignment=TA_CENTER)
+        right = style("record-right", alignment=TA_RIGHT)
+        right_bold = style("record-right-bold", fontName=bold_font, alignment=TA_RIGHT)
+        right_label = style("record-right-label", fontName=bold_font, fontSize=7.5, leading=9.5, textColor=muted, alignment=TA_RIGHT)
+        heading = style("record-heading", fontName=bold_font, fontSize=14, leading=17)
 
         def text(value: Any) -> str:
             return str(value if value not in (None, "") else "—").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br/>")
 
-        fields = [
-            ("Maszyna", record["name"]), ("Typ", record["machine_type"]), ("Numer", record["serial_number"]),
-            ("Rok / tydzień / Lp.", f'{record["record_year"]} / W{record["record_week"]} / {record["week_sequence"]}'),
-            ("Rodzaj zdarzenia", record["event_type"]), ("MTG maszyny", record["machine_mtg"]),
-            ("Data wystąpienia", format_datetime(record["occurrence_at"])), ("Data naprawienia", format_datetime(record["repaired_at"])),
-            ("Opis", record["description"]), ("Przyczyna", record["cause"]), ("Sposób naprawy", record["repair_method"]),
-            ("Wymienione części", record["replaced_parts"]), ("Osoby biorące udział", record["participants"]),
-            ("Uwagi", record["notes"]), ("Pracochłonność [h]", record["labor_cost"]), ("Materiał PLN", record["material_cost"]),
-            ("Części zamienne PLN", record["spare_parts_cost"]), ("Serwis PLN", record["service_cost"]),
-            ("Koszt netto PLN", record["total_cost"]), ("Wykluczenie z produkcji [h]", record["downtime_hours"]),
-        ]
-        data = [[Paragraph(f"<b>{text(name)}</b>", label), Paragraph(text(value), normal)] for name, value in fields]
-        table = Table(data, colWidths=[38 * mm, 140 * mm], repeatRows=0)
-        table.setStyle(TableStyle([
-            ("BOX", (0, 0), (-1, -1), 0.7, colors.black),
-            ("INNERGRID", (0, 0), (-1, -1), 0.35, colors.black),
-            ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#eeeeee")),
-            ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ("LEFTPADDING", (0, 0), (-1, -1), 5), ("RIGHTPADDING", (0, 0), (-1, -1), 5),
-            ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        def section(name: str, *content: Any) -> KeepTogether:
+            return KeepTogether([
+                Spacer(1, 4 * mm),
+                Paragraph(name.upper(), section_label),
+                HRFlowable(width="100%", thickness=0.6, color=rule, spaceBefore=1.5, spaceAfter=2 * mm),
+                *content,
+            ])
+
+        def key_figure(caption: str, value_html: str) -> list[Any]:
+            return [Paragraph(caption.upper(), label), Spacer(1, 1.5), Paragraph(value_html, big)]
+
+        # --- nagłówek dokumentu ---
+        record_number = f'{record["record_year"]} / W{record["record_week"]} / {record["week_sequence"]}'
+        header = Table(
+            [[Paragraph("TYGODNIOWY RAPORT NAPRAW  ·  DUR", label),
+              Paragraph(f"NR <b>{text(record_number)}</b>", right_label)]],
+            colWidths=[content_width * 0.6, content_width * 0.4],
+        )
+        header.setStyle(TableStyle([
+            ("LINEBELOW", (0, 0), (-1, -1), 1.2, accent),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+            ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0),
         ]))
 
-        if record["name"] and record["machine_type"]== "-":
-            head_text=f"Zdarzenie #{record_id} : {text(record['name'])}"
-        else:
-            head_text=f"Zdarzenie #{record_id} : {text(record['name'])} — {text(record['machine_type'])}"
+        # --- tytuł z plakietką rodzaju zdarzenia ---
+        subtitle_parts = [str(record["name"] or "")]
+        if record["machine_type"] not in (None, "", "-"):
+            subtitle_parts.append(str(record["machine_type"]))
+        if record["serial_number"] not in (None, "", "-"):
+            subtitle_parts.append(f'nr {record["serial_number"]}')
+        subtitle_text = "  ·  ".join(text(part) for part in subtitle_parts if part)
+        title_block = Table(
+            [[Paragraph(text(str(record["event_type"] or "Inne")).upper(), badge),
+              [Paragraph(f"Zdarzenie #{record_id}", title_style), Paragraph(subtitle_text, subtitle)]]],
+            colWidths=[34 * mm, content_width - 34 * mm],
+        )
+        title_block.setStyle(TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("BACKGROUND", (0, 0), (0, 0), accent),
+            ("TOPPADDING", (0, 0), (0, 0), 8), ("BOTTOMPADDING", (0, 0), (0, 0), 8),
+            ("LEFTPADDING", (0, 0), (0, 0), 0), ("RIGHTPADDING", (0, 0), (0, 0), 0),
+            ("LEFTPADDING", (1, 0), (1, 0), 10),
+        ]))
 
-        story = [Paragraph(head_text, heading), table]
+        # --- pasek kluczowych liczb ---
+        downtime = pdf_duration(record["downtime_hours"])
+        downtime_html = f"{pdf_number(record['downtime_hours'])}&nbsp;h"
+        if downtime:
+            downtime_html += f' <font size="8" name="{font_name}" color="#667085">({downtime})</font>'
+        figures = Table(
+            [[key_figure("Wystąpienie", text(format_datetime(record["occurrence_at"]))),
+              key_figure("Naprawiono", text(format_datetime(record["repaired_at"]))),
+              key_figure("Wyłączenie z produkcji", downtime_html),
+              key_figure("Koszt netto", f"{pdf_number(record['total_cost'])}&nbsp;PLN")]],
+            colWidths=[content_width * 0.25, content_width * 0.25, content_width * 0.28, content_width * 0.22],
+        )
+        figures.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), tint),
+            ("BOX", (0, 0), (-1, -1), 0.6, accent),
+            ("LINEBEFORE", (0, 0), (0, -1), 4, accent),
+            ("LINEAFTER", (0, 0), (-2, -1), 0.4, rule),
+            ("TOPPADDING", (0, 0), (-1, -1), 6), ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+            ("LEFTPADDING", (0, 0), (-1, -1), 8),
+        ]))
 
+        story: list[Any] = [header, Spacer(1, 5 * mm), title_block, Spacer(1, 5 * mm), figures]
+
+        # --- opisy ---
+        story.append(section("Opis zdarzenia", Paragraph(text(record["description"]), normal)))
+        story.append(section("Przyczyna", Paragraph(text(record["cause"]), normal)))
+        story.append(section("Sposób naprawy", Paragraph(text(record["repair_method"]), normal)))
+        if record["notes"]:
+            note_box = Table([[Paragraph(text(record["notes"]), normal)]], colWidths=[content_width])
+            note_box.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#fff7d6")),
+                ("LINEBEFORE", (0, 0), (0, -1), 3, colors.HexColor("#e4bf59")),
+                ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+                ("LEFTPADDING", (0, 0), (-1, -1), 8),
+            ]))
+            story.append(section("Uwagi", note_box))
+
+        # --- części, osoby, MTG ---
+        extra = Table(
+            [[Paragraph("WYMIENIONE CZĘŚCI", label), Paragraph("OSOBY BIORĄCE UDZIAŁ", label), Paragraph("MTG MASZYNY", label)],
+             [Paragraph(text(record["replaced_parts"]), normal), Paragraph(text(record["participants"]), normal),
+              Paragraph(text(record["machine_mtg"]), normal)]],
+            colWidths=[content_width * 0.4, content_width * 0.4, content_width * 0.2],
+        )
+        extra.setStyle(TableStyle([
+            ("LEFTPADDING", (0, 0), (-1, -1), 0), ("TOPPADDING", (0, 0), (-1, -1), 1), ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ]))
+        story.append(section("Dodatkowe informacje", extra))
+
+        # --- koszty ---
+        costs = Table(
+            [[Paragraph(name, right_label) for name in
+              ("PRACOCHŁONNOŚĆ", "MATERIAŁ", "CZĘŚCI ZAMIENNE", "SERWIS", "RAZEM NETTO")],
+             [Paragraph(f"{pdf_number(record['labor_cost'])}&nbsp;h", right),
+              Paragraph(f"{pdf_number(record['material_cost'])}&nbsp;PLN", right),
+              Paragraph(f"{pdf_number(record['spare_parts_cost'])}&nbsp;PLN", right),
+              Paragraph(f"{pdf_number(record['service_cost'])}&nbsp;PLN", right),
+              Paragraph(f"{pdf_number(record['total_cost'])}&nbsp;PLN", right_bold)]],
+            colWidths=[content_width * 0.19, content_width * 0.19, content_width * 0.22, content_width * 0.19, content_width * 0.21],
+        )
+        costs.setStyle(TableStyle([
+            ("LINEBELOW", (0, 0), (-1, 0), 0.4, rule),
+            ("BACKGROUND", (-1, 0), (-1, -1), tint),
+            ("LINEABOVE", (-1, 0), (-1, 0), 1.2, accent),
+            ("TOPPADDING", (0, 0), (-1, -1), 4), ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ]))
+        story.append(section("Koszty", costs))
+
+        # --- załączniki: zdjęcia na osobnej stronie, pozostałe pliki tylko wymienione ---
         image_files = []
+        other_files = []
         for attachment in attachments:
             if not attachment["content_type"].startswith("image/"):
+                other_files.append(attachment["original_name"])
                 continue
             path = Path(current_app_uploads()) / str(record_id) / attachment["filename"]
             if path.exists():
                 image_files.append((path, attachment["original_name"]))
+        if other_files:
+            story.append(section(
+                "Pozostałe załączniki (nie są dołączone do PDF)",
+                Paragraph("  ·  ".join(text(name) for name in other_files), normal),
+            ))
         if image_files:
-            story += [PageBreak(), Paragraph("Załączniki — zdjęcia", heading)]
-            for path, original_name in image_files:
-                image = PdfImage(str(path), width=170 * mm, height=105 * mm, kind="proportional")
-                story += [Paragraph(text(original_name), normal), Spacer(1, 2 * mm), image, Spacer(1, 6 * mm)]
-        SimpleDocTemplate(output, pagesize=A4, rightMargin=16 * mm, leftMargin=16 * mm,
-                          topMargin=15 * mm, bottomMargin=15 * mm,
-                          title=f"Rekord {record_id}").build(story, canvasmaker=PageNumberCanvas)
+            story += [
+                PageBreak(),
+                Paragraph("Załączniki — zdjęcia", heading),
+                HRFlowable(width="100%", thickness=1.2, color=accent, spaceBefore=2, spaceAfter=3 * mm),
+            ]
+            for index, (path, original_name) in enumerate(image_files, start=1):
+                image = PdfImage(str(path), width=170 * mm, height=105 * mm, kind="proportional", hAlign="LEFT")
+                caption = f'<font name="{bold_font}">Zdjęcie {index} z {len(image_files)}</font>  <font size="7.5" color="#667085">{text(original_name)}</font>'
+                story += [Paragraph(caption, normal), Spacer(1, 2 * mm), image, Spacer(1, 7 * mm)]
+
+        generated_at = datetime.now(ZoneInfo(current_app.config.get("TIMEZONE", "Europe/Warsaw")))
+        footer_parts = [f"Wygenerowano {generated_at:%d-%m-%Y %H:%M}"]
+        if session.get("username"):
+            footer_parts.append(str(session["username"]))
+        footer_parts.append(f"Zdarzenie #{record_id}")
+        canvas_class = make_record_pdf_canvas(font_name, "  ·  ".join(footer_parts))
+
+        # Ramka dokumentu ma domyślny padding 6 pt, więc marginesy są o tyle mniejsze, by treść zaczynała się na 16 mm.
+        SimpleDocTemplate(
+            output, pagesize=A4,
+            rightMargin=16 * mm - 6, leftMargin=16 * mm - 6, topMargin=13 * mm - 6, bottomMargin=18 * mm - 6,
+            title=f"Zdarzenie #{record_id} — {record['name']}", author="Tygodniowy raport napraw DUR",
+        ).build(story, canvasmaker=canvas_class)
         output.seek(0)
         log_user_activity(
             "export_record_pdf",
@@ -2690,7 +2903,11 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             target_type="record",
             target_id=record_id,
         )
-        return send_file(output, as_attachment=True, download_name=f"rekord_{record_id}_{record['name']}.pdf", mimetype="application/pdf")
+        safe_machine_name = re.sub(r'[\\/:*?"<>|\s]+', "_", str(record["name"] or "")).strip("._") or "maszyna"
+        return send_file(
+            output, as_attachment=True, download_name=f"rekord_{record_id}_{safe_machine_name}.pdf",
+            mimetype="application/pdf",
+        )
 
     @app.route("/api/record/<int:record_id>", methods=["PATCH"])
     def update_record_api(record_id: int):

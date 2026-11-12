@@ -70,6 +70,50 @@ class RepairReportAppTests(unittest.TestCase):
 
         self.assertEqual(page_numbers, ["1/2", "2/2"])
 
+    def test_record_pdf_export_has_data_page_and_image_page(self):
+        from PIL import Image
+
+        self.client.post(
+            "/",
+            data={
+                "occurrence_at": "2026-11-04T09:01",
+                "repaired_at": "2026-11-04T10:00",
+                "machine_name": "Prasa / 1",
+                "machine_type": "Hydrauliczna",
+                "serial_number": "H-001",
+                "event_type": "Awaria",
+                "description": "Błąd komunikacji",
+                "labor_cost": "2.5",
+                "material_cost": "1234.5",
+                "spare_parts_cost": "0",
+                "service_cost": "0",
+            },
+        )
+        with self.app.app_context():
+            record_id = int(get_db().execute("SELECT id FROM repair_records").fetchone()["id"])
+
+        def count_pages(pdf_bytes):
+            return len(re.findall(rb"/Type /Page(?!s)", pdf_bytes))
+
+        without_images = self.client.get(f"/record/{record_id}/pdf")
+        self.assertEqual(without_images.status_code, 200)
+        self.assertEqual(without_images.mimetype, "application/pdf")
+        self.assertTrue(without_images.data.startswith(b"%PDF"))
+        self.assertEqual(count_pages(without_images.data), 1)
+        self.assertIn(f"rekord_{record_id}_Prasa_1.pdf", without_images.headers["Content-Disposition"])
+
+        image_bytes = io.BytesIO()
+        Image.new("RGB", (40, 30), "white").save(image_bytes, format="JPEG")
+        self.client.post(
+            f"/api/record/{record_id}/attachments",
+            data={"attachments": (io.BytesIO(image_bytes.getvalue()), "foto.jpg", "image/jpeg")},
+        )
+        with_images = self.client.get(f"/record/{record_id}/pdf")
+        self.assertEqual(with_images.status_code, 200)
+        self.assertEqual(count_pages(with_images.data), 2)
+
+        self.assertEqual(self.client.get("/record/9999/pdf").status_code, 404)
+
     def test_create_record_calculates_downtime_and_cost(self):
         response = self.client.post(
             "/",
