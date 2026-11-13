@@ -2319,6 +2319,8 @@ class RepairReportAppTests(unittest.TestCase):
         ):
             self.assertIn(heading, page_html)
         self.assertIn('id="machine-modal-view"', page_html)
+        self.assertIn('id="machine-modal-photos"', page_html)
+        self.assertIn('const photosByDay = new Map();', page_html)
         self.assertIn('id="machine-modal-edit"', page_html)
         self.assertIn('id="machine-modal-save"', page_html)
         self.assertIn("machineDeleteForm.addEventListener('submit'", page_html)
@@ -2377,6 +2379,50 @@ class RepairReportAppTests(unittest.TestCase):
                 (machine_id,),
             ).fetchone()
         self.assertEqual(tuple(machine), ("Prasa hydrauliczna", "2024-02-29", "Zmieniono"))
+
+    def test_machine_photos_api_lists_only_image_attachments_for_machine(self):
+        self.client.post(
+            "/",
+            data={
+                "occurrence_at": "2026-11-04T09:01",
+                "repaired_at": "2026-11-04T10:00",
+                "machine_name": "Prasa ze zdjęciem",
+                "machine_type": "Hydrauliczna",
+                "serial_number": "H-PHOTO-1",
+                "event_type": "Awaria",
+                "description": "Wymiana czujnika",
+            },
+        )
+        with self.app.app_context():
+            machine_id = get_db().execute(
+                "SELECT id FROM machines WHERE serial_number = ?", ("H-PHOTO-1",)
+            ).fetchone()["id"]
+            record_id = get_db().execute(
+                "SELECT id FROM repair_records WHERE machine_id = ?", (machine_id,)
+            ).fetchone()["id"]
+
+        self.client.post(
+            f"/api/record/{record_id}/attachments",
+            data={
+                "attachments": [
+                    (io.BytesIO(b"photo bytes"), "zdjecie.jpg", "image/jpeg"),
+                    (io.BytesIO(b"text bytes"), "protokol.txt", "text/plain"),
+                ]
+            },
+        )
+        with self.client.session_transaction() as session:
+            session["logged_in"] = True
+            session["role"] = "admin"
+
+        response = self.client.get(f"/api/machine/{machine_id}/photos")
+
+        self.assertEqual(response.status_code, 200)
+        photos = response.get_json()["photos"]
+        self.assertEqual(len(photos), 1)
+        self.assertEqual(photos[0]["original_name"], "zdjecie.jpg")
+        self.assertEqual(photos[0]["event_type"], "Awaria")
+        self.assertEqual(photos[0]["description"], "Wymiana czujnika")
+        self.assertEqual(photos[0]["url"], f"/attachments/{record_id}/zdjecie.jpg")
 
     def test_admin_can_import_and_export_machine_workbook(self):
         with self.app.app_context():

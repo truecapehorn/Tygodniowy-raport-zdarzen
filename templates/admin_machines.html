@@ -68,6 +68,10 @@
             </div>
         </div>
         <div id="machine-modal-view" class="detail-grid"></div>
+        <section id="machine-modal-photos" class="machine-modal-photos" aria-live="polite" aria-label="Zdjęcia ze zdarzeń maszyny">
+            <h3>Zdjęcia ze zdarzeń</h3>
+            <div id="machine-modal-photos-content" class="text-muted">Wybierz maszynę, aby wyświetlić zdjęcia.</div>
+        </section>
         <form id="machine-modal-form" method="post" class="u-display-none">
             <div class="machine-form-grid">
                 <div class="field">
@@ -131,6 +135,8 @@ const CAN_MANAGE_MACHINES = {{ can_manage_machines | tojson }};
 const machineModal = document.getElementById('machine-modal');
 const machineModalTitle = document.getElementById('machine-modal-title');
 const machineModalView = document.getElementById('machine-modal-view');
+const machineModalPhotos = document.getElementById('machine-modal-photos');
+const machineModalPhotosContent = document.getElementById('machine-modal-photos-content');
 const machineModalForm = document.getElementById('machine-modal-form');
 const machineDeleteForm = document.getElementById('machine-modal-delete-form');
 const machineEditButton = document.getElementById('machine-modal-edit');
@@ -213,9 +219,55 @@ function machineDetails(row) {
     `).join('');
 }
 
+async function loadMachinePhotos(row) {
+    const machineId = row.dataset.machineId;
+    machineModalPhotosContent.textContent = 'Ładowanie zdjęć…';
+    try {
+        const response = await fetch(`/api/machine/${encodeURIComponent(machineId)}/photos`);
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'Nie udało się pobrać zdjęć.');
+        if (!currentMachineRow || currentMachineRow.dataset.machineId !== machineId) return;
+        if (!result.photos.length) {
+            machineModalPhotosContent.textContent = 'Brak zdjęć w załącznikach zdarzeń tej maszyny.';
+            return;
+        }
+        const photosByDay = new Map();
+        result.photos.forEach(photo => {
+            const day = (photo.occurrence_at || '').split(/[T ]/)[0] || 'Brak daty';
+            if (!photosByDay.has(day)) photosByDay.set(day, []);
+            photosByDay.get(day).push(photo);
+        });
+        machineModalPhotosContent.innerHTML = [...photosByDay.entries()].map(([day, photos]) => {
+            const displayDay = /^\d{4}-\d{2}-\d{2}$/.test(day) ? day.split('-').reverse().join('-') : day;
+            return `<section class="machine-photo-day">
+                <h4>${machineHtml(displayDay)}</h4>
+                <div class="machine-photo-grid">${photos.map(photo => {
+                    const tooltip = [
+                        photo.original_name,
+                        photo.occurrence_at,
+                        photo.event_type,
+                        photo.description ? `${photo.description.slice(0, 180)}${photo.description.length > 180 ? '…' : ''}` : '',
+                    ].filter(Boolean).join('\n');
+                    return `
+                        <a class="machine-photo" href="${machineHtml(photo.url)}" target="_blank" rel="noopener">
+                            <img src="${machineHtml(photo.url)}" alt="${machineHtml(photo.original_name)}" loading="lazy">
+                            <span title="${machineHtml(tooltip)}">${machineHtml(photo.original_name)}</span>
+                            <small title="${machineHtml(tooltip)}">${machineHtml(photo.occurrence_at || '')} · ${machineHtml(photo.event_type || '')}</small>
+                        </a>
+                    `;
+                }).join('')}</div>
+            </section>`;
+        }).join('');
+    } catch (error) {
+        if (!currentMachineRow || currentMachineRow.dataset.machineId !== machineId) return;
+        machineModalPhotosContent.textContent = error.message || 'Nie udało się pobrać zdjęć.';
+    }
+}
+
 function setMachineEditMode(editing) {
     if (!CAN_MANAGE_MACHINES) return;
     machineModalView.style.display = editing ? 'none' : '';
+    machineModalPhotos.style.display = editing ? 'none' : '';
     machineModalForm.classList.toggle('u-display-none', !editing);
     machineModalForm.style.display = editing ? '' : 'none';
     machineEditButton.style.display = editing ? 'none' : '';
@@ -231,6 +283,8 @@ function openMachineModal(row, editing = false) {
     machineModal.classList.add('open');
     machineModal.setAttribute('aria-hidden', 'false');
     machineModalView.innerHTML = row ? machineDetails(row) : '';
+    machineModalPhotos.style.display = row ? '' : 'none';
+    if (row && !editing) loadMachinePhotos(row);
     if (CAN_MANAGE_MACHINES) {
         machineDeleteButton.style.display = row ? '' : 'none';
         machineEditButton.style.display = row ? '' : 'none';

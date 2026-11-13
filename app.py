@@ -1377,6 +1377,44 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             can_manage_machines=can_manage_machines,
         )
 
+    @app.route("/api/machine/<int:machine_id>/photos")
+    def machine_photos_api(machine_id: int):
+        can_view_machines = session.get("role") == "admin" or any(
+            user_has_permission(permission)
+            for permission in ("can_create_records", "can_edit_records", "can_delete_records")
+        )
+        if not can_view_machines:
+            return jsonify({"error": "Brak uprawnień do przeglądania zdjęć maszyny."}), 403
+
+        db = get_db()
+        if not db.execute("SELECT 1 FROM machines WHERE id = ?", (machine_id,)).fetchone():
+            return jsonify({"error": "Maszyna nie istnieje."}), 404
+
+        photos = db.execute(
+            """
+            SELECT a.record_id, a.filename, a.original_name, a.content_type,
+                   r.occurrence_at, r.event_type, r.description
+            FROM attachments a
+            JOIN repair_records r ON r.id = a.record_id
+            WHERE r.machine_id = ? AND a.content_type LIKE 'image/%'
+            ORDER BY r.occurrence_at DESC, a.created_at DESC, a.id DESC
+            """,
+            (machine_id,),
+        ).fetchall()
+        return jsonify({
+            "photos": [
+                {
+                    **dict(photo),
+                    "url": url_for(
+                        "serve_attachment",
+                        record_id=photo["record_id"],
+                        filename=photo["filename"],
+                    ),
+                }
+                for photo in photos
+            ]
+        })
+
     @app.route("/admin/machines/new", methods=["POST"])
     def admin_create_machine():
         if session.get("role") != "admin":
