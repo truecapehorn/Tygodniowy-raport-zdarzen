@@ -2751,8 +2751,11 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
                 *content,
             ])
 
+        centered_label = ParagraphStyle("pdf_key_label_centered", parent=label, alignment=TA_CENTER)
+        centered_value = ParagraphStyle("pdf_key_value_centered", parent=big, alignment=TA_CENTER)
+
         def key_figure(caption: str, value_html: str) -> list[Any]:
-            return [Paragraph(caption.upper(), label), Spacer(1, 1.5), Paragraph(value_html, big)]
+            return [Paragraph(caption.upper(), centered_label), Spacer(1, 1.5), Paragraph(value_html, centered_value)]
 
         # --- nagłówek dokumentu ---
         record_number = f'{record["record_year"]} / W{record["record_week"]} / {record["week_sequence"]}'
@@ -2795,9 +2798,8 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         figures = Table(
             [[key_figure("Wystąpienie", text(format_datetime(record["occurrence_at"]))),
               key_figure("Naprawiono", text(format_datetime(record["repaired_at"]))),
-              key_figure("Wyłączenie z produkcji", downtime_html),
-              key_figure("Koszt netto", f"{pdf_number(record['total_cost'])}&nbsp;PLN")]],
-            colWidths=[content_width * 0.25, content_width * 0.25, content_width * 0.28, content_width * 0.22],
+              key_figure("Wyłączenie z produkcji", downtime_html)]],
+            colWidths=[content_width / 3] * 3,
         )
         figures.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (-1, -1), tint),
@@ -2836,26 +2838,6 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ]))
         story.append(section("Dodatkowe informacje", extra))
-
-        # --- koszty ---
-        costs = Table(
-            [[Paragraph(name, right_label) for name in
-              ("PRACOCHŁONNOŚĆ", "MATERIAŁ", "CZĘŚCI ZAMIENNE", "SERWIS", "RAZEM NETTO")],
-             [Paragraph(f"{pdf_number(record['labor_cost'])}&nbsp;h", right),
-              Paragraph(f"{pdf_number(record['material_cost'])}&nbsp;PLN", right),
-              Paragraph(f"{pdf_number(record['spare_parts_cost'])}&nbsp;PLN", right),
-              Paragraph(f"{pdf_number(record['service_cost'])}&nbsp;PLN", right),
-              Paragraph(f"{pdf_number(record['total_cost'])}&nbsp;PLN", right_bold)]],
-            colWidths=[content_width * 0.19, content_width * 0.19, content_width * 0.22, content_width * 0.19, content_width * 0.21],
-        )
-        costs.setStyle(TableStyle([
-            ("LINEBELOW", (0, 0), (-1, 0), 0.4, rule),
-            ("BACKGROUND", (-1, 0), (-1, -1), tint),
-            ("LINEABOVE", (-1, 0), (-1, 0), 1.2, accent),
-            ("TOPPADDING", (0, 0), (-1, -1), 4), ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-        ]))
-        story.append(section("Koszty", costs))
 
         # --- załączniki: zdjęcia na osobnej stronie, pozostałe pliki tylko wymienione ---
         image_files = []
