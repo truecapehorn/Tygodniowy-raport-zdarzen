@@ -2817,14 +2817,13 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         story.append(section("Przyczyna", Paragraph(text(record["cause"]), normal)))
         story.append(section("Sposób naprawy", Paragraph(text(record["repair_method"]), normal)))
         if record["notes"]:
-            note_box = Table([[Paragraph(text(record["notes"]), normal)]], colWidths=[content_width])
-            note_box.setStyle(TableStyle([
-                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#fff7d6")),
-                ("LINEBEFORE", (0, 0), (0, -1), 3, colors.HexColor("#e4bf59")),
-                ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-                ("LEFTPADDING", (0, 0), (-1, -1), 8),
-            ]))
-            story.append(section("Uwagi", note_box))
+            note_style = style(
+                "record-notes", backColor=colors.HexColor("#fff7d6"),
+                borderColor=colors.HexColor("#e4bf59"), borderWidth=0.6,
+                borderPadding=(5, 5, 5, 8),
+            )
+            note_style.borderWidthLeft = 3
+            story.append(section("Uwagi", Paragraph(text(record["notes"]), note_style)))
 
         # --- części, osoby, MTG ---
         extra = Table(
