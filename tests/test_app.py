@@ -607,7 +607,7 @@ class RepairReportAppTests(unittest.TestCase):
         month_html = self.client.get(
             "/records-calendar?calendar_view=month&year=2026&month=3"
         ).get_data(as_text=True)
-        self.assertIn("02-03-2026 09:30 — Prasa calendar — Awaria — Calendar record one", month_html)
+        self.assertIn("02-03-2026 09:30 — Prasa calendar — Hydrauliczna — Awaria — Calendar record one", month_html)
         self.assertNotIn("Calendar record two", month_html)
         self.assertNotIn("/new?occurrence_at=", month_html)
         self.assertIn(f'data-record-id="{record_id}"', month_html)

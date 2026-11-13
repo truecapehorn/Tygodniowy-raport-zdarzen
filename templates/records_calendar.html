@@ -81,7 +81,7 @@
                 <div class="calendar-day-slot-events">
                     {% for item in slot.events %}
                     {% set event = item.event %}
-                    {% set event_title = event.occurrence_at | datetime ~ ' — ' ~ event.name ~ ' — ' ~ event.event_type ~ ' — ' ~ event.description %}
+                    {% set event_title = event.occurrence_at | datetime ~ ' — ' ~ event.name ~ (' — ' ~ event.machine_type if event.machine_type else '') ~ ' — ' ~ event.event_type ~ ' — ' ~ event.description %}
                     <a class="calendar-event-link badge {{ calendar_event_class(event.event_type) }}"
                        href="{{ url_for('record_details_api', record_id=event.id) }}"
                        data-record-id="{{ event.id }}"
@@ -111,7 +111,7 @@
                 <div class="calendar-hour-cell{% if day.is_today %} calendar-day-today{% endif %}">
                     {% for item in day.hours[hour] %}
                     {% set event = item.event %}
-                    {% set event_title = event.occurrence_at | datetime ~ ' — ' ~ event.name ~ ' — ' ~ event.event_type ~ ' — ' ~ event.description %}
+                    {% set event_title = event.occurrence_at | datetime ~ ' — ' ~ event.name ~ (' — ' ~ event.machine_type if event.machine_type else '') ~ ' — ' ~ event.event_type ~ ' — ' ~ event.description %}
                     <a class="calendar-event-link badge {{ calendar_event_class(event.event_type) }}"
                        href="{{ url_for('record_details_api', record_id=event.id) }}"
                        data-record-id="{{ event.id }}"
@@ -144,7 +144,7 @@
                         <span class="calendar-day-number">{{ day.date.day }}</span>
                         <div class="calendar-day-events">
                             {% for event in day.events %}
-                            {% set event_title = event.occurrence_at | datetime ~ ' — ' ~ event.name ~ ' — ' ~ event.event_type ~ ' — ' ~ event.description %}
+                            {% set event_title = event.occurrence_at | datetime ~ ' — ' ~ event.name ~ (' — ' ~ event.machine_type if event.machine_type else '') ~ ' — ' ~ event.event_type ~ ' — ' ~ event.description %}
                             {% if calendar_view == 'month' %}
                             <a class="calendar-event-link badge {{ calendar_event_class(event.event_type) }}"
                                href="{{ url_for('record_details_api', record_id=event.id) }}"
