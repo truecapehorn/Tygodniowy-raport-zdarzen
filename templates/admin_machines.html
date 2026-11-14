@@ -244,6 +244,14 @@ function machineEventBadgeClass(eventType) {
     return 'badge-inne';
 }
 
+function machineFormatOccurrenceDate(value) {
+    const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2}))?/);
+    if (!match) return value || '';
+    const [, year, month, day, hour, minute] = match;
+    const date = `${day}-${month}-${year}`;
+    return hour && minute ? `${date} ${hour}:${minute}` : date;
+}
+
 function renderMachinePhotos() {
     const byRecord = machinePhotoGrouping.value === 'record';
     const groups = new Map();
@@ -267,19 +275,21 @@ function renderMachinePhotos() {
     }
     machineModalPhotosContent.innerHTML = entries.map(([key, photos]) => {
         const eventType = photos[0]?.event_type || 'Brak rodzaju zdarzenia';
+        const occurrenceDate = machineFormatOccurrenceDate(photos[0]?.occurrence_at || '');
         const heading = byRecord
-            ? `Rekord ${machineHtml(key)} · <span class="badge ${machineEventBadgeClass(eventType)}">${machineHtml(eventType)}</span> · ${machineHtml(photos[0]?.occurrence_at || 'Brak daty')}`
+            ? `Rekord ${machineHtml(key)} · <span class="badge ${machineEventBadgeClass(eventType)}">${machineHtml(eventType)}</span> · ${machineHtml(occurrenceDate || 'Brak daty')}`
             : (/^\d{4}-\d{2}-\d{2}$/.test(key) ? key.split('-').reverse().join('-') : key);
         return `<section class="machine-photo-day">
             <h4>${heading}</h4>
             <div class="machine-photo-grid">${photos.map(photo => {
-                const tooltip = [photo.original_name, photo.occurrence_at, photo.event_type,
+                const formattedDate = machineFormatOccurrenceDate(photo.occurrence_at);
+                const tooltip = [photo.original_name, formattedDate, photo.event_type,
                     photo.description ? `${photo.description.slice(0, 180)}${photo.description.length > 180 ? '…' : ''}` : '']
                     .filter(Boolean).join('\n');
                 return `<a class="machine-photo" href="${machineHtml(photo.url)}" target="_blank" rel="noopener">
                     <img src="${machineHtml(photo.url)}" alt="${machineHtml(photo.original_name)}" loading="lazy">
                     <span title="${machineHtml(tooltip)}">${machineHtml(photo.original_name)}</span>
-                    <small title="${machineHtml(tooltip)}">${machineHtml(photo.occurrence_at || '')} · ${machineHtml(photo.event_type || '')}</small>
+                    <small title="${machineHtml(tooltip)}">${machineHtml(formattedDate)} · ${machineHtml(photo.event_type || '')}</small>
                 </a>`;
             }).join('')}</div>
         </section>`;

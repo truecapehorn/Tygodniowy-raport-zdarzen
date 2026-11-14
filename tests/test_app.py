@@ -2330,6 +2330,8 @@ class RepairReportAppTests(unittest.TestCase):
         self.assertIn('function renderMachinePhotos()', page_html)
         self.assertIn('function machineEventBadgeClass(eventType)', page_html)
         self.assertIn('badge ${machineEventBadgeClass(eventType)}', page_html)
+        self.assertIn('function machineFormatOccurrenceDate(value)', page_html)
+        self.assertIn('`${date} ${hour}:${minute}`', page_html)
         self.assertIn('id="machine-modal-edit"', page_html)
         self.assertIn('id="machine-modal-save"', page_html)
         self.assertIn("machineDeleteForm.addEventListener('submit'", page_html)
