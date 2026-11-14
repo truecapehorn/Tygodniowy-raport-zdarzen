@@ -67,6 +67,11 @@
                        placeholder="dd-mm-rrrr" pattern="[0-9]{2}-[0-9]{2}-[0-9]{4}" maxlength="10"
                        title="Wpisz datę w formacie dd-mm-rrrr">
             </div>
+            <div class="field">
+                <label>Nr rekordu</label>
+                <input type="text" name="record_id" value="{{ filters.record_id }}"
+                       placeholder="np. 12, 15, 28" autocomplete="off">
+            </div>
             <div class="field filter-search-field">
                 <label>Szukaj w opisie, przyczynie, naprawie, częściach i uwagach (słowa rozdzielone ; )</label>
                 <input type="text" name="description_terms" value="{{ filters.description_terms }}"

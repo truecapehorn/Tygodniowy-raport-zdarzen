@@ -351,6 +351,38 @@ class RepairReportAppTests(unittest.TestCase):
         self.assertIn("Linia B", filter_page)
         self.assertIn("31-08-2026\n08:00", filter_page)
 
+        record_id = int(rows[1][0])
+        record_filter_response = self.client.get(f"/filter?record_id={record_id}")
+        record_filter_page = record_filter_response.get_data(as_text=True)
+        self.assertIn(f'name="record_id" value="{record_id}"', record_filter_page)
+        self.assertIn(f'<td class="td-id">{record_id}<br>', record_filter_page)
+        self.assertNotIn("Linia A</td>", record_filter_page)
+
+        with self.app.app_context():
+            other_record_id = int(
+                get_db().execute("SELECT id FROM repair_records WHERE id != ?", (record_id,)).fetchone()["id"]
+            )
+        multiple_filter_response = self.client.get(
+            f"/filter?record_id={record_id}%2C%20{other_record_id}"
+        )
+        multiple_filter_page = multiple_filter_response.get_data(as_text=True)
+        self.assertIn(f'name="record_id" value="{record_id}, {other_record_id}"', multiple_filter_page)
+        self.assertIn(f'<td class="td-id">{record_id}<br>', multiple_filter_page)
+        self.assertIn(f'<td class="td-id">{other_record_id}<br>', multiple_filter_page)
+
+        record_export_response = self.client.get(f"/export?record_id={record_id}")
+        record_workbook = load_workbook(io.BytesIO(record_export_response.data))
+        record_rows = list(record_workbook.active.iter_rows(values_only=True))
+        self.assertEqual(len(record_rows), 2)
+        self.assertEqual(record_rows[1][0], record_id)
+
+        multiple_export_response = self.client.get(
+            f"/export?record_id={record_id}%2C{other_record_id}"
+        )
+        multiple_workbook = load_workbook(io.BytesIO(multiple_export_response.data))
+        multiple_rows = list(multiple_workbook.active.iter_rows(values_only=True))
+        self.assertEqual({row[0] for row in multiple_rows[1:]}, {record_id, other_record_id})
+
         notes_export_response = self.client.get("/export?description_terms=łożyska")
         self.assertEqual(notes_export_response.status_code, 200)
         notes_workbook = load_workbook(io.BytesIO(notes_export_response.data))

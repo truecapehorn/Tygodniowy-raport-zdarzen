@@ -2472,6 +2472,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             "machine": request.args.get("machine", "").strip(),
             "machine_type": request.args.get("machine_type", "").strip(),
             "serial_number": request.args.get("serial_number", "").strip(),
+            "record_id": request.args.get("record_id", "").strip(),
             "event_type": request.args.get("event_type", "").strip(),
             "task_status": request.args.get("task_status", "").strip(),
             "occurrence_from": format_date(request.args.get("occurrence_from", "").strip()),
@@ -2674,6 +2675,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             "machine": request.args.get("machine", "").strip(),
             "machine_type": request.args.get("machine_type", "").strip(),
             "serial_number": request.args.get("serial_number", "").strip(),
+            "record_id": request.args.get("record_id", "").strip(),
             "event_type": request.args.get("event_type", "").strip(),
             "task_status": request.args.get("task_status", "").strip(),
             "occurrence_from": format_date(request.args.get("occurrence_from", "").strip()),
@@ -3957,6 +3959,16 @@ def query_records(filters: dict[str, str]) -> list[sqlite3.Row]:
     if filters.get("serial_number"):
         query += " AND m.serial_number = ?"
         params.append(filters["serial_number"])
+    if filters.get("record_id"):
+        record_ids = list(dict.fromkeys(
+            value.strip() for value in filters["record_id"].split(",") if value.strip()
+        ))
+        if not all(record_id.isdecimal() for record_id in record_ids):
+            query += " AND 1 = 0"
+        elif record_ids:
+            placeholders = ", ".join("?" for _ in record_ids)
+            query += f" AND r.id IN ({placeholders})"
+            params.extend(record_ids)
     if filters.get("event_type"):
         query += " AND r.event_type = ?"
         params.append(filters["event_type"])
