@@ -74,11 +74,10 @@
                 <label>Widok
                     <select id="machine-photo-grouping"><option value="day">Dni</option><option value="record">Zdarzenia</option></select>
                 </label>
-                <label id="machine-photo-sort-label" class="u-display-none">Sortuj zdarzenia według
+                <label id="machine-photo-sort-label">Kolejność sortowania
                     <select id="machine-photo-sort">
-                        <option value="record_id">Nr rekordu</option>
-                        <option value="event_type">Rodzaj zdarzenia</option>
-                        <option value="occurrence_at">Data wystąpienia</option>
+                        <option value="descending">Malejąco</option>
+                        <option value="ascending">Rosnąco</option>
                     </select>
                 </label>
             </div>
@@ -151,7 +150,6 @@ const machineModalPhotos = document.getElementById('machine-modal-photos');
 const machineModalPhotosContent = document.getElementById('machine-modal-photos-content');
 const machinePhotoControls = document.getElementById('machine-photo-controls');
 const machinePhotoGrouping = document.getElementById('machine-photo-grouping');
-const machinePhotoSortLabel = document.getElementById('machine-photo-sort-label');
 const machinePhotoSort = document.getElementById('machine-photo-sort');
 const machineModalForm = document.getElementById('machine-modal-form');
 const machineDeleteForm = document.getElementById('machine-modal-delete-form');
@@ -165,7 +163,6 @@ const warrantyPeriodInput = document.getElementById('machine-warranty-period');
 const warrantyEndInput = document.getElementById('machine-warranty-end');
 let currentMachineRow = null;
 let currentMachinePhotos = [];
-const machinePhotoCollator = new Intl.Collator('pl', { numeric: true, sensitivity: 'base' });
 
 const machineTable = document.querySelector('.machine-table');
 const machineSortCollator = new Intl.Collator('pl', { numeric: true, sensitivity: 'base' });
@@ -237,9 +234,18 @@ function machineDetails(row) {
     `).join('');
 }
 
+function machineEventBadgeClass(eventType) {
+    const type = String(eventType || '').toLocaleLowerCase('pl');
+    if (type === 'awaria') return 'badge-awaria';
+    if (type.includes('przegl')) return 'badge-przeglad';
+    if (type === 'modernizacja') return 'badge-modernizacja';
+    if (type === 'interwencja') return 'badge-interwencja';
+    if (type === 'własne') return 'badge-wlasne';
+    return 'badge-inne';
+}
+
 function renderMachinePhotos() {
     const byRecord = machinePhotoGrouping.value === 'record';
-    machinePhotoSortLabel.classList.toggle('u-display-none', !byRecord);
     const groups = new Map();
     currentMachinePhotos.forEach(photo => {
         const key = byRecord ? String(photo.record_id) : ((photo.occurrence_at || '').split(/[T ]/)[0] || 'Brak daty');
@@ -247,17 +253,22 @@ function renderMachinePhotos() {
         groups.get(key).push(photo);
     });
     const entries = [...groups.entries()];
+    const direction = machinePhotoSort.value === 'ascending' ? 1 : -1;
     if (byRecord) {
-        const field = machinePhotoSort.value;
-        entries.sort(([, a], [, b]) => field === 'record_id'
-            ? Number(a[0]?.record_id) - Number(b[0]?.record_id)
-            : machinePhotoCollator.compare(String(a[0]?.[field] || ''), String(b[0]?.[field] || '')));
+        entries.sort(([, a], [, b]) =>
+            (Number(a[0]?.record_id) - Number(b[0]?.record_id)) * direction);
     } else {
-        entries.sort(([a], [b]) => b.localeCompare(a));
+        entries.sort(([a], [b]) => {
+            if (a === 'Brak daty' || b === 'Brak daty') {
+                return a === b ? 0 : a === 'Brak daty' ? 1 : -1;
+            }
+            return a.localeCompare(b) * direction;
+        });
     }
     machineModalPhotosContent.innerHTML = entries.map(([key, photos]) => {
+        const eventType = photos[0]?.event_type || 'Brak rodzaju zdarzenia';
         const heading = byRecord
-            ? `Rekord ${machineHtml(key)} · ${machineHtml(photos[0]?.event_type || 'Brak rodzaju zdarzenia')} · ${machineHtml(photos[0]?.occurrence_at || 'Brak daty')}`
+            ? `Rekord ${machineHtml(key)} · <span class="badge ${machineEventBadgeClass(eventType)}">${machineHtml(eventType)}</span> · ${machineHtml(photos[0]?.occurrence_at || 'Brak daty')}`
             : (/^\d{4}-\d{2}-\d{2}$/.test(key) ? key.split('-').reverse().join('-') : key);
         return `<section class="machine-photo-day">
             <h4>${heading}</h4>
