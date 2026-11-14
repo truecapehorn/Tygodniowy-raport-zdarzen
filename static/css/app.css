@@ -197,6 +197,9 @@
     .machine-modal-box { width: min(1050px, calc(100vw - 2rem)); }
     .machine-modal-photos { margin-top: 1.25rem; }
     .machine-modal-photos h3 { margin: 0 0 .65rem; font-size: .95rem; }
+    .machine-photo-controls { display: flex; align-items: center; flex-wrap: wrap; gap: .75rem; margin: 0 0 .75rem; }
+    .machine-photo-controls label { display: flex; align-items: center; gap: .4rem; color: var(--muted); font-size: .8rem; }
+    .machine-photo-controls select { max-width: 100%; padding: .3rem .45rem; border: 1px solid var(--border); border-radius: .3rem; background: var(--bg-card); color: var(--text); }
     .machine-photo-day + .machine-photo-day { margin-top: 1rem; padding-top: .75rem; border-top: 1px solid var(--border); }
     .machine-photo-day h4 { margin: 0 0 .5rem; font-size: .85rem; color: var(--muted); }
     .machine-photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(125px, 1fr)); gap: .65rem; }

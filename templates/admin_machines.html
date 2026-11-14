@@ -70,6 +70,18 @@
         <div id="machine-modal-view" class="detail-grid"></div>
         <section id="machine-modal-photos" class="machine-modal-photos" aria-live="polite" aria-label="Zdjęcia ze zdarzeń maszyny">
             <h3>Zdjęcia ze zdarzeń</h3>
+            <div id="machine-photo-controls" class="machine-photo-controls u-display-none">
+                <label>Widok
+                    <select id="machine-photo-grouping"><option value="day">Dni</option><option value="record">Zdarzenia</option></select>
+                </label>
+                <label id="machine-photo-sort-label" class="u-display-none">Sortuj zdarzenia według
+                    <select id="machine-photo-sort">
+                        <option value="record_id">Nr rekordu</option>
+                        <option value="event_type">Rodzaj zdarzenia</option>
+                        <option value="occurrence_at">Data wystąpienia</option>
+                    </select>
+                </label>
+            </div>
             <div id="machine-modal-photos-content" class="text-muted">Wybierz maszynę, aby wyświetlić zdjęcia.</div>
         </section>
         <form id="machine-modal-form" method="post" class="u-display-none">
@@ -137,6 +149,10 @@ const machineModalTitle = document.getElementById('machine-modal-title');
 const machineModalView = document.getElementById('machine-modal-view');
 const machineModalPhotos = document.getElementById('machine-modal-photos');
 const machineModalPhotosContent = document.getElementById('machine-modal-photos-content');
+const machinePhotoControls = document.getElementById('machine-photo-controls');
+const machinePhotoGrouping = document.getElementById('machine-photo-grouping');
+const machinePhotoSortLabel = document.getElementById('machine-photo-sort-label');
+const machinePhotoSort = document.getElementById('machine-photo-sort');
 const machineModalForm = document.getElementById('machine-modal-form');
 const machineDeleteForm = document.getElementById('machine-modal-delete-form');
 const machineEditButton = document.getElementById('machine-modal-edit');
@@ -148,6 +164,8 @@ const commissioningDateInput = document.getElementById('machine-commissioning-da
 const warrantyPeriodInput = document.getElementById('machine-warranty-period');
 const warrantyEndInput = document.getElementById('machine-warranty-end');
 let currentMachineRow = null;
+let currentMachinePhotos = [];
+const machinePhotoCollator = new Intl.Collator('pl', { numeric: true, sensitivity: 'base' });
 
 const machineTable = document.querySelector('.machine-table');
 const machineSortCollator = new Intl.Collator('pl', { numeric: true, sensitivity: 'base' });
@@ -219,6 +237,44 @@ function machineDetails(row) {
     `).join('');
 }
 
+function renderMachinePhotos() {
+    const byRecord = machinePhotoGrouping.value === 'record';
+    machinePhotoSortLabel.classList.toggle('u-display-none', !byRecord);
+    const groups = new Map();
+    currentMachinePhotos.forEach(photo => {
+        const key = byRecord ? String(photo.record_id) : ((photo.occurrence_at || '').split(/[T ]/)[0] || 'Brak daty');
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(photo);
+    });
+    const entries = [...groups.entries()];
+    if (byRecord) {
+        const field = machinePhotoSort.value;
+        entries.sort(([, a], [, b]) => field === 'record_id'
+            ? Number(a[0]?.record_id) - Number(b[0]?.record_id)
+            : machinePhotoCollator.compare(String(a[0]?.[field] || ''), String(b[0]?.[field] || '')));
+    } else {
+        entries.sort(([a], [b]) => b.localeCompare(a));
+    }
+    machineModalPhotosContent.innerHTML = entries.map(([key, photos]) => {
+        const heading = byRecord
+            ? `Rekord ${machineHtml(key)} · ${machineHtml(photos[0]?.event_type || 'Brak rodzaju zdarzenia')} · ${machineHtml(photos[0]?.occurrence_at || 'Brak daty')}`
+            : (/^\d{4}-\d{2}-\d{2}$/.test(key) ? key.split('-').reverse().join('-') : key);
+        return `<section class="machine-photo-day">
+            <h4>${heading}</h4>
+            <div class="machine-photo-grid">${photos.map(photo => {
+                const tooltip = [photo.original_name, photo.occurrence_at, photo.event_type,
+                    photo.description ? `${photo.description.slice(0, 180)}${photo.description.length > 180 ? '…' : ''}` : '']
+                    .filter(Boolean).join('\n');
+                return `<a class="machine-photo" href="${machineHtml(photo.url)}" target="_blank" rel="noopener">
+                    <img src="${machineHtml(photo.url)}" alt="${machineHtml(photo.original_name)}" loading="lazy">
+                    <span title="${machineHtml(tooltip)}">${machineHtml(photo.original_name)}</span>
+                    <small title="${machineHtml(tooltip)}">${machineHtml(photo.occurrence_at || '')} · ${machineHtml(photo.event_type || '')}</small>
+                </a>`;
+            }).join('')}</div>
+        </section>`;
+    }).join('');
+}
+
 async function loadMachinePhotos(row) {
     const machineId = row.dataset.machineId;
     machineModalPhotosContent.textContent = 'Ładowanie zdjęć…';
@@ -228,41 +284,21 @@ async function loadMachinePhotos(row) {
         if (!response.ok) throw new Error(result.error || 'Nie udało się pobrać zdjęć.');
         if (!currentMachineRow || currentMachineRow.dataset.machineId !== machineId) return;
         if (!result.photos.length) {
+            machinePhotoControls.classList.add('u-display-none');
             machineModalPhotosContent.textContent = 'Brak zdjęć w załącznikach zdarzeń tej maszyny.';
             return;
         }
-        const photosByDay = new Map();
-        result.photos.forEach(photo => {
-            const day = (photo.occurrence_at || '').split(/[T ]/)[0] || 'Brak daty';
-            if (!photosByDay.has(day)) photosByDay.set(day, []);
-            photosByDay.get(day).push(photo);
-        });
-        machineModalPhotosContent.innerHTML = [...photosByDay.entries()].map(([day, photos]) => {
-            const displayDay = /^\d{4}-\d{2}-\d{2}$/.test(day) ? day.split('-').reverse().join('-') : day;
-            return `<section class="machine-photo-day">
-                <h4>${machineHtml(displayDay)}</h4>
-                <div class="machine-photo-grid">${photos.map(photo => {
-                    const tooltip = [
-                        photo.original_name,
-                        photo.occurrence_at,
-                        photo.event_type,
-                        photo.description ? `${photo.description.slice(0, 180)}${photo.description.length > 180 ? '…' : ''}` : '',
-                    ].filter(Boolean).join('\n');
-                    return `
-                        <a class="machine-photo" href="${machineHtml(photo.url)}" target="_blank" rel="noopener">
-                            <img src="${machineHtml(photo.url)}" alt="${machineHtml(photo.original_name)}" loading="lazy">
-                            <span title="${machineHtml(tooltip)}">${machineHtml(photo.original_name)}</span>
-                            <small title="${machineHtml(tooltip)}">${machineHtml(photo.occurrence_at || '')} · ${machineHtml(photo.event_type || '')}</small>
-                        </a>
-                    `;
-                }).join('')}</div>
-            </section>`;
-        }).join('');
+        currentMachinePhotos = result.photos;
+        machinePhotoControls.classList.remove('u-display-none');
+        renderMachinePhotos();
     } catch (error) {
         if (!currentMachineRow || currentMachineRow.dataset.machineId !== machineId) return;
         machineModalPhotosContent.textContent = error.message || 'Nie udało się pobrać zdjęć.';
     }
 }
+
+machinePhotoGrouping.addEventListener('change', renderMachinePhotos);
+machinePhotoSort.addEventListener('change', renderMachinePhotos);
 
 function setMachineEditMode(editing) {
     if (!CAN_MANAGE_MACHINES) return;
