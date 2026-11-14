@@ -58,17 +58,6 @@ data-notes="{{ event.notes or '' }}"
     {% endif %}
     </div>
 </div>
-<section class="scheduled-summary" aria-label="Podsumowanie zdarzeń">
-    <div class="scheduled-summary-item">
-        <span class="text-muted">Zaplanowane</span>
-        <strong class="u-color-var-accent">{{ planned_count }}</strong>
-    </div>
-    <div class="scheduled-summary-item">
-        <span class="text-muted">Zrealizowane</span>
-        <strong class="u-color-var-green">{{ completed_count }}</strong>
-    </div>
-</section>
-
 <div class="card">
     <div class="calendar-toolbar">
         <div>
@@ -219,6 +208,17 @@ data-notes="{{ event.notes or '' }}"
         {% endif %}
     </div>
 </div>
+
+<section class="scheduled-summary" aria-label="Podsumowanie zdarzeń">
+    <div class="scheduled-summary-item">
+        <span class="text-muted">Zaplanowane</span>
+        <strong class="u-color-var-accent">{{ planned_count }}</strong>
+    </div>
+    <div class="scheduled-summary-item">
+        <span class="text-muted">Zrealizowane</span>
+        <strong class="u-color-var-green">{{ completed_count }}</strong>
+    </div>
+</section>
 
 <div class="card">
     <div class="card-title">Zaplanowane zdarzenia</div>
